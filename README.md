@@ -1,6 +1,6 @@
 # WM31Bot
 
-WM31Bot is a serverless Discord bot for managing Wordle channel access through slash commands on Vercel.
+WM31Bot is a serverless Discord bot for managing channel access through slash commands on Vercel.
 
 ## Use it
 
@@ -24,7 +24,7 @@ npm run dev
 | `DISCORD_PUBLIC_KEY` | Yes | Public key used to verify interaction signatures |
 | `DISCORD_BOT_TOKEN` | Yes | Bot token used for Discord REST role updates |
 | `DISCORD_GUILD_ID` | No | Restricts the bot to a single guild. Defaults to `1282936453134815275` |
-| `SELF_ASSIGNABLE_ROLES` | No | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` |
+| `SELF_ASSIGNABLE_ROLES` | No | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:
 
@@ -35,6 +35,12 @@ Default `SELF_ASSIGNABLE_ROLES` value:
     "label": "Wordle Channel",
     "description": "Access to the Wordle channel",
     "emoji": "🟩"
+  },
+  {
+    "id": "1450774352386719775",
+    "label": "Brawl Stars Channel",
+    "description": "Access to the Brawl Stars channel",
+    "emoji": "⭐"
   }
 ]
 ```

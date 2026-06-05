@@ -22,6 +22,16 @@ const commands = [
     description: "Remove the Wordle channel access role",
     dm_permission: false,
   },
+  {
+    name: "join-brawlstars-channel",
+    description: "Grant the Brawl Stars channel access role",
+    dm_permission: false,
+  },
+  {
+    name: "leave-brawlstars-channel",
+    description: "Remove the Brawl Stars channel access role",
+    dm_permission: false,
+  },
 ];
 
 const response = await fetch(url, {

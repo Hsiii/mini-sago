@@ -1,4 +1,4 @@
-import { TARGET_GUILD_ID, WORDLE_ROLE_ID } from "@/lib/discord/constants";
+import { BRAWL_STARS_ROLE_ID, TARGET_GUILD_ID, WORDLE_ROLE_ID } from "@/lib/discord/constants";
 
 export type ManagedRole = {
   id: string;
@@ -55,6 +55,12 @@ function getDefaultManagedRoles(): ManagedRole[] {
       description: "Access to the Wordle channel",
       emoji: "🟩",
     },
+    {
+      id: BRAWL_STARS_ROLE_ID,
+      label: "Brawl Stars Channel",
+      description: "Access to the Brawl Stars channel",
+      emoji: "⭐",
+    },
   ];
 }
 
@@ -99,6 +105,10 @@ export function parseManagedRoles(rawValue: string | undefined) {
 
 export function getWordleRole(managedRoles: ManagedRole[]) {
   return managedRoles.find((role) => role.id === WORDLE_ROLE_ID) ?? getDefaultManagedRoles()[0];
+}
+
+export function getBrawlStarsRole(managedRoles: ManagedRole[]) {
+  return managedRoles.find((role) => role.id === BRAWL_STARS_ROLE_ID) ?? getDefaultManagedRoles()[1];
 }
 
 export function getDiscordConfig(): DiscordConfig {

@@ -1,8 +1,10 @@
 import {
+  JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME,
   JOIN_WORDLE_CHANNEL_COMMAND_NAME,
+  LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "@/lib/discord/constants";
-import { getDiscordConfig, getWordleRole } from "@/lib/discord/env";
+import { getBrawlStarsRole, getDiscordConfig, getWordleRole } from "@/lib/discord/env";
 import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
@@ -104,10 +106,36 @@ export async function POST(request: Request) {
 
   const userId = getUserId(interaction);
 
-  if (
-    commandName !== JOIN_WORDLE_CHANNEL_COMMAND_NAME &&
-    commandName !== LEAVE_WORDLE_CHANNEL_COMMAND_NAME
-  ) {
+  const wordleRole = getWordleRole(config.managedRoles);
+  const brawlStarsRole = getBrawlStarsRole(config.managedRoles);
+  const roleCommand = [
+    {
+      name: JOIN_WORDLE_CHANNEL_COMMAND_NAME,
+      role: wordleRole,
+      selectedRoleIds: [wordleRole.id],
+      includeMemberSummary: true,
+    },
+    {
+      name: LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
+      role: wordleRole,
+      selectedRoleIds: [],
+      includeMemberSummary: false,
+    },
+    {
+      name: JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME,
+      role: brawlStarsRole,
+      selectedRoleIds: [brawlStarsRole.id],
+      includeMemberSummary: true,
+    },
+    {
+      name: LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
+      role: brawlStarsRole,
+      selectedRoleIds: [],
+      includeMemberSummary: false,
+    },
+  ].find((command) => command.name === commandName);
+
+  if (!roleCommand) {
     return jsonResponse({
       type: 4,
       data: {
@@ -127,11 +155,8 @@ export async function POST(request: Request) {
     });
   }
 
-  const wordleRole = getWordleRole(config.managedRoles);
   const currentRoleIds = getMemberRoleIds(interaction);
-  const managedRolesById = getManagedRolesById([wordleRole]);
-  const selectedRoleIds =
-    commandName === JOIN_WORDLE_CHANNEL_COMMAND_NAME ? [wordleRole.id] : [];
+  const managedRolesById = getManagedRolesById([roleCommand.role]);
 
   try {
     const result = await applyManagedRoleSelection({
@@ -139,21 +164,21 @@ export async function POST(request: Request) {
       userId,
       botToken: config.botToken,
       currentRoleIds,
-      selectedRoleIds,
+      selectedRoleIds: roleCommand.selectedRoleIds,
       managedRolesById,
     });
 
     let message = result.message;
 
-    if (commandName === JOIN_WORDLE_CHANNEL_COMMAND_NAME) {
+    if (roleCommand.includeMemberSummary) {
       const summary = await getRoleMemberSummary({
         guildId: interaction.guild_id,
-        roleId: wordleRole.id,
+        roleId: roleCommand.role.id,
         botToken: config.botToken,
       });
 
       message = `${message}\n\n${formatRoleMemberSummary({
-        roleLabel: wordleRole.label,
+        roleLabel: roleCommand.role.label,
         memberIds: summary.memberIds,
         totalCount: summary.totalCount,
         usedFallbackCount: summary.usedFallbackCount,
