@@ -15,8 +15,6 @@ import { verifyDiscordRequest } from "@/lib/discord/verify";
 
 export const runtime = "nodejs";
 
-const EPHEMERAL_FLAG = 64;
-
 type DiscordInteraction = {
   type: number;
   guild_id?: string;
@@ -197,7 +195,6 @@ function buildRoleCommandResponse(message: string) {
   return {
     type: 4,
     data: {
-      flags: EPHEMERAL_FLAG,
       content: message,
     },
   };
