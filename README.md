@@ -18,13 +18,13 @@ npm run dev
 
 ## Environment variables
 
-| Name | Required | Description |
-| --- | --- | --- |
-| `DISCORD_APPLICATION_ID` | Yes | Discord application ID |
-| `DISCORD_PUBLIC_KEY` | Yes | Public key used to verify interaction signatures |
-| `DISCORD_BOT_TOKEN` | Yes | Bot token used for Discord REST role updates |
-| `DISCORD_GUILD_ID` | No | Restricts the bot to a single guild. Defaults to `1282936453134815275` |
-| `SELF_ASSIGNABLE_ROLES` | No | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
+| Name                     | Required | Description                                                                                                                      |
+| ------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_APPLICATION_ID` | Yes      | Discord application ID                                                                                                           |
+| `DISCORD_PUBLIC_KEY`     | Yes      | Public key used to verify interaction signatures                                                                                 |
+| `DISCORD_BOT_TOKEN`      | Yes      | Bot token used for Discord REST role updates                                                                                     |
+| `DISCORD_GUILD_ID`       | No       | Restricts the bot to a single guild. Defaults to `1282936453134815275`                                                           |
+| `SELF_ASSIGNABLE_ROLES`  | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:
 

@@ -18,8 +18,16 @@
 html {
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(255, 194, 124, 0.55), transparent 30%),
-    radial-gradient(circle at 90% 20%, rgba(181, 76, 34, 0.16), transparent 25%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 194, 124, 0.55),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 90% 20%,
+      rgba(181, 76, 34, 0.16),
+      transparent 25%
+    ),
     linear-gradient(160deg, #fffaf1 0%, #f2e4cf 45%, #ead5b7 100%);
 }
 
@@ -51,7 +59,11 @@ pre {
   padding: 2rem;
   border: 1px solid var(--border);
   border-radius: 28px;
-  background: linear-gradient(135deg, rgba(255, 252, 247, 0.92), rgba(245, 232, 211, 0.84));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 252, 247, 0.92),
+    rgba(245, 232, 211, 0.84)
+  );
   box-shadow: var(--shadow);
 }
 
@@ -122,7 +134,11 @@ h2 {
 }
 
 .panel.accent {
-  background: linear-gradient(140deg, rgba(181, 76, 34, 0.18), rgba(255, 248, 238, 0.88));
+  background: linear-gradient(
+    140deg,
+    rgba(181, 76, 34, 0.18),
+    rgba(255, 248, 238, 0.88)
+  );
 }
 
 .panel-label {

@@ -1,4 +1,8 @@
-import { BRAWL_STARS_ROLE_ID, TARGET_GUILD_ID, WORDLE_ROLE_ID } from "@/lib/discord/constants";
+import {
+  BRAWL_STARS_ROLE_ID,
+  TARGET_GUILD_ID,
+  WORDLE_ROLE_ID,
+} from "@/lib/discord/constants";
 
 export type ManagedRole = {
   id: string;
@@ -33,11 +37,17 @@ function ensureRoleShape(input: unknown, index: number): ManagedRole {
   const maybeRole = input as Record<string, unknown>;
   const id = String(maybeRole.id ?? "").trim();
   const label = String(maybeRole.label ?? "").trim();
-  const description = typeof maybeRole.description === "string" ? maybeRole.description.trim() : undefined;
-  const emoji = typeof maybeRole.emoji === "string" ? maybeRole.emoji.trim() : undefined;
+  const description =
+    typeof maybeRole.description === "string"
+      ? maybeRole.description.trim()
+      : undefined;
+  const emoji =
+    typeof maybeRole.emoji === "string" ? maybeRole.emoji.trim() : undefined;
 
   if (!id || !/^\d{17,20}$/.test(id)) {
-    throw new Error(`Role at index ${index} is missing a valid Discord role ID`);
+    throw new Error(
+      `Role at index ${index} is missing a valid Discord role ID`,
+    );
   }
 
   if (!label) {
@@ -94,7 +104,9 @@ export function parseManagedRoles(rawValue: string | undefined) {
 
   for (const role of roles) {
     if (ids.has(role.id)) {
-      throw new Error(`Duplicate role ID found in SELF_ASSIGNABLE_ROLES: ${role.id}`);
+      throw new Error(
+        `Duplicate role ID found in SELF_ASSIGNABLE_ROLES: ${role.id}`,
+      );
     }
 
     ids.add(role.id);
@@ -104,11 +116,17 @@ export function parseManagedRoles(rawValue: string | undefined) {
 }
 
 export function getWordleRole(managedRoles: ManagedRole[]) {
-  return managedRoles.find((role) => role.id === WORDLE_ROLE_ID) ?? getDefaultManagedRoles()[0];
+  return (
+    managedRoles.find((role) => role.id === WORDLE_ROLE_ID) ??
+    getDefaultManagedRoles()[0]
+  );
 }
 
 export function getBrawlStarsRole(managedRoles: ManagedRole[]) {
-  return managedRoles.find((role) => role.id === BRAWL_STARS_ROLE_ID) ?? getDefaultManagedRoles()[1];
+  return (
+    managedRoles.find((role) => role.id === BRAWL_STARS_ROLE_ID) ??
+    getDefaultManagedRoles()[1]
+  );
 }
 
 export function getDiscordConfig(): DiscordConfig {

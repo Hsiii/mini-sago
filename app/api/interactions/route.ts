@@ -4,7 +4,11 @@ import {
   LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "@/lib/discord/constants";
-import { getBrawlStarsRole, getDiscordConfig, getWordleRole } from "@/lib/discord/env";
+import {
+  getBrawlStarsRole,
+  getDiscordConfig,
+  getWordleRole,
+} from "@/lib/discord/env";
 import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
@@ -46,7 +50,10 @@ function getMemberRoleIds(interaction: DiscordInteraction) {
   return interaction.member?.roles ?? [];
 }
 
-function isGuildAllowed(guildId: string | undefined, allowedGuildId: string | undefined) {
+function isGuildAllowed(
+  guildId: string | undefined,
+  allowedGuildId: string | undefined,
+) {
   if (!allowedGuildId) {
     return true;
   }
@@ -69,7 +76,9 @@ export async function POST(request: Request) {
     config = getDiscordConfig();
   } catch (error) {
     return new Response(
-      error instanceof Error ? error.message : "Discord bot configuration is invalid",
+      error instanceof Error
+        ? error.message
+        : "Discord bot configuration is invalid",
       { status: 500 },
     );
   }
@@ -148,7 +157,8 @@ export async function POST(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "Guild member details were missing from the interaction payload.",
+        content:
+          "Guild member details were missing from the interaction payload.",
       },
     });
   }
@@ -186,7 +196,11 @@ export async function POST(request: Request) {
     return jsonResponse(buildRoleCommandResponse(message));
   } catch (error) {
     return jsonResponse(
-      buildRoleCommandResponse(error instanceof Error ? `Could not update roles: ${error.message}` : "Could not update roles."),
+      buildRoleCommandResponse(
+        error instanceof Error
+          ? `Could not update roles: ${error.message}`
+          : "Could not update roles.",
+      ),
     );
   }
 }

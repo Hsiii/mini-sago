@@ -54,7 +54,11 @@ function getDiscordRoleErrorMessage(status: number, responseBody: string) {
   return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;
 }
 
-async function discordApiRequest(url: string, botToken: string, method = "GET"): Promise<Response> {
+async function discordApiRequest(
+  url: string,
+  botToken: string,
+  method = "GET",
+): Promise<Response> {
   const response = await fetch(url, {
     method,
     headers: {
@@ -70,7 +74,11 @@ async function discordApiRequest(url: string, botToken: string, method = "GET"):
   throw new Error(getDiscordRoleErrorMessage(response.status, body));
 }
 
-async function discordRoleRequest(url: string, botToken: string, method: "PUT" | "DELETE") {
+async function discordRoleRequest(
+  url: string,
+  botToken: string,
+  method: "PUT" | "DELETE",
+) {
   await discordApiRequest(url, botToken, method);
 }
 
@@ -195,7 +203,9 @@ export async function applyManagedRoleSelection({
   managedRolesById,
 }: ApplyManagedRoleSelectionArgs) {
   const managedRoleIds = [...managedRolesById.keys()];
-  const invalidRoleId = selectedRoleIds.find((roleId) => !managedRolesById.has(roleId));
+  const invalidRoleId = selectedRoleIds.find(
+    (roleId) => !managedRolesById.has(roleId),
+  );
 
   if (invalidRoleId) {
     throw new Error(`Role ${invalidRoleId} is not managed by this bot`);
@@ -203,7 +213,9 @@ export async function applyManagedRoleSelection({
 
   const currentRoleIdSet = new Set(currentRoleIds);
   const selectedRoleIdSet = new Set(selectedRoleIds);
-  const rolesToAdd = [...selectedRoleIdSet].filter((roleId) => !currentRoleIdSet.has(roleId));
+  const rolesToAdd = [...selectedRoleIdSet].filter(
+    (roleId) => !currentRoleIdSet.has(roleId),
+  );
   const rolesToRemove = managedRoleIds.filter(
     (roleId) => currentRoleIdSet.has(roleId) && !selectedRoleIdSet.has(roleId),
   );
@@ -211,8 +223,12 @@ export async function applyManagedRoleSelection({
   const baseUrl = `https://discord.com/api/v10/guilds/${guildId}/members/${userId}/roles`;
 
   await Promise.all([
-    ...rolesToAdd.map((roleId) => discordRoleRequest(`${baseUrl}/${roleId}`, botToken, "PUT")),
-    ...rolesToRemove.map((roleId) => discordRoleRequest(`${baseUrl}/${roleId}`, botToken, "DELETE")),
+    ...rolesToAdd.map((roleId) =>
+      discordRoleRequest(`${baseUrl}/${roleId}`, botToken, "PUT"),
+    ),
+    ...rolesToRemove.map((roleId) =>
+      discordRoleRequest(`${baseUrl}/${roleId}`, botToken, "DELETE"),
+    ),
   ]);
 
   const nextRoleIds = [
@@ -220,7 +236,8 @@ export async function applyManagedRoleSelection({
     ...rolesToAdd.filter((roleId) => !currentRoleIdSet.has(roleId)),
   ];
 
-  let message = "No changes were needed. Your managed roles already matched the selection.";
+  let message =
+    "No changes were needed. Your managed roles already matched the selection.";
 
   if (rolesToAdd.length > 0 || rolesToRemove.length > 0) {
     const fragments = [];

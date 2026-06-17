@@ -11,9 +11,9 @@ export default function Home() {
         <p className="eyebrow">Discord Self-Assign Roles</p>
         <h1>Serverless bot flow built for Vercel.</h1>
         <p className="lede">
-          This project uses Discord interactions instead of a long-running gateway
-          connection, so it deploys cleanly on Vercel and still lets members add
-          or remove channel access from simple slash commands.
+          This project uses Discord interactions instead of a long-running
+          gateway connection, so it deploys cleanly on Vercel and still lets
+          members add or remove channel access from simple slash commands.
         </p>
         <div className="panel-grid">
           <article className="panel accent">
@@ -24,7 +24,9 @@ export default function Home() {
           <article className="panel">
             <span className="panel-label">Commands</span>
             <strong>/join-wordle-channel</strong>
-            <p>`/join-brawlstars-channel` and both leave commands remove access.</p>
+            <p>
+              `/join-brawlstars-channel` and both leave commands remove access.
+            </p>
           </article>
         </div>
       </section>
@@ -64,7 +66,9 @@ export default function Home() {
             <ul className="role-list">
               {summary.roles.map((role) => (
                 <li key={role.id}>
-                  <strong>{role.emoji ? `${role.emoji} ${role.label}` : role.label}</strong>
+                  <strong>
+                    {role.emoji ? `${role.emoji} ${role.label}` : role.label}
+                  </strong>
                   <span>{role.id}</span>
                   <p>{role.description || "No description"}</p>
                 </li>
@@ -78,10 +82,21 @@ export default function Home() {
           <ol className="steps-list">
             <li>Create a Discord application and bot.</li>
             <li>Invite the bot with Manage Roles permission.</li>
-            <li>Move the bot role above the managed access roles in the server hierarchy.</li>
-            <li>Copy .env.example to .env.local and fill in your IDs and keys.</li>
-            <li>Deploy to Vercel, then set the interactions endpoint to /api/interactions.</li>
-            <li>Run <code>{exampleCommand}</code> to publish the channel slash commands.</li>
+            <li>
+              Move the bot role above the managed access roles in the server
+              hierarchy.
+            </li>
+            <li>
+              Copy .env.example to .env.local and fill in your IDs and keys.
+            </li>
+            <li>
+              Deploy to Vercel, then set the interactions endpoint to
+              /api/interactions.
+            </li>
+            <li>
+              Run <code>{exampleCommand}</code> to publish the channel slash
+              commands.
+            </li>
           </ol>
         </article>
 

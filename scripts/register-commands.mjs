@@ -49,4 +49,6 @@ if (!response.ok) {
 }
 
 const result = await response.json();
-console.log(`Registered ${result.length} command(s) ${guildId ? `for guild ${guildId}` : "globally"}.`);
+console.log(
+  `Registered ${result.length} command(s) ${guildId ? `for guild ${guildId}` : "globally"}.`,
+);
