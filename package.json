@@ -7,7 +7,18 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "prepare": "husky",
     "register:commands": "node --env-file=.env.local scripts/register-commands.mjs"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,css,scss,html,json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix"
+    ]
   },
   "dependencies": {
     "next": "16.2.1",
@@ -21,6 +32,9 @@
     "@types/react-dom": "19.2.2",
     "eslint": "9.39.1",
     "eslint-config-next": "16.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.7",
+    "prettier": "^3.8.4",
     "typescript": "5.8.3"
   }
 }
