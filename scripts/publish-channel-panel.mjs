@@ -204,10 +204,6 @@ const message = existingMessage
       body: JSON.stringify(payload),
     });
 
-await discordApi(`/channels/${channelId}/pins/${message.id}`, {
-  method: "PUT",
-});
-
 console.log(
   `${existingMessage ? "Updated" : "Created"} channel access panel ${message.id} in channel ${channelId}.`,
 );
