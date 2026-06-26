@@ -1,7 +1,3 @@
-{
-	email {$ACME_EMAIL}
-}
-
 {$DOMAIN} {
 	encode zstd gzip
 

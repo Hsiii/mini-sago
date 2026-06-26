@@ -19,12 +19,12 @@ npm run dev
 
 ## Oracle Cloud Free Tier deployment
 
-Oracle's current Always Free Ampere A1 allowance is 1,500 OCPU hours and
-9,000 GB-hours per month, which is equivalent to one VM with 2 OCPUs and
-12 GB RAM. This bot should run on a much smaller `VM.Standard.A1.Flex`
-instance: 1 OCPU and 1 GB RAM. If building the image directly on the VM runs
-out of memory, increase the VM to 2 GB RAM; that still stays inside Always
-Free limits. See Oracle's Free Tier pages:
+Oracle's current Always Free resources include both a small x86
+`VM.Standard.E2.1.Micro` VM and an Ampere A1 allowance. This bot fits on the
+E2 micro shape used by this deployment, or on a small `VM.Standard.A1.Flex`
+instance. If building the image directly on a 1 GB VM runs out of memory, add
+a small swap file or build the image elsewhere; runtime stays well below the
+Always Free VM limits. See Oracle's Free Tier pages:
 
 - <https://www.oracle.com/cloud/free/>
 - <https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm>
@@ -43,9 +43,9 @@ The included Caddy config also supports a `/wm31` path prefix, so you can use
 only `bot.example.com`.
 
 1. Create an Oracle Cloud account and tenancy.
-2. Create an Ampere A1 VM:
+2. Create a minimal Always Free VM:
    - Image: Ubuntu 24.04 or 22.04.
-   - Shape: `VM.Standard.A1.Flex`.
+   - Shape: `VM.Standard.E2.1.Micro`, or `VM.Standard.A1.Flex` if you prefer Arm.
    - Size: 1 OCPU and 1 GB RAM.
    - Boot volume: 50 GB.
    - Networking: public subnet with a public IPv4 address.
@@ -68,7 +68,6 @@ sudo usermod -aG docker "$USER"
 5. Clone this repository onto the VM.
 6. Create `.env.production` from `.env.production.example` and fill in:
    - `DOMAIN` without a path, such as `bot.example.com`
-   - `ACME_EMAIL`
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
    - `DISCORD_BOT_TOKEN`
