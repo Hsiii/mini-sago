@@ -8,7 +8,8 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 
 1. Install dependencies and create `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
-3. Optionally set `DISCORD_GUILD_ID` and `SELF_ASSIGNABLE_ROLES`.
+3. Set `DISCORD_GUILD_ID` for the Wordle/荒野 role-control server, and
+   optionally set `SELF_ASSIGNABLE_ROLES`.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
    under Bot -> Privileged Gateway Intents. Without this, Discord closes the
    Gateway connection with code `4014` and Instagram links cannot be read.
@@ -37,6 +38,10 @@ When a non-bot guild member posts an `instagram.com` link, the bot deletes the
 original message and reposts the transformed `kkinstagram.com` URL through a
 channel webhook. The webhook payload uses the member's display name and avatar,
 and disables allowed mentions so reposts do not create new pings.
+
+Instagram link transforms run in every guild where the bot is installed. The
+bot still needs channel permissions to manage messages and webhooks in each
+guild/channel.
 
 The first transformed link in a channel creates a `WM31 Instagram` webhook in
 that channel. Threads are reposted through a webhook in the parent channel with
@@ -105,7 +110,7 @@ The production Compose stack caps runtime usage so the bot remains small:
 | `DISCORD_APPLICATION_ID`            | Yes      | Discord application ID                                                                                                           |
 | `DISCORD_PUBLIC_KEY`                | Yes      | Public key used to verify interaction signatures                                                                                 |
 | `DISCORD_BOT_TOKEN`                 | Yes      | Bot token used for Discord REST role updates                                                                                     |
-| `DISCORD_GUILD_ID`                  | No       | Restricts the bot to a single guild. Defaults to `1282936453134815275`                                                           |
+| `DISCORD_GUILD_ID`                  | Yes      | Guild where Wordle/荒野 role-control interactions are allowed. Defaults to `1282936453134815275` when omitted                    |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
 | `DISCORD_GATEWAY_DISABLED`          | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener                                              |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |

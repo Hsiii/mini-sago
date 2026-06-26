@@ -1,4 +1,3 @@
-import { TARGET_GUILD_ID } from "./constants";
 import { transformInstagramLinks } from "./instagram-links";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -75,7 +74,6 @@ type WebhookTarget = {
 
 type InstagramGatewayConfig = {
   botToken: string;
-  guildId?: string;
 };
 
 function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
@@ -88,7 +86,6 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
 
   return {
     botToken,
-    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
   };
 }
 
@@ -435,10 +432,6 @@ class InstagramGatewayClient {
 
   private shouldTransformMessage(message: DiscordMessageCreate) {
     if (!message.guild_id || !message.content) {
-      return false;
-    }
-
-    if (this.config.guildId && message.guild_id !== this.config.guildId) {
       return false;
     }
 
