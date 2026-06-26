@@ -1,6 +1,7 @@
 # WM31Bot
 
-WM31Bot is a serverless Discord bot for managing channel access through slash commands on Vercel.
+WM31Bot is a Discord bot for managing channel access through slash commands.
+It can run serverlessly on Vercel or as a containerized Next.js app on a VM.
 
 ## Use it
 
@@ -8,12 +9,75 @@ WM31Bot is a serverless Discord bot for managing channel access through slash co
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
 3. Optionally set `DISCORD_GUILD_ID` and `SELF_ASSIGNABLE_ROLES`.
 4. Publish the slash commands.
-5. Run locally or deploy to Vercel, then point the Discord Interactions Endpoint URL at `/api/interactions`.
+5. Run locally or deploy, then point the Discord Interactions Endpoint URL at `/api/interactions`.
 
 ```bash
 npm install
 npm run register:commands
 npm run dev
+```
+
+## Oracle Cloud Free Tier deployment
+
+Oracle's current Always Free Ampere A1 allowance is 1,500 OCPU hours and
+9,000 GB-hours per month, which is equivalent to one VM with 2 OCPUs and
+12 GB RAM. Use the `VM.Standard.A1.Flex` shape at or below that size to avoid
+paid usage. See Oracle's Free Tier pages:
+
+- <https://www.oracle.com/cloud/free/>
+- <https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm>
+
+Discord interaction endpoints must be public HTTPS URLs, so the included
+Docker Compose stack runs the app behind Caddy for automatic TLS.
+
+1. Create an Oracle Cloud account and tenancy.
+2. Create an Ampere A1 VM:
+   - Image: Ubuntu 24.04 or 22.04.
+   - Shape: `VM.Standard.A1.Flex`.
+   - Size: 1-2 OCPUs and 6-12 GB RAM.
+   - Networking: public subnet with a public IPv4 address.
+   - Ingress: TCP `22`, `80`, and `443`.
+3. Point a DNS `A` record, such as `bot.example.com`, to the VM public IP.
+4. SSH into the VM and install Docker:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl git
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker "$USER"
+```
+
+5. Clone this repository onto the VM.
+6. Create `.env.production` from `.env.production.example` and fill in:
+   - `DOMAIN`
+   - `ACME_EMAIL`
+   - `DISCORD_APPLICATION_ID`
+   - `DISCORD_PUBLIC_KEY`
+   - `DISCORD_BOT_TOKEN`
+   - `DISCORD_GUILD_ID`
+   - `SELF_ASSIGNABLE_ROLES`
+7. Start the service:
+
+```bash
+docker compose up -d --build
+docker compose logs -f
+```
+
+8. Confirm the health endpoint:
+
+```bash
+curl https://$DOMAIN/api/health
+```
+
+9. In the Discord Developer Portal, set the Interactions Endpoint URL to:
+
+```text
+https://YOUR_DOMAIN/api/interactions
 ```
 
 ## Environment variables

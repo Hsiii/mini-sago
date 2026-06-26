@@ -1,9 +1,9 @@
-.next
-node_modules
-.vercel
 .env
 .env.local
-.env.production
 .env.production.local
+.git
+.next
+.vercel
+node_modules
 npm-debug.log*
 *.tsbuildinfo
