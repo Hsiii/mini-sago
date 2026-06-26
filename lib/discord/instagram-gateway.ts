@@ -123,15 +123,25 @@ function getAvatarUrl({
 
   if (guildAvatar && guildId) {
     const extension = guildAvatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${guildAvatar}.${extension}?size=128`;
+    return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${guildAvatar}.${extension}`;
   }
 
   if (user.avatar) {
     const extension = user.avatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${extension}?size=128`;
+    return `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${extension}`;
   }
 
   return `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(user)}.png`;
+}
+
+function hasCustomAvatar({
+  user,
+  guildAvatar,
+}: {
+  user: DiscordUser | undefined;
+  guildAvatar?: string | null;
+}) {
+  return Boolean(guildAvatar || user?.avatar);
 }
 
 function getDefaultAvatarIndex(user: DiscordUser | undefined) {
@@ -540,6 +550,21 @@ class InstagramGatewayClient {
   }
 
   private async getMessageAuthorAvatarUrl(message: DiscordMessageCreate) {
+    const gatewayAvatarUrl = getAvatarUrl({
+      user: message.author,
+      guildId: message.guild_id,
+      guildAvatar: message.member?.avatar,
+    });
+
+    if (
+      hasCustomAvatar({
+        user: message.author,
+        guildAvatar: message.member?.avatar,
+      })
+    ) {
+      return gatewayAvatarUrl;
+    }
+
     if (message.guild_id && message.author?.id) {
       try {
         const member = await this.discordRequest<DiscordGuildMember>(
@@ -559,11 +584,7 @@ class InstagramGatewayClient {
       }
     }
 
-    return getAvatarUrl({
-      user: message.author,
-      guildId: message.guild_id,
-      guildAvatar: message.member?.avatar,
-    });
+    return gatewayAvatarUrl;
   }
 
   private async discordRequest<T>(
