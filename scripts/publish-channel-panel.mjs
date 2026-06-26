@@ -2,10 +2,14 @@ const botToken = process.env.DISCORD_BOT_TOKEN;
 const channelId =
   process.argv[2] ?? process.env.DISCORD_CHANNEL_ACCESS_CHANNEL_ID;
 
-const panelTitle = "頻道權限";
+const panelTitle = "遊戲頻道入口";
+const legacyPanelTitles = ["頻道權限", panelTitle];
 const joinPrefix = "wm31:channel-access:join:";
 const leavePrefix = "wm31:channel-access:leave:";
 const selectCustomId = "wm31:channel-access:select:v1";
+const guildId = process.env.DISCORD_GUILD_ID ?? "1282936453134815275";
+const wordleRoleId = "1451976411152781466";
+const brawlStarsRoleId = "1450774352386719775";
 
 const defaultRoles = [
   {
@@ -81,10 +85,27 @@ function maybeEmoji(role) {
   return { name: role.emoji };
 }
 
-function describeRole(role) {
-  return role.description
-    ? `${role.emoji ? `${role.emoji} ` : ""}**${role.label}** - ${role.description}`
-    : `${role.emoji ? `${role.emoji} ` : ""}**${role.label}**`;
+function getRoleTitle(role) {
+  if (role.id === wordleRoleId) {
+    return "Wordle";
+  }
+
+  if (role.id === brawlStarsRoleId) {
+    return "荒野亂鬥";
+  }
+
+  return role.label;
+}
+
+function formatCount(count) {
+  return typeof count === "number" ? `${count} 人` : "讀取中";
+}
+
+function describeRoleGroup(role, counts) {
+  const title = getRoleTitle(role);
+  const description = role.description ? `\n${role.description}` : "";
+
+  return `**${role.emoji ? `${role.emoji} ` : ""}${title}**\n目前成員：${formatCount(counts[role.id])}${description}`;
 }
 
 function buildButtonRows(roles) {
@@ -94,14 +115,14 @@ function buildButtonRows(roles) {
       {
         type: 2,
         style: 1,
-        label: `加入 ${role.label}`,
+        label: `加入 ${getRoleTitle(role)}`,
         custom_id: `${joinPrefix}${role.id}`,
         emoji: maybeEmoji(role),
       },
       {
         type: 2,
         style: 2,
-        label: `離開 ${role.label}`,
+        label: `離開 ${getRoleTitle(role)}`,
         custom_id: `${leavePrefix}${role.id}`,
         emoji: maybeEmoji(role),
       },
@@ -136,16 +157,13 @@ function buildSelectRow(roles) {
   ];
 }
 
-function buildPanelPayload(roles) {
+function buildPanelPayload(roles, counts) {
   const roleLines =
     roles.length > 0
-      ? roles.map((role) => `- ${describeRole(role)}`).join("\n")
+      ? roles.map((role) => describeRoleGroup(role, counts)).join("\n\n")
       : "- 目前還沒有設定可自助加入的頻道。";
 
-  const actionHint =
-    roles.length <= 5
-      ? "點下方按鈕即可加入或離開頻道。"
-      : "用下方選單選擇你想加入的頻道。";
+  const actionHint = "不用輸入指令，直接用下方按鈕加入或離開遊戲頻道。";
 
   return {
     content: `**${panelTitle}**\n${actionHint}\n\n${roleLines}`,
@@ -186,12 +204,29 @@ async function findExistingPanelMessage() {
     (message) =>
       message.author?.bot === true &&
       typeof message.content === "string" &&
-      message.content.startsWith(`**${panelTitle}**`),
+      legacyPanelTitles.some((title) =>
+        message.content.startsWith(`**${title}**`),
+      ),
   );
 }
 
+async function fetchRoleCounts(roles) {
+  try {
+    const roleCounts = await discordApi(
+      `/guilds/${guildId}/roles/member-counts`,
+    );
+
+    return Object.fromEntries(
+      roles.map((role) => [role.id, roleCounts[role.id] ?? 0]),
+    );
+  } catch {
+    return {};
+  }
+}
+
 const roles = parseManagedRoles();
-const payload = buildPanelPayload(roles);
+const counts = await fetchRoleCounts(roles);
+const payload = buildPanelPayload(roles, counts);
 const existingMessage = await findExistingPanelMessage();
 
 const message = existingMessage

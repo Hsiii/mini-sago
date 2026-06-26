@@ -1,8 +1,10 @@
 import {
+  BRAWL_STARS_ROLE_ID,
   CHANNEL_ACCESS_JOIN_PREFIX,
   CHANNEL_ACCESS_LEAVE_PREFIX,
   CHANNEL_ACCESS_PANEL_TITLE,
   CHANNEL_ACCESS_SELECT_CUSTOM_ID,
+  WORDLE_ROLE_ID,
 } from "./constants";
 import type { ManagedRole } from "./env";
 
@@ -50,6 +52,8 @@ export type ChannelAccessButtonAction = {
   roleId: string;
 };
 
+export type ChannelAccessRoleCounts = Record<string, number | undefined>;
+
 function maybeEmoji(role: ManagedRole) {
   if (!role.emoji) {
     return undefined;
@@ -58,10 +62,27 @@ function maybeEmoji(role: ManagedRole) {
   return { name: role.emoji };
 }
 
-function describeRole(role: ManagedRole) {
-  return role.description
-    ? `${role.emoji ? `${role.emoji} ` : ""}**${role.label}** - ${role.description}`
-    : `${role.emoji ? `${role.emoji} ` : ""}**${role.label}**`;
+function getRoleTitle(role: ManagedRole) {
+  if (role.id === WORDLE_ROLE_ID) {
+    return "Wordle";
+  }
+
+  if (role.id === BRAWL_STARS_ROLE_ID) {
+    return "荒野亂鬥";
+  }
+
+  return role.label;
+}
+
+function formatCount(count: number | undefined) {
+  return typeof count === "number" ? `${count} 人` : "讀取中";
+}
+
+function describeRoleGroup(role: ManagedRole, counts: ChannelAccessRoleCounts) {
+  const title = getRoleTitle(role);
+  const description = role.description ? `\n${role.description}` : "";
+
+  return `**${role.emoji ? `${role.emoji} ` : ""}${title}**\n目前成員：${formatCount(counts[role.id])}${description}`;
 }
 
 function buildButtonRows(roles: ManagedRole[]): DiscordActionRow[] {
@@ -71,14 +92,14 @@ function buildButtonRows(roles: ManagedRole[]): DiscordActionRow[] {
       {
         type: 2,
         style: 1,
-        label: `加入 ${role.label}`,
+        label: `加入 ${getRoleTitle(role)}`,
         custom_id: `${CHANNEL_ACCESS_JOIN_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
       {
         type: 2,
         style: 2,
-        label: `離開 ${role.label}`,
+        label: `離開 ${getRoleTitle(role)}`,
         custom_id: `${CHANNEL_ACCESS_LEAVE_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
@@ -115,16 +136,14 @@ function buildSelectRow(roles: ManagedRole[]): DiscordActionRow[] {
 
 export function buildChannelAccessPanel(
   roles: ManagedRole[],
+  counts: ChannelAccessRoleCounts = {},
 ): ChannelAccessPanelPayload {
   const roleLines =
     roles.length > 0
-      ? roles.map((role) => `- ${describeRole(role)}`).join("\n")
+      ? roles.map((role) => describeRoleGroup(role, counts)).join("\n\n")
       : "- 目前還沒有設定可自助加入的頻道。";
 
-  const actionHint =
-    roles.length <= 5
-      ? "點下方按鈕即可加入或離開頻道。"
-      : "用下方選單選擇你想加入的頻道。";
+  const actionHint = "不用輸入指令，直接用下方按鈕加入或離開遊戲頻道。";
 
   return {
     content: `**${CHANNEL_ACCESS_PANEL_TITLE}**\n${actionHint}\n\n${roleLines}`,

@@ -6,7 +6,7 @@ export const LEAVE_WORDLE_CHANNEL_COMMAND_NAME = "leave-wordle-channel";
 export const JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME = "join-brawlstars-channel";
 export const LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME =
   "leave-brawlstars-channel";
-export const CHANNEL_ACCESS_PANEL_TITLE = "頻道權限";
+export const CHANNEL_ACCESS_PANEL_TITLE = "遊戲頻道入口";
 export const CHANNEL_ACCESS_SELECT_CUSTOM_ID = "wm31:channel-access:select:v1";
 export const CHANNEL_ACCESS_JOIN_PREFIX = "wm31:channel-access:join:";
 export const CHANNEL_ACCESS_LEAVE_PREFIX = "wm31:channel-access:leave:";

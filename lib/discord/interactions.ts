@@ -5,7 +5,12 @@ import {
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
 } from "./constants";
 import { getBrawlStarsRole, getDiscordConfig, getWordleRole } from "./env";
-import { isChannelAccessSelect, parseChannelAccessButton } from "./panel";
+import {
+  buildChannelAccessPanel,
+  isChannelAccessSelect,
+  type ChannelAccessRoleCounts,
+  parseChannelAccessButton,
+} from "./panel";
 import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
@@ -67,6 +72,16 @@ function buildEphemeralResponse(message: string) {
   };
 }
 
+function buildPanelUpdateResponse(
+  roles: ReturnType<typeof getDiscordConfig>["managedRoles"],
+  counts: ChannelAccessRoleCounts,
+) {
+  return {
+    type: 7,
+    data: buildChannelAccessPanel(roles, counts),
+  };
+}
+
 async function buildRoleMemberSummaryMessage({
   guildId,
   roleId,
@@ -90,6 +105,30 @@ async function buildRoleMemberSummaryMessage({
     totalCount: summary.totalCount,
     usedFallbackCount: summary.usedFallbackCount,
   });
+}
+
+async function getPanelRoleCounts({
+  guildId,
+  botToken,
+  roles,
+}: {
+  guildId: string;
+  botToken: string;
+  roles: ReturnType<typeof getDiscordConfig>["managedRoles"];
+}) {
+  const entries = await Promise.all(
+    roles.map(async (role) => {
+      const summary = await getRoleMemberSummary({
+        guildId,
+        roleId: role.id,
+        botToken,
+      });
+
+      return [role.id, summary.totalCount] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries);
 }
 
 async function handleChannelAccessComponent({
@@ -118,7 +157,7 @@ async function handleChannelAccessComponent({
       return buildEphemeralResponse("這個頻道選項已不再由機器人管理。");
     }
 
-    const result = await applyManagedRoleSelection({
+    await applyManagedRoleSelection({
       guildId,
       userId,
       botToken: config.botToken,
@@ -127,24 +166,17 @@ async function handleChannelAccessComponent({
       managedRolesById: getManagedRolesById([role]),
     });
 
-    let message = result.message;
+    const counts = await getPanelRoleCounts({
+      guildId,
+      botToken: config.botToken,
+      roles: config.managedRoles,
+    });
 
-    if (buttonAction.action === "join") {
-      const summary = await buildRoleMemberSummaryMessage({
-        guildId,
-        roleId: role.id,
-        roleLabel: role.label,
-        botToken: config.botToken,
-      });
-
-      message = `${message}\n\n${summary}`;
-    }
-
-    return buildEphemeralResponse(message);
+    return buildPanelUpdateResponse(config.managedRoles, counts);
   }
 
   if (isChannelAccessSelect(customId)) {
-    const result = await applyManagedRoleSelection({
+    await applyManagedRoleSelection({
       guildId,
       userId,
       botToken: config.botToken,
@@ -153,7 +185,13 @@ async function handleChannelAccessComponent({
       managedRolesById: getManagedRolesById(config.managedRoles),
     });
 
-    return buildEphemeralResponse(result.message);
+    const counts = await getPanelRoleCounts({
+      guildId,
+      botToken: config.botToken,
+      roles: config.managedRoles,
+    });
+
+    return buildPanelUpdateResponse(config.managedRoles, counts);
   }
 
   return null;
