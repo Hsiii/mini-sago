@@ -21,8 +21,10 @@ npm run dev
 
 Oracle's current Always Free Ampere A1 allowance is 1,500 OCPU hours and
 9,000 GB-hours per month, which is equivalent to one VM with 2 OCPUs and
-12 GB RAM. Use the `VM.Standard.A1.Flex` shape at or below that size to avoid
-paid usage. See Oracle's Free Tier pages:
+12 GB RAM. This bot should run on a much smaller `VM.Standard.A1.Flex`
+instance: 1 OCPU and 1 GB RAM. If building the image directly on the VM runs
+out of memory, increase the VM to 2 GB RAM; that still stays inside Always
+Free limits. See Oracle's Free Tier pages:
 
 - <https://www.oracle.com/cloud/free/>
 - <https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm>
@@ -30,14 +32,21 @@ paid usage. See Oracle's Free Tier pages:
 Discord interaction endpoints must be public HTTPS URLs, so the included
 Docker Compose stack runs the app behind Caddy for automatic TLS.
 
+You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
+record pointed at the Oracle VM public IP. Discord will not accept a plain
+HTTP endpoint, and Caddy needs a hostname to issue a trusted TLS certificate.
+No paid Oracle load balancer, database, object storage, or managed service is
+required.
+
 1. Create an Oracle Cloud account and tenancy.
 2. Create an Ampere A1 VM:
    - Image: Ubuntu 24.04 or 22.04.
    - Shape: `VM.Standard.A1.Flex`.
-   - Size: 1-2 OCPUs and 6-12 GB RAM.
+   - Size: 1 OCPU and 1 GB RAM.
+   - Boot volume: 50 GB.
    - Networking: public subnet with a public IPv4 address.
    - Ingress: TCP `22`, `80`, and `443`.
-3. Point a DNS `A` record, such as `bot.example.com`, to the VM public IP.
+3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker:
 
 ```bash
@@ -79,6 +88,11 @@ curl https://$DOMAIN/api/health
 ```text
 https://YOUR_DOMAIN/api/interactions
 ```
+
+The production Compose stack caps runtime usage so the bot remains small:
+
+- app container: 0.25 CPU and 256 MB RAM
+- Caddy container: 0.25 CPU and 128 MB RAM
 
 ## Environment variables
 
