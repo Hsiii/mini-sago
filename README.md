@@ -4,6 +4,20 @@ WM31Bot is a small Bun service for a Discord bot. It exposes Discord
 interaction webhooks for channel access slash commands, and it keeps a Discord
 Gateway connection open to transform Instagram links into kkinstagram links.
 
+## Features
+
+- Self-assignable Discord channel roles through localized slash commands.
+- A persistent channel access panel with per-role join/leave buttons for up to
+  five roles, or a select menu for larger role sets.
+- Live panel member counts that refresh after component interactions and when
+  the panel publisher runs.
+- Instagram link reposting across every guild where the bot is installed:
+  `instagram.com` links are deleted and reposted as `kkinstagram.com` links
+  through a channel webhook.
+- Webhook reposts preserve the member display name and avatar where possible,
+  support thread replies through the parent channel webhook, and disable
+  allowed mentions to avoid duplicate pings.
+
 ## Use it
 
 1. Install dependencies and create `.env.local`.
@@ -13,9 +27,11 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
    under Bot -> Privileged Gateway Intents. Without this, Discord closes the
    Gateway connection with code `4014` and Instagram links cannot be read.
-5. Invite the bot with `Manage Messages` and `Manage Webhooks` permissions.
+5. Invite the bot with `applications.commands` plus bot permissions for
+   `Manage Roles`, `Manage Messages`, and `Manage Webhooks`.
 6. Publish the slash commands.
-7. Publish the channel access panel.
+7. Publish the channel access panel. Pass a channel ID or set
+   `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
 8. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
@@ -32,6 +48,22 @@ bun run dev
 - `POST /api/interactions` handles Discord slash commands and panel
   components.
 
+## Channel access panel
+
+`bun run publish:panel -- CHANNEL_ID` creates or updates the channel access
+panel in the target channel. It recognizes existing panel messages, including
+older legacy panel content, so republishing refreshes the same message instead
+of posting a duplicate.
+
+For one to five managed roles, the panel interleaves each role summary with
+dedicated `加入` and `退出` buttons. For larger role sets, it falls back to a
+Discord select menu. The panel is sent as Components V2, includes localized
+Wordle and 荒野亂鬥 labels for the default roles, and disables allowed mentions.
+
+Component interactions update Discord roles immediately and then refresh the
+panel with the latest member counts. Slash commands remain available for the
+default Wordle and 荒野亂鬥 role flows.
+
 ## Instagram link transform
 
 When a non-bot guild member posts an `instagram.com` link, the bot deletes the
@@ -45,7 +77,9 @@ guild/channel.
 
 The first transformed link in a channel creates a `WM31 Instagram` webhook in
 that channel. Threads are reposted through a webhook in the parent channel with
-Discord's `thread_id` webhook parameter.
+Discord's `thread_id` webhook parameter. The Gateway client heartbeats,
+resumes sessions when Discord allows it, and logs clearer close reasons for
+authentication or privileged-intent failures.
 
 ## Oracle Cloud Free Tier deployment
 
