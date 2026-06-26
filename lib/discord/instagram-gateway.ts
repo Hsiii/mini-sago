@@ -6,6 +6,7 @@ const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 const INSTAGRAM_REPOST_WEBHOOK_NAME = "WM31 Instagram";
 const MESSAGE_CONTENT_LIMIT = 2_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
+const GUILDS_INTENT = 1 << 0;
 const GUILD_MESSAGES_INTENT = 1 << 9;
 const MESSAGE_CONTENT_INTENT = 1 << 15;
 
@@ -155,6 +156,22 @@ function readGatewayMessage(data: MessageEvent["data"]) {
   return String(data);
 }
 
+function getGatewayCloseReason(code: number) {
+  if (code === 4004) {
+    return "authentication failed; check DISCORD_BOT_TOKEN";
+  }
+
+  if (code === 4013) {
+    return "invalid gateway intents requested";
+  }
+
+  if (code === 4014) {
+    return "disallowed gateway intents; enable the Message Content privileged intent in the Discord Developer Portal";
+  }
+
+  return "no specific reason mapped";
+}
+
 class InstagramGatewayClient {
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -193,7 +210,9 @@ class InstagramGatewayClient {
       this.clearHeartbeat();
 
       if (this.stopped || !this.shouldReconnect(event.code)) {
-        console.warn(`Discord gateway closed with code ${event.code}.`);
+        console.warn(
+          `Discord gateway closed with code ${event.code}: ${getGatewayCloseReason(event.code)}.`,
+        );
         return;
       }
 
@@ -305,7 +324,7 @@ class InstagramGatewayClient {
       op: 2,
       d: {
         token: this.config.botToken,
-        intents: GUILD_MESSAGES_INTENT | MESSAGE_CONTENT_INTENT,
+        intents: GUILDS_INTENT | GUILD_MESSAGES_INTENT | MESSAGE_CONTENT_INTENT,
         properties: {
           os: process.platform,
           browser: "wm31bot",

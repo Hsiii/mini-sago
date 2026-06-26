@@ -9,7 +9,9 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 1. Install dependencies and create `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
 3. Optionally set `DISCORD_GUILD_ID` and `SELF_ASSIGNABLE_ROLES`.
-4. Enable the Message Content privileged intent in the Discord Developer Portal.
+4. Enable the Message Content privileged intent in the Discord Developer Portal
+   under Bot -> Privileged Gateway Intents. Without this, Discord closes the
+   Gateway connection with code `4014` and Instagram links cannot be read.
 5. Invite the bot with `Manage Messages` and `Manage Webhooks` permissions.
 6. Publish the slash commands.
 7. Publish the channel access panel.
