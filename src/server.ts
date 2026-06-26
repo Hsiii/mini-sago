@@ -1,4 +1,5 @@
 import { getPublicDiscordSummary } from "../lib/discord/env";
+import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -51,5 +52,9 @@ const server = Bun.serve({
   hostname,
   fetch: handleRequest,
 });
+
+if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {
+  startInstagramGateway();
+}
 
 console.log(`WM31Bot listening on http://${server.hostname}:${server.port}`);

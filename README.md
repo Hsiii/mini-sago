@@ -1,17 +1,19 @@
 # WM31Bot
 
 WM31Bot is a small Bun service for a Discord bot. It exposes Discord
-interaction webhooks for channel access slash commands and runs as a
-long-lived process behind Caddy.
+interaction webhooks for channel access slash commands, and it keeps a Discord
+Gateway connection open to transform Instagram links into kkinstagram links.
 
 ## Use it
 
 1. Install dependencies and create `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
 3. Optionally set `DISCORD_GUILD_ID` and `SELF_ASSIGNABLE_ROLES`.
-4. Publish the slash commands.
-5. Publish the channel access panel.
-6. Run locally or deploy, then point the Discord Interactions Endpoint URL at
+4. Enable the Message Content privileged intent in the Discord Developer Portal.
+5. Invite the bot with `Manage Messages` and `Manage Webhooks` permissions.
+6. Publish the slash commands.
+7. Publish the channel access panel.
+8. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
 ```bash
@@ -26,6 +28,17 @@ bun run dev
 - `GET /api/health` returns configuration health.
 - `POST /api/interactions` handles Discord slash commands and panel
   components.
+
+## Instagram link transform
+
+When a non-bot guild member posts an `instagram.com` link, the bot deletes the
+original message and reposts the transformed `kkinstagram.com` URL through a
+channel webhook. The webhook payload uses the member's display name and avatar,
+and disables allowed mentions so reposts do not create new pings.
+
+The first transformed link in a channel creates a `WM31 Instagram` webhook in
+that channel. Threads are reposted through a webhook in the parent channel with
+Discord's `thread_id` webhook parameter.
 
 ## Oracle Cloud Free Tier deployment
 
@@ -92,6 +105,7 @@ The production Compose stack caps runtime usage so the bot remains small:
 | `DISCORD_BOT_TOKEN`                 | Yes      | Bot token used for Discord REST role updates                                                                                     |
 | `DISCORD_GUILD_ID`                  | No       | Restricts the bot to a single guild. Defaults to `1282936453134815275`                                                           |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
+| `DISCORD_GATEWAY_DISABLED`          | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener                                              |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:
