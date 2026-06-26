@@ -38,6 +38,10 @@ HTTP endpoint, and Caddy needs a hostname to issue a trusted TLS certificate.
 No paid Oracle load balancer, database, object storage, or managed service is
 required.
 
+The included Caddy config also supports a `/wm31` path prefix, so you can use
+`https://bot.example.com/wm31/api/interactions` while keeping `DOMAIN` set to
+only `bot.example.com`.
+
 1. Create an Oracle Cloud account and tenancy.
 2. Create an Ampere A1 VM:
    - Image: Ubuntu 24.04 or 22.04.
@@ -63,7 +67,7 @@ sudo usermod -aG docker "$USER"
 
 5. Clone this repository onto the VM.
 6. Create `.env.production` from `.env.production.example` and fill in:
-   - `DOMAIN`
+   - `DOMAIN` without a path, such as `bot.example.com`
    - `ACME_EMAIL`
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
@@ -80,13 +84,13 @@ docker compose logs -f
 8. Confirm the health endpoint:
 
 ```bash
-curl https://$DOMAIN/api/health
+curl https://$DOMAIN/wm31/api/health
 ```
 
 9. In the Discord Developer Portal, set the Interactions Endpoint URL to:
 
 ```text
-https://YOUR_DOMAIN/api/interactions
+https://YOUR_DOMAIN/wm31/api/interactions
 ```
 
 The production Compose stack caps runtime usage so the bot remains small:

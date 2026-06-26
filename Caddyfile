@@ -10,5 +10,11 @@
 		X-Content-Type-Options "nosniff"
 	}
 
+	redir /wm31 /wm31/ 308
+
+	handle_path /wm31/* {
+		reverse_proxy wm31bot:3000
+	}
+
 	reverse_proxy wm31bot:3000
 }
