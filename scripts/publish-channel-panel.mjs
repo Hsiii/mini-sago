@@ -3,10 +3,12 @@ const channelId =
   process.argv[2] ?? process.env.DISCORD_CHANNEL_ACCESS_CHANNEL_ID;
 
 const panelTitle = "遊戲頻道入口";
+const panelIntro = "使用按鈕加入或離開遊戲頻道";
 const legacyPanelTitles = ["頻道權限", panelTitle];
 const joinPrefix = "wm31:channel-access:join:";
 const leavePrefix = "wm31:channel-access:leave:";
 const selectCustomId = "wm31:channel-access:select:v1";
+const isComponentsV2Flag = 1 << 15;
 const guildId = process.env.DISCORD_GUILD_ID ?? "1282936453134815275";
 const wordleRoleId = "1451976411152781466";
 const brawlStarsRoleId = "1450774352386719775";
@@ -97,37 +99,61 @@ function getRoleTitle(role) {
   return role.label;
 }
 
+function getRoleDescription(role) {
+  if (role.id === wordleRoleId) {
+    return "每日 Wordle 活動";
+  }
+
+  if (role.id === brawlStarsRoleId) {
+    return "荒野亂鬥相關討論";
+  }
+
+  return role.description;
+}
+
 function formatCount(count) {
   return typeof count === "number" ? `${count} 人` : "讀取中";
 }
 
-function describeRoleGroup(role, counts) {
+function buildRoleText(role, counts) {
   const title = getRoleTitle(role);
-  const description = role.description ? `\n${role.description}` : "";
+  const description = getRoleDescription(role);
+  const heading = `**${role.emoji ? `${role.emoji} ` : ""}${title}**`;
+  const summary = description ? `${heading}：${description}` : heading;
 
-  return `**${role.emoji ? `${role.emoji} ` : ""}${title}**\n目前成員：${formatCount(counts[role.id])}${description}`;
+  return `${summary}\n目前成員：${formatCount(counts[role.id])}`;
 }
 
-function buildButtonRows(roles) {
-  return roles.slice(0, 5).map((role) => ({
+function buildButtonRow(role) {
+  return {
     type: 1,
     components: [
       {
         type: 2,
         style: 1,
-        label: `加入 ${getRoleTitle(role)}`,
+        label: "加入",
         custom_id: `${joinPrefix}${role.id}`,
         emoji: maybeEmoji(role),
       },
       {
         type: 2,
         style: 2,
-        label: `離開 ${getRoleTitle(role)}`,
+        label: "退出",
         custom_id: `${leavePrefix}${role.id}`,
         emoji: maybeEmoji(role),
       },
     ],
-  }));
+  };
+}
+
+function buildButtonGroups(roles, counts) {
+  return roles.slice(0, 5).flatMap((role) => [
+    {
+      type: 10,
+      content: buildRoleText(role, counts),
+    },
+    buildButtonRow(role),
+  ]);
 }
 
 function buildSelectRow(roles) {
@@ -158,17 +184,35 @@ function buildSelectRow(roles) {
 }
 
 function buildPanelPayload(roles, counts) {
-  const roleLines =
+  const roleComponents =
     roles.length > 0
-      ? roles.map((role) => describeRoleGroup(role, counts)).join("\n\n")
-      : "- 目前還沒有設定可自助加入的頻道。";
-
-  const actionHint = "不用輸入指令，直接用下方按鈕加入或離開遊戲頻道。";
+      ? roles.length <= 5
+        ? buildButtonGroups(roles, counts)
+        : [
+            {
+              type: 10,
+              content: roles
+                .map((role) => buildRoleText(role, counts))
+                .join("\n\n"),
+            },
+            ...buildSelectRow(roles),
+          ]
+      : [
+          {
+            type: 10,
+            content: "目前還沒有設定可自助加入的頻道。",
+          },
+        ];
 
   return {
-    content: `**${panelTitle}**\n${actionHint}\n\n${roleLines}`,
-    components:
-      roles.length <= 5 ? buildButtonRows(roles) : buildSelectRow(roles),
+    flags: isComponentsV2Flag,
+    components: [
+      {
+        type: 10,
+        content: panelIntro,
+      },
+      ...roleComponents,
+    ],
     allowed_mentions: {
       parse: [],
     },
@@ -203,11 +247,41 @@ async function findExistingPanelMessage() {
   return messages.find(
     (message) =>
       message.author?.bot === true &&
-      typeof message.content === "string" &&
-      legacyPanelTitles.some((title) =>
-        message.content.startsWith(`**${title}**`),
-      ),
+      (isLegacyPanelContent(message.content) ||
+        hasChannelAccessComponent(message.components)),
   );
+}
+
+function isLegacyPanelContent(content) {
+  return (
+    typeof content === "string" &&
+    legacyPanelTitles.some((title) => content.startsWith(`**${title}**`))
+  );
+}
+
+function hasChannelAccessComponent(components) {
+  if (!Array.isArray(components)) {
+    return false;
+  }
+
+  return components.some((component) => {
+    if (typeof component?.custom_id === "string") {
+      return (
+        component.custom_id === selectCustomId ||
+        component.custom_id.startsWith(joinPrefix) ||
+        component.custom_id.startsWith(leavePrefix)
+      );
+    }
+
+    if (component?.type === 10 && typeof component.content === "string") {
+      return (
+        component.content.includes(panelIntro) ||
+        legacyPanelTitles.some((title) => component.content.includes(title))
+      );
+    }
+
+    return hasChannelAccessComponent(component?.components);
+  });
 }
 
 async function fetchRoleCounts(roles) {
@@ -232,7 +306,11 @@ const existingMessage = await findExistingPanelMessage();
 const message = existingMessage
   ? await discordApi(`/channels/${channelId}/messages/${existingMessage.id}`, {
       method: "PATCH",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        content: null,
+        embeds: [],
+      }),
     })
   : await discordApi(`/channels/${channelId}/messages`, {
       method: "POST",

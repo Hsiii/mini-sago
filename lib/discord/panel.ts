@@ -2,11 +2,13 @@ import {
   BRAWL_STARS_ROLE_ID,
   CHANNEL_ACCESS_JOIN_PREFIX,
   CHANNEL_ACCESS_LEAVE_PREFIX,
-  CHANNEL_ACCESS_PANEL_TITLE,
   CHANNEL_ACCESS_SELECT_CUSTOM_ID,
   WORDLE_ROLE_ID,
 } from "./constants";
 import type { ManagedRole } from "./env";
+
+const IS_COMPONENTS_V2_FLAG = 1 << 15;
+const PANEL_INTRO = "使用按鈕加入或離開遊戲頻道";
 
 type DiscordEmoji = {
   name: string;
@@ -39,9 +41,14 @@ type DiscordActionRow = {
   components: (DiscordButton | DiscordStringSelect)[];
 };
 
-export type ChannelAccessPanelPayload = {
+type DiscordTextDisplay = {
+  type: 10;
   content: string;
-  components: DiscordActionRow[];
+};
+
+export type ChannelAccessPanelPayload = {
+  flags: typeof IS_COMPONENTS_V2_FLAG;
+  components: (DiscordTextDisplay | DiscordActionRow)[];
   allowed_mentions: {
     parse: [];
   };
@@ -74,37 +81,64 @@ function getRoleTitle(role: ManagedRole) {
   return role.label;
 }
 
+function getRoleDescription(role: ManagedRole) {
+  if (role.id === WORDLE_ROLE_ID) {
+    return "每日 Wordle 活動";
+  }
+
+  if (role.id === BRAWL_STARS_ROLE_ID) {
+    return "荒野亂鬥相關討論";
+  }
+
+  return role.description;
+}
+
 function formatCount(count: number | undefined) {
   return typeof count === "number" ? `${count} 人` : "讀取中";
 }
 
-function describeRoleGroup(role: ManagedRole, counts: ChannelAccessRoleCounts) {
+function buildRoleText(role: ManagedRole, counts: ChannelAccessRoleCounts) {
   const title = getRoleTitle(role);
-  const description = role.description ? `\n${role.description}` : "";
+  const description = getRoleDescription(role);
+  const heading = `**${role.emoji ? `${role.emoji} ` : ""}${title}**`;
+  const summary = description ? `${heading}：${description}` : heading;
 
-  return `**${role.emoji ? `${role.emoji} ` : ""}${title}**\n目前成員：${formatCount(counts[role.id])}${description}`;
+  return `${summary}\n目前成員：${formatCount(counts[role.id])}`;
 }
 
-function buildButtonRows(roles: ManagedRole[]): DiscordActionRow[] {
-  return roles.slice(0, 5).map((role) => ({
+function buildButtonRow(role: ManagedRole): DiscordActionRow {
+  return {
     type: 1,
     components: [
       {
         type: 2,
         style: 1,
-        label: `加入 ${getRoleTitle(role)}`,
+        label: "加入",
         custom_id: `${CHANNEL_ACCESS_JOIN_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
       {
         type: 2,
         style: 2,
-        label: `離開 ${getRoleTitle(role)}`,
+        label: "退出",
         custom_id: `${CHANNEL_ACCESS_LEAVE_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
     ],
-  }));
+  };
+}
+
+function buildButtonGroups(
+  roles: ManagedRole[],
+  counts: ChannelAccessRoleCounts,
+): (DiscordTextDisplay | DiscordActionRow)[] {
+  return roles.slice(0, 5).flatMap((role) => [
+    {
+      type: 10 as const,
+      content: buildRoleText(role, counts),
+    },
+    buildButtonRow(role),
+  ]);
 }
 
 function buildSelectRow(roles: ManagedRole[]): DiscordActionRow[] {
@@ -138,17 +172,35 @@ export function buildChannelAccessPanel(
   roles: ManagedRole[],
   counts: ChannelAccessRoleCounts = {},
 ): ChannelAccessPanelPayload {
-  const roleLines =
+  const roleComponents =
     roles.length > 0
-      ? roles.map((role) => describeRoleGroup(role, counts)).join("\n\n")
-      : "- 目前還沒有設定可自助加入的頻道。";
-
-  const actionHint = "不用輸入指令，直接用下方按鈕加入或離開遊戲頻道。";
+      ? roles.length <= 5
+        ? buildButtonGroups(roles, counts)
+        : [
+            {
+              type: 10 as const,
+              content: roles
+                .map((role) => buildRoleText(role, counts))
+                .join("\n\n"),
+            },
+            ...buildSelectRow(roles),
+          ]
+      : [
+          {
+            type: 10 as const,
+            content: "目前還沒有設定可自助加入的頻道。",
+          },
+        ];
 
   return {
-    content: `**${CHANNEL_ACCESS_PANEL_TITLE}**\n${actionHint}\n\n${roleLines}`,
-    components:
-      roles.length <= 5 ? buildButtonRows(roles) : buildSelectRow(roles),
+    flags: IS_COMPONENTS_V2_FLAG,
+    components: [
+      {
+        type: 10,
+        content: PANEL_INTRO,
+      },
+      ...roleComponents,
+    ],
     allowed_mentions: {
       parse: [],
     },
