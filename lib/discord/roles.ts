@@ -40,15 +40,15 @@ function getDiscordRoleErrorMessage(status: number, responseBody: string) {
   const parsedBody = parseDiscordApiError(responseBody);
 
   if (status === 404 && parsedBody?.code === 10004) {
-    return "The bot user cannot access this server. Invite the bot with both the bot and applications.commands scopes, and verify DISCORD_BOT_TOKEN belongs to the same Discord application handling interactions.";
+    return "機器人無法存取這個伺服器。請確認機器人已用 bot 和 applications.commands scopes 邀請進伺服器，且 DISCORD_BOT_TOKEN 屬於正在處理互動的同一個 Discord 應用程式。";
   }
 
   if (status === 403 && parsedBody?.code === 50001) {
-    return "The bot does not have access to update roles in this server. Check that the bot is installed in the server and that the production token matches this application.";
+    return "機器人沒有權限更新這個伺服器的身分組。請確認機器人已安裝在伺服器中，且正式環境 token 對應到這個應用程式。";
   }
 
   if (status === 403 && parsedBody?.code === 50013) {
-    return `Discord denied the role update in guild ${TARGET_GUILD_ID}. Ensure the bot has the Manage Roles permission and that its highest role is above the managed channel role in the server role hierarchy.`;
+    return `Discord 拒絕更新伺服器 ${TARGET_GUILD_ID} 的身分組。請確認機器人有「管理身分組」權限，且機器人的最高身分組在伺服器身分組排序中高於要管理的頻道身分組。`;
   }
 
   return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;
@@ -102,14 +102,14 @@ export function formatRoleMemberSummary({
   usedFallbackCount: boolean;
 }) {
   if (totalCount === 0) {
-    return `Current ${roleLabel} members: none.`;
+    return `目前沒有加入「${roleLabel}」的成員。`;
   }
 
   if (usedFallbackCount || memberIds.length === 0) {
-    return `Current ${roleLabel} members: ${totalCount}.`;
+    return `目前「${roleLabel}」成員數：${totalCount}。`;
   }
 
-  const lines = [`Current ${roleLabel} members (${totalCount}):`];
+  const lines = [`目前「${roleLabel}」成員（${totalCount}）：`];
   let visibleCount = 0;
 
   for (const memberId of memberIds) {
@@ -125,7 +125,7 @@ export function formatRoleMemberSummary({
   }
 
   if (visibleCount < totalCount) {
-    lines.push(`...and ${totalCount - visibleCount} more.`);
+    lines.push(`...還有 ${totalCount - visibleCount} 位。`);
   }
 
   return lines.join("\n");
@@ -236,18 +236,17 @@ export async function applyManagedRoleSelection({
     ...rolesToAdd.filter((roleId) => !currentRoleIdSet.has(roleId)),
   ];
 
-  let message =
-    "No changes were needed. Your managed roles already matched the selection.";
+  let message = "不需要變更，你的頻道權限已經是最新狀態。";
 
   if (rolesToAdd.length > 0 || rolesToRemove.length > 0) {
     const fragments = [];
 
     if (rolesToAdd.length > 0) {
-      fragments.push(`Added ${mentionRoles(rolesToAdd)}`);
+      fragments.push(`已加入 ${mentionRoles(rolesToAdd)}`);
     }
 
     if (rolesToRemove.length > 0) {
-      fragments.push(`Removed ${mentionRoles(rolesToRemove)}`);
+      fragments.push(`已離開 ${mentionRoles(rolesToRemove)}`);
     }
 
     message = `${fragments.join(". ")}.`;

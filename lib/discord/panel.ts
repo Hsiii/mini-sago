@@ -71,14 +71,14 @@ function buildButtonRows(roles: ManagedRole[]): DiscordActionRow[] {
       {
         type: 2,
         style: 1,
-        label: `Join ${role.label}`,
+        label: `加入 ${role.label}`,
         custom_id: `${CHANNEL_ACCESS_JOIN_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
       {
         type: 2,
         style: 2,
-        label: `Leave ${role.label}`,
+        label: `離開 ${role.label}`,
         custom_id: `${CHANNEL_ACCESS_LEAVE_PREFIX}${role.id}`,
         emoji: maybeEmoji(role),
       },
@@ -98,7 +98,7 @@ function buildSelectRow(roles: ManagedRole[]): DiscordActionRow[] {
         {
           type: 3,
           custom_id: CHANNEL_ACCESS_SELECT_CUSTOM_ID,
-          placeholder: "Choose channel access roles",
+          placeholder: "選擇要加入的頻道",
           min_values: 0,
           max_values: roles.length,
           options: roles.map((role) => ({
@@ -119,12 +119,12 @@ export function buildChannelAccessPanel(
   const roleLines =
     roles.length > 0
       ? roles.map((role) => `- ${describeRole(role)}`).join("\n")
-      : "- No channel roles are configured yet.";
+      : "- 目前還沒有設定可自助加入的頻道。";
 
   const actionHint =
     roles.length <= 5
-      ? "Use the buttons below to join or leave a channel."
-      : "Use the selector below to choose the channels you want.";
+      ? "點下方按鈕即可加入或離開頻道。"
+      : "用下方選單選擇你想加入的頻道。";
 
   return {
     content: `**${CHANNEL_ACCESS_PANEL_TITLE}**\n${actionHint}\n\n${roleLines}`,

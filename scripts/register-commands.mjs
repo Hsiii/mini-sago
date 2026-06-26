@@ -14,22 +14,22 @@ const url = guildId
 const commands = [
   {
     name: "join-wordle-channel",
-    description: "Grant the Wordle channel access role",
+    description: "加入 Wordle 頻道",
     dm_permission: false,
   },
   {
     name: "leave-wordle-channel",
-    description: "Remove the Wordle channel access role",
+    description: "離開 Wordle 頻道",
     dm_permission: false,
   },
   {
     name: "join-brawlstars-channel",
-    description: "Grant the Brawl Stars channel access role",
+    description: "加入 Brawl Stars 頻道",
     dm_permission: false,
   },
   {
     name: "leave-brawlstars-channel",
-    description: "Remove the Brawl Stars channel access role",
+    description: "離開 Brawl Stars 頻道",
     dm_permission: false,
   },
 ];

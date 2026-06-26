@@ -124,9 +124,7 @@ async function handleChannelAccessComponent({
     );
 
     if (!role) {
-      return buildEphemeralResponse(
-        "That channel option is no longer managed by this bot.",
-      );
+      return buildEphemeralResponse("這個頻道選項已不再由機器人管理。");
     }
 
     const result = await applyManagedRoleSelection({
@@ -176,7 +174,7 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
 
   if (!signature || !timestamp) {
-    return new Response("Missing Discord signature headers", { status: 401 });
+    return new Response("缺少 Discord 簽章標頭", { status: 401 });
   }
 
   let config;
@@ -185,9 +183,7 @@ export async function POST(request: Request) {
     config = getDiscordConfig();
   } catch (error) {
     return new Response(
-      error instanceof Error
-        ? error.message
-        : "Discord bot configuration is invalid",
+      error instanceof Error ? error.message : "Discord 機器人設定無效",
       { status: 500 },
     );
   }
@@ -200,7 +196,7 @@ export async function POST(request: Request) {
   });
 
   if (!isValid) {
-    return new Response("Invalid request signature", { status: 401 });
+    return new Response("Discord 請求簽章無效", { status: 401 });
   }
 
   const interaction = JSON.parse(rawBody) as DiscordInteraction;
@@ -216,7 +212,7 @@ export async function POST(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "This bot is restricted to a different Discord server.",
+        content: "這個機器人只限指定伺服器使用。",
       },
     });
   }
@@ -226,9 +222,7 @@ export async function POST(request: Request) {
   if (interaction.type === 3) {
     if (!interaction.guild_id || !userId) {
       return jsonResponse(
-        buildEphemeralResponse(
-          "Guild member details were missing from the interaction payload.",
-        ),
+        buildEphemeralResponse("互動資料缺少伺服器成員資訊。"),
       );
     }
 
@@ -249,8 +243,8 @@ export async function POST(request: Request) {
       return jsonResponse(
         buildEphemeralResponse(
           error instanceof Error
-            ? `Could not update roles: ${error.message}`
-            : "Could not update roles.",
+            ? `無法更新身分組：${error.message}`
+            : "無法更新身分組。",
         ),
       );
     }
@@ -290,7 +284,7 @@ export async function POST(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "Unsupported interaction type.",
+        content: "不支援的互動類型。",
       },
     });
   }
@@ -300,8 +294,7 @@ export async function POST(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content:
-          "Guild member details were missing from the interaction payload.",
+        content: "互動資料缺少伺服器成員資訊。",
       },
     });
   }
@@ -337,8 +330,8 @@ export async function POST(request: Request) {
     return jsonResponse(
       buildRoleCommandResponse(
         error instanceof Error
-          ? `Could not update roles: ${error.message}`
-          : "Could not update roles.",
+          ? `無法更新身分組：${error.message}`
+          : "無法更新身分組。",
       ),
     );
   }
