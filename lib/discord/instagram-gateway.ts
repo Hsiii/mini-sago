@@ -41,6 +41,7 @@ type DiscordUser = {
 type DiscordGuildMember = {
   nick?: string | null;
   avatar?: string | null;
+  user?: DiscordUser;
 };
 
 type DiscordMessageCreate = {
@@ -108,27 +109,32 @@ function getDisplayName(message: DiscordMessageCreate) {
   ).slice(0, 80);
 }
 
-function getAvatarUrl(message: DiscordMessageCreate) {
-  const userId = message.author?.id;
+function getAvatarUrl({
+  user,
+  guildId,
+  guildAvatar,
+}: {
+  user: DiscordUser | undefined;
+  guildId?: string;
+  guildAvatar?: string | null;
+}) {
+  const userId = user?.id;
 
   if (!userId) {
     return undefined;
   }
 
-  const guildAvatar = message.member?.avatar;
-  const userAvatar = message.author?.avatar;
-
-  if (guildAvatar && message.guild_id) {
+  if (guildAvatar && guildId) {
     const extension = guildAvatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/guilds/${message.guild_id}/users/${userId}/avatars/${guildAvatar}.${extension}?size=128`;
+    return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${guildAvatar}.${extension}?size=128`;
   }
 
-  if (userAvatar) {
-    const extension = userAvatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/avatars/${userId}/${userAvatar}.${extension}?size=128`;
+  if (user.avatar) {
+    const extension = user.avatar.startsWith("a_") ? "gif" : "png";
+    return `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${extension}?size=128`;
   }
 
-  return `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(message.author)}.png`;
+  return `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(user)}.png`;
 }
 
 function getDefaultAvatarIndex(user: DiscordUser | undefined) {
@@ -527,7 +533,7 @@ class InstagramGatewayClient {
         parse: [],
       },
     };
-    const avatarUrl = getAvatarUrl(message);
+    const avatarUrl = await this.getMessageAuthorAvatarUrl(message);
 
     if (avatarUrl) {
       body.avatar_url = avatarUrl;
@@ -537,6 +543,33 @@ class InstagramGatewayClient {
       method: "POST",
       body,
       authenticated: false,
+    });
+  }
+
+  private async getMessageAuthorAvatarUrl(message: DiscordMessageCreate) {
+    if (message.guild_id && message.author?.id) {
+      try {
+        const member = await this.discordRequest<DiscordGuildMember>(
+          `/guilds/${message.guild_id}/members/${message.author.id}`,
+        );
+
+        return getAvatarUrl({
+          user: member.user ?? message.author,
+          guildId: message.guild_id,
+          guildAvatar: member.avatar,
+        });
+      } catch (error) {
+        console.warn(
+          `Failed to refresh avatar for user ${message.author.id}; falling back to gateway payload.`,
+          error,
+        );
+      }
+    }
+
+    return getAvatarUrl({
+      user: message.author,
+      guildId: message.guild_id,
+      guildAvatar: message.member?.avatar,
     });
   }
 
