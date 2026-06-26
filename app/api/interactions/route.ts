@@ -10,6 +10,10 @@ import {
   getWordleRole,
 } from "@/lib/discord/env";
 import {
+  isChannelAccessSelect,
+  parseChannelAccessButton,
+} from "@/lib/discord/panel";
+import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
   getManagedRolesById,
@@ -23,6 +27,7 @@ type DiscordInteraction = {
   type: number;
   guild_id?: string;
   data?: {
+    component_type?: number;
     name?: string;
     custom_id?: string;
     values?: string[];
@@ -61,6 +66,110 @@ function isGuildAllowed(
   return guildId === allowedGuildId;
 }
 
+function buildEphemeralResponse(message: string) {
+  return {
+    type: 4,
+    data: {
+      flags: 64,
+      content: message,
+    },
+  };
+}
+
+async function buildRoleMemberSummaryMessage({
+  guildId,
+  roleId,
+  roleLabel,
+  botToken,
+}: {
+  guildId: string;
+  roleId: string;
+  roleLabel: string;
+  botToken: string;
+}) {
+  const summary = await getRoleMemberSummary({
+    guildId,
+    roleId,
+    botToken,
+  });
+
+  return formatRoleMemberSummary({
+    roleLabel,
+    memberIds: summary.memberIds,
+    totalCount: summary.totalCount,
+    usedFallbackCount: summary.usedFallbackCount,
+  });
+}
+
+async function handleChannelAccessComponent({
+  customId,
+  selectedRoleIds,
+  config,
+  guildId,
+  userId,
+  currentRoleIds,
+}: {
+  customId: string | undefined;
+  selectedRoleIds: string[];
+  config: ReturnType<typeof getDiscordConfig>;
+  guildId: string;
+  userId: string;
+  currentRoleIds: string[];
+}) {
+  const buttonAction = parseChannelAccessButton(customId);
+
+  if (buttonAction) {
+    const role = config.managedRoles.find(
+      (managedRole) => managedRole.id === buttonAction.roleId,
+    );
+
+    if (!role) {
+      return buildEphemeralResponse(
+        "That channel option is no longer managed by this bot.",
+      );
+    }
+
+    const result = await applyManagedRoleSelection({
+      guildId,
+      userId,
+      botToken: config.botToken,
+      currentRoleIds,
+      selectedRoleIds: buttonAction.action === "join" ? [role.id] : [],
+      managedRolesById: getManagedRolesById([role]),
+    });
+
+    let message = result.message;
+
+    if (buttonAction.action === "join") {
+      const summary = await buildRoleMemberSummaryMessage({
+        guildId,
+        roleId: role.id,
+        roleLabel: role.label,
+        botToken: config.botToken,
+      });
+
+      message = `${message}\n\n${summary}`;
+    }
+
+    return buildEphemeralResponse(message);
+  }
+
+  if (isChannelAccessSelect(customId)) {
+    const result = await applyManagedRoleSelection({
+      guildId,
+      userId,
+      botToken: config.botToken,
+      currentRoleIds,
+      selectedRoleIds,
+      managedRolesById: getManagedRolesById(config.managedRoles),
+    });
+
+    return buildEphemeralResponse(result.message);
+  }
+
+  return null;
+}
+
 export async function POST(request: Request) {
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
@@ -96,6 +205,7 @@ export async function POST(request: Request) {
 
   const interaction = JSON.parse(rawBody) as DiscordInteraction;
   const commandName = interaction.data?.name;
+  const customId = interaction.data?.custom_id;
 
   if (interaction.type === 1) {
     return jsonResponse({ type: 1 });
@@ -112,6 +222,39 @@ export async function POST(request: Request) {
   }
 
   const userId = getUserId(interaction);
+
+  if (interaction.type === 3) {
+    if (!interaction.guild_id || !userId) {
+      return jsonResponse(
+        buildEphemeralResponse(
+          "Guild member details were missing from the interaction payload.",
+        ),
+      );
+    }
+
+    try {
+      const response = await handleChannelAccessComponent({
+        customId,
+        selectedRoleIds: interaction.data?.values ?? [],
+        config,
+        guildId: interaction.guild_id,
+        userId,
+        currentRoleIds: getMemberRoleIds(interaction),
+      });
+
+      if (response) {
+        return jsonResponse(response);
+      }
+    } catch (error) {
+      return jsonResponse(
+        buildEphemeralResponse(
+          error instanceof Error
+            ? `Could not update roles: ${error.message}`
+            : "Could not update roles.",
+        ),
+      );
+    }
+  }
 
   const wordleRole = getWordleRole(config.managedRoles);
   const brawlStarsRole = getBrawlStarsRole(config.managedRoles);
@@ -179,18 +322,14 @@ export async function POST(request: Request) {
     let message = result.message;
 
     if (roleCommand.includeMemberSummary) {
-      const summary = await getRoleMemberSummary({
+      const summary = await buildRoleMemberSummaryMessage({
         guildId: interaction.guild_id,
         roleId: roleCommand.role.id,
+        roleLabel: roleCommand.role.label,
         botToken: config.botToken,
       });
 
-      message = `${message}\n\n${formatRoleMemberSummary({
-        roleLabel: roleCommand.role.label,
-        memberIds: summary.memberIds,
-        totalCount: summary.totalCount,
-        usedFallbackCount: summary.usedFallbackCount,
-      })}`;
+      message = `${message}\n\n${summary}`;
     }
 
     return jsonResponse(buildRoleCommandResponse(message));
