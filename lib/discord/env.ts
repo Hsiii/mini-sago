@@ -2,7 +2,7 @@ import {
   BRAWL_STARS_ROLE_ID,
   TARGET_GUILD_ID,
   WORDLE_ROLE_ID,
-} from "@/lib/discord/constants";
+} from "./constants";
 
 export type ManagedRole = {
   id: string;

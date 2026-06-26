@@ -2,40 +2,27 @@
   "name": "wm31bot",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
+    "dev": "bun --watch src/server.ts",
+    "build": "tsc --noEmit",
+    "start": "bun src/server.ts",
+    "lint": "tsc --noEmit",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "prepare": "husky",
-    "publish:panel": "node --env-file=.env.local scripts/publish-channel-panel.mjs",
-    "register:commands": "node --env-file=.env.local scripts/register-commands.mjs"
-  },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx,css,scss,html,json,md,yml,yaml}": [
-      "prettier --write"
-    ],
-    "*.{js,jsx,ts,tsx}": [
-      "eslint --fix"
-    ]
+    "publish:panel": "bun --env-file=.env.local scripts/publish-channel-panel.mjs",
+    "register:commands": "bun --env-file=.env.local scripts/register-commands.mjs"
   },
   "dependencies": {
-    "next": "16.2.1",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
     "tweetnacl": "1.0.3"
   },
   "devDependencies": {
     "@types/node": "22.15.30",
-    "@types/react": "19.2.2",
-    "@types/react-dom": "19.2.2",
-    "eslint": "9.39.1",
-    "eslint-config-next": "16.2.1",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.0.7",
+    "bun-types": "1.3.4",
     "prettier": "^3.8.4",
     "typescript": "5.8.3"
-  }
+  },
+  "trustedDependencies": [
+    "tweetnacl"
+  ]
 }

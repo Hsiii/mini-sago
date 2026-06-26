@@ -1,7 +1,8 @@
 # WM31Bot
 
-WM31Bot is a Discord bot for managing channel access through slash commands.
-It can run serverlessly on Vercel or as a containerized Next.js app on a VM.
+WM31Bot is a small Bun service for a Discord bot. It exposes Discord
+interaction webhooks for channel access slash commands and runs as a
+long-lived process behind Caddy.
 
 ## Use it
 
@@ -10,35 +11,31 @@ It can run serverlessly on Vercel or as a containerized Next.js app on a VM.
 3. Optionally set `DISCORD_GUILD_ID` and `SELF_ASSIGNABLE_ROLES`.
 4. Publish the slash commands.
 5. Publish the channel access panel.
-6. Run locally or deploy, then point the Discord Interactions Endpoint URL at `/api/interactions`.
+6. Run locally or deploy, then point the Discord Interactions Endpoint URL at
+   `/api/interactions`.
 
 ```bash
-npm install
-npm run register:commands
-npm run publish:panel -- 1520033288767537263
-npm run dev
+bun install
+bun run register:commands
+bun run publish:panel -- 1520033288767537263
+bun run dev
 ```
+
+## Endpoints
+
+- `GET /api/health` returns configuration health.
+- `POST /api/interactions` handles Discord slash commands and panel
+  components.
 
 ## Oracle Cloud Free Tier deployment
 
-Oracle's current Always Free resources include both a small x86
-`VM.Standard.E2.1.Micro` VM and an Ampere A1 allowance. This bot fits on the
-E2 micro shape used by this deployment, or on a small `VM.Standard.A1.Flex`
-instance. If building the image directly on a 1 GB VM runs out of memory, add
-a small swap file or build the image elsewhere; runtime stays well below the
-Always Free VM limits. See Oracle's Free Tier pages:
-
-- <https://www.oracle.com/cloud/free/>
-- <https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm>
-
-Discord interaction endpoints must be public HTTPS URLs, so the included
-Docker Compose stack runs the app behind Caddy for automatic TLS.
+Oracle's Always Free resources include small VM shapes that are enough for this
+bot. Discord interaction endpoints must be public HTTPS URLs, so the included
+Docker Compose stack runs the service behind Caddy for automatic TLS.
 
 You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
-record pointed at the Oracle VM public IP. Discord will not accept a plain
-HTTP endpoint, and Caddy needs a hostname to issue a trusted TLS certificate.
-No paid Oracle load balancer, database, object storage, or managed service is
-required.
+record pointed at the Oracle VM public IP. Discord will not accept a plain HTTP
+endpoint, and Caddy needs a hostname to issue a trusted TLS certificate.
 
 The included Caddy config also supports a `/wm31` path prefix, so you can use
 `https://bot.example.com/wm31/api/interactions` while keeping `DOMAIN` set to
@@ -53,20 +50,7 @@ only `bot.example.com`.
    - Networking: public subnet with a public IPv4 address.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
-4. SSH into the VM and install Docker:
-
-```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl git
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker "$USER"
-```
-
+4. SSH into the VM and install Docker.
 5. Clone this repository onto the VM.
 6. Create `.env.production` from `.env.production.example` and fill in:
    - `DOMAIN` without a path, such as `bot.example.com`
@@ -107,7 +91,7 @@ The production Compose stack caps runtime usage so the bot remains small:
 | `DISCORD_PUBLIC_KEY`                | Yes      | Public key used to verify interaction signatures                                                                                 |
 | `DISCORD_BOT_TOKEN`                 | Yes      | Bot token used for Discord REST role updates                                                                                     |
 | `DISCORD_GUILD_ID`                  | No       | Restricts the bot to a single guild. Defaults to `1282936453134815275`                                                           |
-| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `npm run publish:panel`                                                                           |
+| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:

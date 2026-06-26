@@ -1,5 +1,5 @@
-import { TARGET_GUILD_ID } from "@/lib/discord/constants";
-import type { ManagedRole } from "@/lib/discord/env";
+import { TARGET_GUILD_ID } from "./constants";
+import type { ManagedRole } from "./env";
 
 type ApplyManagedRoleSelectionArgs = {
   guildId: string;

@@ -3,25 +3,16 @@ import {
   JOIN_WORDLE_CHANNEL_COMMAND_NAME,
   LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME,
   LEAVE_WORDLE_CHANNEL_COMMAND_NAME,
-} from "@/lib/discord/constants";
-import {
-  getBrawlStarsRole,
-  getDiscordConfig,
-  getWordleRole,
-} from "@/lib/discord/env";
-import {
-  isChannelAccessSelect,
-  parseChannelAccessButton,
-} from "@/lib/discord/panel";
+} from "./constants";
+import { getBrawlStarsRole, getDiscordConfig, getWordleRole } from "./env";
+import { isChannelAccessSelect, parseChannelAccessButton } from "./panel";
 import {
   applyManagedRoleSelection,
   formatRoleMemberSummary,
   getManagedRolesById,
   getRoleMemberSummary,
-} from "@/lib/discord/roles";
-import { verifyDiscordRequest } from "@/lib/discord/verify";
-
-export const runtime = "nodejs";
+} from "./roles";
+import { verifyDiscordRequest } from "./verify";
 
 type DiscordInteraction = {
   type: number;
@@ -168,7 +159,16 @@ async function handleChannelAccessComponent({
   return null;
 }
 
-export async function POST(request: Request) {
+function buildRoleCommandResponse(message: string) {
+  return {
+    type: 4,
+    data: {
+      content: message,
+    },
+  };
+}
+
+export async function handleDiscordInteractionRequest(request: Request) {
   const signature = request.headers.get("x-signature-ed25519");
   const timestamp = request.headers.get("x-signature-timestamp");
   const rawBody = await request.text();
@@ -335,13 +335,4 @@ export async function POST(request: Request) {
       ),
     );
   }
-}
-
-function buildRoleCommandResponse(message: string) {
-  return {
-    type: 4,
-    data: {
-      content: message,
-    },
-  };
 }

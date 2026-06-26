@@ -3,8 +3,8 @@ import {
   CHANNEL_ACCESS_LEAVE_PREFIX,
   CHANNEL_ACCESS_PANEL_TITLE,
   CHANNEL_ACCESS_SELECT_CUSTOM_ID,
-} from "@/lib/discord/constants";
-import type { ManagedRole } from "@/lib/discord/env";
+} from "./constants";
+import type { ManagedRole } from "./env";
 
 type DiscordEmoji = {
   name: string;
