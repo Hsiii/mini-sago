@@ -32,6 +32,7 @@ type GatewayReady = {
 type DiscordUser = {
   id?: string;
   username?: string;
+  discriminator?: string;
   global_name?: string | null;
   avatar?: string | null;
   bot?: boolean;
@@ -127,7 +128,21 @@ function getAvatarUrl(message: DiscordMessageCreate) {
     return `https://cdn.discordapp.com/avatars/${userId}/${userAvatar}.${extension}?size=128`;
   }
 
-  return undefined;
+  return `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(message.author)}.png`;
+}
+
+function getDefaultAvatarIndex(user: DiscordUser | undefined) {
+  const discriminator = user?.discriminator;
+
+  if (discriminator && discriminator !== "0") {
+    return Number(discriminator) % 5;
+  }
+
+  if (!user?.id) {
+    return 0;
+  }
+
+  return Number((BigInt(user.id) >> 22n) % 6n);
 }
 
 function toWebhookExecutionUrl(target: WebhookTarget) {
