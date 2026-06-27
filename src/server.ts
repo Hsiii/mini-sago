@@ -1,6 +1,7 @@
 import { getPublicDiscordSummary } from "../lib/discord/env";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
+import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });
@@ -56,5 +57,7 @@ const server = Bun.serve({
 if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {
   startInstagramGateway();
 }
+
+startToeflVocabScheduler();
 
 console.log(`WM31Bot listening on http://${server.hostname}:${server.port}`);
