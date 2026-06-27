@@ -6,6 +6,8 @@ services:
     mem_limit: 256m
     env_file:
       - .env.production
+    volumes:
+      - wm31bot-state:/app/state
 
   caddy:
     image: caddy:2-alpine
@@ -25,5 +27,6 @@ services:
       - caddy-config:/config
 
 volumes:
+  wm31bot-state:
   caddy-data:
   caddy-config:

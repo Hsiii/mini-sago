@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
+    "fetch:vocab": "bun scripts/fetch-wiktionary-vocab.mjs",
     "publish:panel": "bun --env-file=.env.local scripts/publish-channel-panel.mjs",
     "register:commands": "bun --env-file=.env.local scripts/register-commands.mjs"
   },

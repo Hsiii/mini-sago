@@ -3,6 +3,7 @@ node_modules
 .env.local
 .env.production
 .env.production.local
+.data
 npm-debug.log*
 *.tsbuildinfo
 .DS_Store

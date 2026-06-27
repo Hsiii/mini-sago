@@ -17,6 +17,7 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 - Webhook reposts preserve the member display name and avatar where possible,
   support thread replies through the parent channel webhook, and disable
   allowed mentions to avoid duplicate pings.
+- Daily TOEFL vocabulary posts from a checked-in Wiktionary-attributed dataset.
 
 ## Use it
 
@@ -32,7 +33,8 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 6. Publish the slash commands.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
-8. Run locally or deploy, then point the Discord Interactions Endpoint URL at
+8. Optionally set `TOEFL_VOCAB_CHANNEL_ID` to post one vocabulary item per day.
+9. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
 ```bash
@@ -80,6 +82,26 @@ that channel. Threads are reposted through a webhook in the parent channel with
 Discord's `thread_id` webhook parameter. The Gateway client heartbeats,
 resumes sessions when Discord allows it, and logs clearer close reasons for
 authentication or privileged-intent failures.
+
+## Daily TOEFL vocabulary
+
+Set `TOEFL_VOCAB_CHANNEL_ID` to enable the daily vocabulary message. The bot
+posts after `TOEFL_VOCAB_TIME` in `TOEFL_VOCAB_TIMEZONE`; both default to
+`08:00` and `Asia/Taipei`. The selected word is deterministic by date, and the
+state file prevents duplicate sends after restarts on the same day.
+
+Vocabulary data lives in `data/toefl-vocab.json`. The initial entries are based
+on Wiktionary and every Discord message includes Wiktionary source and
+CC BY-SA 4.0 license attribution. To fetch raw Wiktionary definitions for new
+words, run:
+
+```bash
+bun run fetch:vocab -- abate adapt analyze
+```
+
+Review the generated output before replacing or appending to
+`data/toefl-vocab.json`; Wiktionary definitions are broad, so TOEFL-friendly
+examples and Traditional Chinese explanations should stay human-reviewed.
 
 ## Oracle Cloud Free Tier deployment
 
@@ -137,6 +159,10 @@ The production Compose stack caps runtime usage so the bot remains small:
 - app container: 0.25 CPU and 256 MB RAM
 - Caddy container: 0.25 CPU and 128 MB RAM
 
+The Compose stack also persists the TOEFL vocab send-state in the
+`wm31bot-state` volume when `TOEFL_VOCAB_STATE_FILE` is set to
+`/app/state/toefl-vocab-state.json`.
+
 ## Environment variables
 
 | Name                                | Required | Description                                                                                                                      |
@@ -147,6 +173,10 @@ The production Compose stack caps runtime usage so the bot remains small:
 | `DISCORD_GUILD_ID`                  | Yes      | Guild where Wordle/荒野 role-control interactions are allowed. Defaults to `1282936453134815275` when omitted                    |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
 | `DISCORD_GATEWAY_DISABLED`          | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener                                              |
+| `TOEFL_VOCAB_CHANNEL_ID`            | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                      |
+| `TOEFL_VOCAB_TIME`                  | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                        |
+| `TOEFL_VOCAB_TIMEZONE`              | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                               |
+| `TOEFL_VOCAB_STATE_FILE`            | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker        |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:
