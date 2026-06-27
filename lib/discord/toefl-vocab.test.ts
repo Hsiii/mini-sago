@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildToeflVocabMessagePayload,
   formatToeflVocabMessage,
   selectDailyToeflVocabEntry,
   type ToeflVocabEntry,
@@ -36,7 +37,7 @@ describe("selectDailyToeflVocabEntry", () => {
 });
 
 describe("formatToeflVocabMessage", () => {
-  test("includes source and license attribution", () => {
+  test("formats a concise panel text display", () => {
     const message = formatToeflVocabMessage({
       entry: {
         ...entries[0],
@@ -52,17 +53,45 @@ describe("formatToeflVocabMessage", () => {
       },
     });
 
-    expect(message).toContain("TOEFL Word of the Day");
-    expect(message).toContain(
-      "## [abate](<https://en.wiktionary.org/wiki/abate>)",
+    expect(message).toBe(
+      [
+        "TOEFL Word of the Day",
+        "## [abate](<https://en.wiktionary.org/wiki/abate>)",
+        "*verb* · 減弱；緩和",
+        "> The storm began to abate after midnight.",
+        "",
+        "[Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
+      ].join("\n"),
     );
-    expect(message).toContain("*verb* · 減弱；緩和");
-    expect(message).toContain("> The storm began to abate after midnight.");
-    expect(message).toContain(
-      "[Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
-    );
+    expect(message).not.toContain("To lessen in force or intensity.");
     expect(message).not.toContain("Example:");
     expect(message).not.toContain("Source:");
     expect(message).not.toContain("License:");
+  });
+
+  test("builds a Components V2 payload", () => {
+    const payload = buildToeflVocabMessagePayload({
+      entry: entries[1],
+      attribution: {
+        sourceName: "Wiktionary",
+        sourceUrl: "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
+        license: "CC BY-SA 4.0",
+        licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+      },
+    });
+
+    expect(payload.flags).toBe((1 << 15) | (1 << 2));
+    expect(payload.components).toEqual([
+      {
+        type: 10,
+        content: [
+          "TOEFL Word of the Day",
+          "## [adapt](<https://en.wiktionary.org/wiki/adapt>)",
+          "*verb*",
+          "",
+          "[Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
+        ].join("\n"),
+      },
+    ]);
   });
 });

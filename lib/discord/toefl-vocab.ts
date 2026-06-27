@@ -9,6 +9,7 @@ const DEFAULT_TIMEZONE = "Asia/Taipei";
 const DEFAULT_STATE_FILE = ".data/toefl-vocab-state.json";
 const MESSAGE_LIMIT = 2_000;
 const DAILY_CHECK_INTERVAL_MS = 60_000;
+const IS_COMPONENTS_V2_FLAG = 1 << 15;
 const SUPPRESS_EMBEDS_FLAG = 1 << 2;
 
 type ToeflVocabAttribution = {
@@ -44,6 +45,19 @@ type ToeflVocabSchedulerConfig = {
 type ToeflVocabState = {
   lastSentDate?: string;
   lastSentWord?: string;
+};
+
+type DiscordTextDisplay = {
+  type: 10;
+  content: string;
+};
+
+type ToeflVocabMessagePayload = {
+  flags: number;
+  components: DiscordTextDisplay[];
+  allowed_mentions: {
+    parse: [];
+  };
 };
 
 type TimeParts = {
@@ -152,20 +166,13 @@ export function formatToeflVocabMessage({
   attribution: ToeflVocabAttribution;
 }) {
   const lines = [
-    "📘 TOEFL Word of the Day",
-    "",
+    "TOEFL Word of the Day",
     `## ${formatSuppressedMarkdownLink(entry.word, entry.sourceUrl)}`,
     `*${entry.partOfSpeech}*${entry.zhTw ? ` · ${entry.zhTw}` : ""}`,
-    "",
-    entry.definition,
   ];
 
   if (entry.example) {
-    lines.push("", formatQuoteBlock(entry.example));
-  }
-
-  if (entry.synonyms?.length) {
-    lines.push("", `Synonyms: ${entry.synonyms.join(" · ")}`);
+    lines.push(formatQuoteBlock(entry.example));
   }
 
   lines.push(
@@ -177,6 +184,27 @@ export function formatToeflVocabMessage({
   );
 
   return lines.join("\n").slice(0, MESSAGE_LIMIT);
+}
+
+export function buildToeflVocabMessagePayload({
+  entry,
+  attribution,
+}: {
+  entry: ToeflVocabEntry;
+  attribution: ToeflVocabAttribution;
+}): ToeflVocabMessagePayload {
+  return {
+    flags: IS_COMPONENTS_V2_FLAG | SUPPRESS_EMBEDS_FLAG,
+    components: [
+      {
+        type: 10,
+        content: formatToeflVocabMessage({ entry, attribution }),
+      },
+    ],
+    allowed_mentions: {
+      parse: [],
+    },
+  };
 }
 
 async function readState(stateFile: string): Promise<ToeflVocabState> {
@@ -204,11 +232,11 @@ async function writeState(stateFile: string, state: ToeflVocabState) {
 async function sendDiscordChannelMessage({
   botToken,
   channelId,
-  content,
+  payload,
 }: {
   botToken: string;
   channelId: string;
-  content: string;
+  payload: ToeflVocabMessagePayload;
 }) {
   const response = await fetch(
     `${DISCORD_API_BASE_URL}/channels/${channelId}/messages`,
@@ -218,13 +246,7 @@ async function sendDiscordChannelMessage({
         Authorization: `Bot ${botToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        content,
-        flags: SUPPRESS_EMBEDS_FLAG,
-        allowed_mentions: {
-          parse: [],
-        },
-      }),
+      body: JSON.stringify(payload),
     },
   );
 
@@ -252,7 +274,7 @@ async function sendDailyToeflVocabIfDue(
 
   const dataset = getDataset();
   const entry = selectDailyToeflVocabEntry(dataset.entries, timeParts.dateKey);
-  const content = formatToeflVocabMessage({
+  const payload = buildToeflVocabMessagePayload({
     entry,
     attribution: dataset.attribution,
   });
@@ -260,7 +282,7 @@ async function sendDailyToeflVocabIfDue(
   await sendDiscordChannelMessage({
     botToken: config.botToken,
     channelId: config.channelId,
-    content,
+    payload,
   });
   await writeState(config.stateFile, {
     lastSentDate: timeParts.dateKey,
