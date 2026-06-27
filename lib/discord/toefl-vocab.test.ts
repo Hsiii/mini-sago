@@ -53,7 +53,16 @@ describe("formatToeflVocabMessage", () => {
     });
 
     expect(message).toContain("TOEFL Word of the Day");
-    expect(message).toContain("Source: Wiktionary");
-    expect(message).toContain("License: CC BY-SA 4.0");
+    expect(message).toContain(
+      "## [abate](<https://en.wiktionary.org/wiki/abate>)",
+    );
+    expect(message).toContain("*verb* · 減弱；緩和");
+    expect(message).toContain("> The storm began to abate after midnight.");
+    expect(message).toContain(
+      "[Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
+    );
+    expect(message).not.toContain("Example:");
+    expect(message).not.toContain("Source:");
+    expect(message).not.toContain("License:");
   });
 });

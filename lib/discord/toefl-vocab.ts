@@ -9,6 +9,7 @@ const DEFAULT_TIMEZONE = "Asia/Taipei";
 const DEFAULT_STATE_FILE = ".data/toefl-vocab-state.json";
 const MESSAGE_LIMIT = 2_000;
 const DAILY_CHECK_INTERVAL_MS = 60_000;
+const SUPPRESS_EMBEDS_FLAG = 1 << 2;
 
 type ToeflVocabAttribution = {
   sourceName: string;
@@ -121,6 +122,17 @@ function daysSinceEpochDate(dateKey: string) {
   return Math.floor(Date.parse(`${dateKey}T00:00:00.000Z`) / 86_400_000);
 }
 
+function formatQuoteBlock(value: string) {
+  return value
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function formatSuppressedMarkdownLink(label: string, url: string) {
+  return `[${label}](<${url}>)`;
+}
+
 export function selectDailyToeflVocabEntry(
   entries: ToeflVocabEntry[],
   dateKey: string,
@@ -142,28 +154,26 @@ export function formatToeflVocabMessage({
   const lines = [
     "📘 TOEFL Word of the Day",
     "",
-    `**${entry.word}**`,
-    entry.partOfSpeech,
+    `## ${formatSuppressedMarkdownLink(entry.word, entry.sourceUrl)}`,
+    `*${entry.partOfSpeech}*${entry.zhTw ? ` · ${entry.zhTw}` : ""}`,
     "",
-    `Meaning: ${entry.definition}`,
+    entry.definition,
   ];
 
-  if (entry.zhTw) {
-    lines.push(`中文：${entry.zhTw}`);
-  }
-
   if (entry.example) {
-    lines.push("", `Example: ${entry.example}`);
+    lines.push("", formatQuoteBlock(entry.example));
   }
 
   if (entry.synonyms?.length) {
-    lines.push("", `Synonyms: ${entry.synonyms.join(", ")}`);
+    lines.push("", `Synonyms: ${entry.synonyms.join(" · ")}`);
   }
 
   lines.push(
     "",
-    `Source: ${attribution.sourceName} (${entry.sourceUrl})`,
-    `License: ${attribution.license} (${attribution.licenseUrl})`,
+    `${formatSuppressedMarkdownLink(
+      attribution.sourceName,
+      attribution.sourceUrl,
+    )} · ${formatSuppressedMarkdownLink(attribution.license, attribution.licenseUrl)}`,
   );
 
   return lines.join("\n").slice(0, MESSAGE_LIMIT);
@@ -210,6 +220,7 @@ async function sendDiscordChannelMessage({
       },
       body: JSON.stringify({
         content,
+        flags: SUPPRESS_EMBEDS_FLAG,
         allowed_mentions: {
           parse: [],
         },
