@@ -1,4 +1,9 @@
 {
+  "wordBank": {
+    "sourceName": "AWL",
+    "sourceUrl": "https://www.eapfoundation.com/vocab/academic/awllists/",
+    "note": "Harder Academic Word List headwords selected from sublists 8-10."
+  },
   "attribution": {
     "sourceName": "Wiktionary",
     "sourceUrl": "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
@@ -7,274 +12,346 @@
   },
   "entries": [
     {
-      "word": "abate",
+      "word": "accommodate",
       "partOfSpeech": "verb",
-      "definition": "To lessen in force or intensity; to moderate.",
-      "zhTw": "減弱；緩和",
-      "example": "The storm began to abate after midnight.",
-      "synonyms": ["lessen", "subside", "diminish"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/abate"
+      "definition": "To make room for or adapt to something.",
+      "zhTw": "容納；適應",
+      "example": "The model was revised to accommodate newly discovered evidence.",
+      "synonyms": ["adjust", "adapt", "fit"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/accommodate"
     },
     {
-      "word": "abstract",
+      "word": "analogy",
+      "partOfSpeech": "noun",
+      "definition": "A comparison between things that are similar in some way.",
+      "zhTw": "類比；比擬",
+      "example": "The professor used an analogy to explain how electrical circuits function.",
+      "synonyms": ["comparison", "parallel", "similarity"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/analogy"
+    },
+    {
+      "word": "anticipate",
+      "partOfSpeech": "verb",
+      "definition": "To expect or prepare for something before it happens.",
+      "zhTw": "預期；預料",
+      "example": "Engineers must anticipate how bridges respond to extreme weather.",
+      "synonyms": ["expect", "foresee", "predict"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/anticipate"
+    },
+    {
+      "word": "arbitrary",
       "partOfSpeech": "adjective",
-      "definition": "Difficult to understand; not concrete.",
-      "zhTw": "抽象的；難懂的",
-      "example": "The professor introduced an abstract theory about memory.",
-      "synonyms": ["conceptual", "theoretical"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/abstract"
+      "definition": "Based on choice or chance rather than a clear reason.",
+      "zhTw": "任意的；武斷的",
+      "example": "The boundary between the two cultural periods is somewhat arbitrary.",
+      "synonyms": ["random", "subjective", "capricious"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/arbitrary"
     },
     {
-      "word": "accumulate",
+      "word": "attain",
       "partOfSpeech": "verb",
-      "definition": "To gather or pile up; to collect.",
-      "zhTw": "累積；聚集",
-      "example": "Evidence continued to accumulate during the study.",
-      "synonyms": ["collect", "gather", "amass"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/accumulate"
+      "definition": "To achieve or reach a goal, level, or condition.",
+      "zhTw": "達到；獲得",
+      "example": "Some plants attain full maturity only after several wet seasons.",
+      "synonyms": ["achieve", "reach", "obtain"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/attain"
     },
     {
-      "word": "accurate",
+      "word": "coherent",
       "partOfSpeech": "adjective",
-      "definition": "Telling the truth or giving a true result; exact.",
-      "zhTw": "精確的；正確的",
-      "example": "Accurate measurements are essential in chemistry.",
-      "synonyms": ["exact", "precise", "correct"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/accurate"
+      "definition": "Clear, logical, and connected.",
+      "zhTw": "連貫的；一致的",
+      "example": "The scattered observations formed a coherent explanation of the eruption.",
+      "synonyms": ["logical", "consistent", "ordered"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/coherent"
     },
     {
-      "word": "adapt",
+      "word": "coincide",
       "partOfSpeech": "verb",
-      "definition": "To make suitable; to adjust to a new use or condition.",
-      "zhTw": "適應；改編；調整",
-      "example": "Many species adapt quickly to changes in climate.",
-      "synonyms": ["adjust", "modify", "alter"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/adapt"
+      "definition": "To happen at the same time or correspond closely.",
+      "zhTw": "同時發生；一致",
+      "example": "The decline in pollen deposits coincided with a period of lower rainfall.",
+      "synonyms": ["concur", "correspond", "overlap"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/coincide"
     },
     {
-      "word": "adequate",
+      "word": "compatible",
       "partOfSpeech": "adjective",
-      "definition": "Equal to what is required; sufficient.",
-      "zhTw": "足夠的；合格的",
-      "example": "The experiment requires adequate lighting.",
-      "synonyms": ["sufficient", "satisfactory"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/adequate"
+      "definition": "Able to exist or work together without conflict.",
+      "zhTw": "相容的；一致的",
+      "example": "The new theory is compatible with earlier fossil evidence.",
+      "synonyms": ["consistent", "suitable", "harmonious"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/compatible"
     },
     {
-      "word": "adjacent",
+      "word": "concurrent",
       "partOfSpeech": "adjective",
-      "definition": "Lying next to, close, or contiguous.",
-      "zhTw": "鄰近的；相鄰的",
-      "example": "The library is adjacent to the science building.",
-      "synonyms": ["nearby", "neighboring", "contiguous"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/adjacent"
+      "definition": "Occurring at the same time.",
+      "zhTw": "同時發生的；並行的",
+      "example": "Concurrent changes in diet and settlement patterns suggest a broader social shift.",
+      "synonyms": ["simultaneous", "coexisting", "parallel"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/concurrent"
     },
     {
-      "word": "allocate",
+      "word": "confine",
       "partOfSpeech": "verb",
-      "definition": "To set aside for a purpose; to distribute according to a plan.",
-      "zhTw": "分配；撥出",
-      "example": "The committee will allocate funds for new equipment.",
-      "synonyms": ["assign", "distribute", "apportion"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/allocate"
+      "definition": "To keep within limits.",
+      "zhTw": "限制；侷限",
+      "example": "The study confines its analysis to coastal communities.",
+      "synonyms": ["limit", "restrict", "enclose"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/confine"
     },
     {
-      "word": "alter",
-      "partOfSpeech": "verb",
-      "definition": "To change the form or structure of something.",
-      "zhTw": "改變；修改",
-      "example": "Even small temperature shifts can alter the results.",
-      "synonyms": ["change", "modify", "adjust"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/alter"
-    },
-    {
-      "word": "analyze",
-      "partOfSpeech": "verb",
-      "definition": "To examine in detail in order to identify causes, features, or meaning.",
-      "zhTw": "分析",
-      "example": "Researchers analyze samples collected from the lake.",
-      "synonyms": ["examine", "study", "evaluate"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/analyze"
-    },
-    {
-      "word": "approach",
+      "word": "controversy",
       "partOfSpeech": "noun",
-      "definition": "A way of dealing with a problem or task.",
-      "zhTw": "方法；途徑",
-      "example": "The new approach reduced the cost of production.",
-      "synonyms": ["method", "strategy", "technique"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/approach"
+      "definition": "A public disagreement or debate.",
+      "zhTw": "爭議；爭論",
+      "example": "The interpretation of the cave paintings remains a source of controversy.",
+      "synonyms": ["dispute", "debate", "disagreement"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/controversy"
     },
     {
-      "word": "assess",
-      "partOfSpeech": "verb",
-      "definition": "To determine, estimate, or judge the value or quality of something.",
-      "zhTw": "評估；判定",
-      "example": "The exam is designed to assess academic reading skills.",
-      "synonyms": ["evaluate", "judge", "estimate"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/assess"
-    },
-    {
-      "word": "assume",
-      "partOfSpeech": "verb",
-      "definition": "To take for granted or suppose to be true.",
-      "zhTw": "假設；認為",
-      "example": "Scientists should not assume that the pattern is universal.",
-      "synonyms": ["suppose", "presume"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/assume"
-    },
-    {
-      "word": "benefit",
-      "partOfSpeech": "noun",
-      "definition": "An advantage, help, or aid from something.",
-      "zhTw": "好處；利益",
-      "example": "One benefit of public transportation is reduced traffic.",
-      "synonyms": ["advantage", "gain", "help"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/benefit"
-    },
-    {
-      "word": "concept",
-      "partOfSpeech": "noun",
-      "definition": "An abstract and general idea.",
-      "zhTw": "概念",
-      "example": "The concept of sustainability appears in many disciplines.",
-      "synonyms": ["idea", "notion", "principle"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/concept"
-    },
-    {
-      "word": "consistent",
+      "word": "converse",
       "partOfSpeech": "adjective",
-      "definition": "Regular, reliable, and not contradictory.",
-      "zhTw": "一致的；穩定的",
-      "example": "The survey produced consistent results across regions.",
-      "synonyms": ["steady", "uniform", "reliable"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/consistent"
+      "definition": "Opposite or reversed in order, relation, or action.",
+      "zhTw": "相反的；反向的",
+      "example": "The converse relationship appears when temperature, rather than pressure, is controlled.",
+      "synonyms": ["opposite", "reverse", "inverse"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/converse"
     },
     {
-      "word": "derive",
+      "word": "deviate",
       "partOfSpeech": "verb",
-      "definition": "To obtain or receive from a source.",
-      "zhTw": "取得；源自於",
-      "example": "The English word derives from Latin.",
-      "synonyms": ["obtain", "originate", "come from"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/derive"
+      "definition": "To move away from an expected path or standard.",
+      "zhTw": "偏離；背離",
+      "example": "The data deviate from the pattern predicted by the original model.",
+      "synonyms": ["diverge", "depart", "differ"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/deviate"
     },
     {
-      "word": "establish",
+      "word": "diminish",
       "partOfSpeech": "verb",
-      "definition": "To make stable or firm; to set up.",
-      "zhTw": "建立；確立",
-      "example": "The study helped establish a link between diet and health.",
-      "synonyms": ["create", "found", "confirm"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/establish"
+      "definition": "To make or become smaller, weaker, or less important.",
+      "zhTw": "減少；削弱",
+      "example": "Repeated harvesting can diminish the forest's capacity to regenerate.",
+      "synonyms": ["reduce", "lessen", "decrease"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/diminish"
     },
     {
-      "word": "evidence",
-      "partOfSpeech": "noun",
-      "definition": "Facts or observations that support a belief or conclusion.",
-      "zhTw": "證據",
-      "example": "The fossils provide evidence of ancient marine life.",
-      "synonyms": ["proof", "support", "indication"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/evidence"
-    },
-    {
-      "word": "factor",
-      "partOfSpeech": "noun",
-      "definition": "Something that contributes to a result.",
-      "zhTw": "因素",
-      "example": "Soil quality is a major factor in crop growth.",
-      "synonyms": ["element", "cause", "component"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/factor"
-    },
-    {
-      "word": "indicate",
+      "word": "distort",
       "partOfSpeech": "verb",
-      "definition": "To point out or show.",
-      "zhTw": "指出；顯示",
-      "example": "The data indicate a gradual increase in rainfall.",
-      "synonyms": ["show", "suggest", "signal"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/indicate"
+      "definition": "To twist out of shape or misrepresent.",
+      "zhTw": "扭曲；歪曲",
+      "example": "Poor preservation can distort the apparent size of fossil specimens.",
+      "synonyms": ["warp", "misrepresent", "alter"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/distort"
     },
     {
-      "word": "interpret",
+      "word": "erode",
       "partOfSpeech": "verb",
-      "definition": "To explain or understand the meaning of something.",
-      "zhTw": "解釋；詮釋",
-      "example": "Historians interpret documents from different perspectives.",
-      "synonyms": ["explain", "understand", "clarify"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/interpret"
+      "definition": "To wear away gradually.",
+      "zhTw": "侵蝕；逐漸削弱",
+      "example": "Seasonal floods erode the riverbank and expose older sediment layers.",
+      "synonyms": ["wear away", "deteriorate", "abrade"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/erode"
     },
     {
-      "word": "method",
-      "partOfSpeech": "noun",
-      "definition": "A process by which a task is completed.",
-      "zhTw": "方法",
-      "example": "The method allows scientists to compare samples accurately.",
-      "synonyms": ["procedure", "technique", "approach"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/method"
-    },
-    {
-      "word": "occur",
+      "word": "fluctuate",
       "partOfSpeech": "verb",
-      "definition": "To happen or take place.",
-      "zhTw": "發生；出現",
-      "example": "Earthquakes occur frequently along some fault lines.",
-      "synonyms": ["happen", "arise", "take place"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/occur"
+      "definition": "To rise and fall irregularly.",
+      "zhTw": "波動；起伏",
+      "example": "Fish populations fluctuate as ocean temperatures change.",
+      "synonyms": ["vary", "oscillate", "shift"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/fluctuate"
     },
     {
-      "word": "period",
-      "partOfSpeech": "noun",
-      "definition": "A length of time.",
-      "zhTw": "期間；時期",
-      "example": "The region experienced drought during that period.",
-      "synonyms": ["interval", "era", "span"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/period"
-    },
-    {
-      "word": "process",
-      "partOfSpeech": "noun",
-      "definition": "A series of actions or changes that lead to a result.",
-      "zhTw": "過程；程序",
-      "example": "Photosynthesis is the process by which plants make food.",
-      "synonyms": ["procedure", "operation", "sequence"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/process"
-    },
-    {
-      "word": "require",
-      "partOfSpeech": "verb",
-      "definition": "To need or make necessary.",
-      "zhTw": "需要；要求",
-      "example": "The assignment requires careful observation.",
-      "synonyms": ["need", "demand", "necessitate"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/require"
-    },
-    {
-      "word": "respond",
-      "partOfSpeech": "verb",
-      "definition": "To say or do something in reaction to something else.",
-      "zhTw": "回應；反應",
-      "example": "Plants respond to changes in light and temperature.",
-      "synonyms": ["reply", "react", "answer"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/respond"
-    },
-    {
-      "word": "significant",
+      "word": "inherent",
       "partOfSpeech": "adjective",
-      "definition": "Having a noticeable or important effect.",
-      "zhTw": "重要的；顯著的",
-      "example": "The invention had a significant impact on communication.",
-      "synonyms": ["important", "notable", "meaningful"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/significant"
+      "definition": "Existing as a natural or essential part of something.",
+      "zhTw": "固有的；內在的",
+      "example": "The method has inherent limitations when samples are extremely small.",
+      "synonyms": ["intrinsic", "essential", "built-in"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/inherent"
     },
     {
-      "word": "vary",
+      "word": "infrastructure",
+      "partOfSpeech": "noun",
+      "definition": "The basic systems and structures needed for a society or activity.",
+      "zhTw": "基礎設施",
+      "example": "Urban growth required major investment in transportation infrastructure.",
+      "synonyms": ["framework", "system", "foundation"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/infrastructure"
+    },
+    {
+      "word": "integral",
+      "partOfSpeech": "adjective",
+      "definition": "Necessary to make a whole complete.",
+      "zhTw": "必要的；不可或缺的",
+      "example": "Ritual objects were integral to the community's political authority.",
+      "synonyms": ["essential", "necessary", "fundamental"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/integral"
+    },
+    {
+      "word": "intermediate",
+      "partOfSpeech": "adjective",
+      "definition": "Coming between two things in time, place, or degree.",
+      "zhTw": "中間的；中級的",
+      "example": "The fossil appears to represent an intermediate stage in the species' development.",
+      "synonyms": ["middle", "transitional", "moderate"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/intermediate"
+    },
+    {
+      "word": "intrinsic",
+      "partOfSpeech": "adjective",
+      "definition": "Belonging naturally; essential.",
+      "zhTw": "內在的；本質的",
+      "example": "The intrinsic value of the artifact lies in what it reveals about daily life.",
+      "synonyms": ["inherent", "essential", "fundamental"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/intrinsic"
+    },
+    {
+      "word": "invoke",
       "partOfSpeech": "verb",
-      "definition": "To change with time, place, or condition.",
-      "zhTw": "變化；不同",
-      "example": "Temperature can vary greatly between day and night.",
-      "synonyms": ["change", "differ", "fluctuate"],
-      "sourceUrl": "https://en.wiktionary.org/wiki/vary"
+      "definition": "To refer to or call upon as support.",
+      "zhTw": "援引；引用",
+      "example": "The author invokes archaeological evidence to challenge the traditional account.",
+      "synonyms": ["cite", "appeal to", "refer to"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/invoke"
+    },
+    {
+      "word": "levy",
+      "partOfSpeech": "verb",
+      "definition": "To impose or collect a tax, fee, or fine.",
+      "zhTw": "徵收；課徵",
+      "example": "The empire levied taxes on goods transported through major ports.",
+      "synonyms": ["impose", "charge", "collect"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/levy"
+    },
+    {
+      "word": "mediate",
+      "partOfSpeech": "verb",
+      "definition": "To influence, connect, or bring about indirectly.",
+      "zhTw": "調解；居中影響",
+      "example": "Soil chemistry can mediate how quickly pollutants enter groundwater.",
+      "synonyms": ["intervene", "moderate", "facilitate"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/mediate"
+    },
+    {
+      "word": "notwithstanding",
+      "partOfSpeech": "preposition",
+      "definition": "Despite; in spite of.",
+      "zhTw": "儘管；雖然",
+      "example": "Notwithstanding limited resources, the expedition collected valuable climate data.",
+      "synonyms": ["despite", "although", "nevertheless"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/notwithstanding"
+    },
+    {
+      "word": "preliminary",
+      "partOfSpeech": "adjective",
+      "definition": "Coming before the main action or more complete result.",
+      "zhTw": "初步的；預備的",
+      "example": "Preliminary results suggest that the settlement was older than previously thought.",
+      "synonyms": ["initial", "introductory", "early"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/preliminary"
+    },
+    {
+      "word": "protocol",
+      "partOfSpeech": "noun",
+      "definition": "An official procedure or set of rules.",
+      "zhTw": "規程；協定",
+      "example": "The laboratory adopted a stricter protocol for handling organic samples.",
+      "synonyms": ["procedure", "standard", "rule"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/protocol"
+    },
+    {
+      "word": "qualitative",
+      "partOfSpeech": "adjective",
+      "definition": "Relating to qualities rather than quantities.",
+      "zhTw": "質性的；定性的",
+      "example": "The researcher combined statistical results with qualitative interview data.",
+      "synonyms": ["descriptive", "non-numerical", "categorical"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/qualitative"
+    },
+    {
+      "word": "refine",
+      "partOfSpeech": "verb",
+      "definition": "To improve by making small changes or removing impurities.",
+      "zhTw": "改進；精煉",
+      "example": "Later excavations helped refine the chronology of the site.",
+      "synonyms": ["improve", "polish", "clarify"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/refine"
+    },
+    {
+      "word": "restrain",
+      "partOfSpeech": "verb",
+      "definition": "To hold back, limit, or control.",
+      "zhTw": "限制；抑制",
+      "example": "Regulations were introduced to restrain excessive groundwater use.",
+      "synonyms": ["limit", "control", "curb"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/restrain"
+    },
+    {
+      "word": "rigid",
+      "partOfSpeech": "adjective",
+      "definition": "Not flexible; difficult to change.",
+      "zhTw": "僵硬的；嚴格的",
+      "example": "A rigid social hierarchy limited economic mobility in the region.",
+      "synonyms": ["stiff", "inflexible", "strict"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/rigid"
+    },
+    {
+      "word": "scenario",
+      "partOfSpeech": "noun",
+      "definition": "A possible sequence of events or situation.",
+      "zhTw": "情境；可能情況",
+      "example": "One scenario predicts that sea levels will rise faster near low-lying islands.",
+      "synonyms": ["situation", "case", "possibility"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/scenario"
+    },
+    {
+      "word": "subordinate",
+      "partOfSpeech": "adjective",
+      "definition": "Lower in rank, importance, or position.",
+      "zhTw": "從屬的；次要的",
+      "example": "Local rulers often held subordinate positions within the larger empire.",
+      "synonyms": ["secondary", "inferior", "lesser"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/subordinate"
+    },
+    {
+      "word": "supplement",
+      "partOfSpeech": "verb",
+      "definition": "To add something in order to complete or improve it.",
+      "zhTw": "補充；增補",
+      "example": "Researchers supplemented satellite images with field observations.",
+      "synonyms": ["add to", "augment", "complement"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/supplement"
+    },
+    {
+      "word": "suspend",
+      "partOfSpeech": "verb",
+      "definition": "To stop temporarily or hang from above.",
+      "zhTw": "暫停；懸掛",
+      "example": "The project was suspended until more accurate survey data became available.",
+      "synonyms": ["pause", "halt", "defer"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/suspend"
+    },
+    {
+      "word": "undergo",
+      "partOfSpeech": "verb",
+      "definition": "To experience or be subjected to something.",
+      "zhTw": "經歷；遭受",
+      "example": "Sedimentary rocks undergo gradual changes under heat and pressure.",
+      "synonyms": ["experience", "endure", "sustain"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/undergo"
+    },
+    {
+      "word": "whereby",
+      "partOfSpeech": "adverb",
+      "definition": "By which; through which.",
+      "zhTw": "藉此；憑此",
+      "example": "The process whereby nitrogen enters the soil depends on microbial activity.",
+      "synonyms": ["by which", "through which"],
+      "sourceUrl": "https://en.wiktionary.org/wiki/whereby"
     }
   ]
 }

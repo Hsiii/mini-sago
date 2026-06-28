@@ -19,6 +19,12 @@ type ToeflVocabAttribution = {
   licenseUrl: string;
 };
 
+type ToeflVocabWordBank = {
+  sourceName: string;
+  sourceUrl: string;
+  note?: string;
+};
+
 export type ToeflVocabEntry = {
   word: string;
   partOfSpeech: string;
@@ -31,6 +37,7 @@ export type ToeflVocabEntry = {
 
 type ToeflVocabDataset = {
   attribution: ToeflVocabAttribution;
+  wordBank?: ToeflVocabWordBank;
   entries: ToeflVocabEntry[];
 };
 
@@ -161,9 +168,11 @@ export function selectDailyToeflVocabEntry(
 export function formatToeflVocabMessage({
   entry,
   attribution,
+  wordBank,
 }: {
   entry: ToeflVocabEntry;
   attribution: ToeflVocabAttribution;
+  wordBank?: ToeflVocabWordBank;
 }) {
   const lines = [
     "TOEFL Word of the Day",
@@ -175,13 +184,15 @@ export function formatToeflVocabMessage({
     lines.push(formatQuoteBlock(entry.example));
   }
 
-  lines.push(
-    "",
-    `${formatSuppressedMarkdownLink(
-      attribution.sourceName,
-      attribution.sourceUrl,
-    )} · ${formatSuppressedMarkdownLink(attribution.license, attribution.licenseUrl)}`,
-  );
+  const attributionLinks = [
+    wordBank
+      ? formatSuppressedMarkdownLink(wordBank.sourceName, wordBank.sourceUrl)
+      : null,
+    formatSuppressedMarkdownLink(attribution.sourceName, attribution.sourceUrl),
+    formatSuppressedMarkdownLink(attribution.license, attribution.licenseUrl),
+  ].filter((link): link is string => Boolean(link));
+
+  lines.push("", attributionLinks.join(" · "));
 
   return lines.join("\n").slice(0, MESSAGE_LIMIT);
 }
@@ -189,16 +200,18 @@ export function formatToeflVocabMessage({
 export function buildToeflVocabMessagePayload({
   entry,
   attribution,
+  wordBank,
 }: {
   entry: ToeflVocabEntry;
   attribution: ToeflVocabAttribution;
+  wordBank?: ToeflVocabWordBank;
 }): ToeflVocabMessagePayload {
   return {
     flags: IS_COMPONENTS_V2_FLAG | SUPPRESS_EMBEDS_FLAG,
     components: [
       {
         type: 10,
-        content: formatToeflVocabMessage({ entry, attribution }),
+        content: formatToeflVocabMessage({ entry, attribution, wordBank }),
       },
     ],
     allowed_mentions: {
@@ -277,6 +290,7 @@ async function sendDailyToeflVocabIfDue(
   const payload = buildToeflVocabMessagePayload({
     entry,
     attribution: dataset.attribution,
+    wordBank: dataset.wordBank,
   });
 
   await sendDiscordChannelMessage({

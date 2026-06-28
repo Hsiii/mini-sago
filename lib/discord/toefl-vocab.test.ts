@@ -72,6 +72,10 @@ describe("formatToeflVocabMessage", () => {
   test("builds a Components V2 payload", () => {
     const payload = buildToeflVocabMessagePayload({
       entry: entries[1],
+      wordBank: {
+        sourceName: "AWL",
+        sourceUrl: "https://www.eapfoundation.com/vocab/academic/awllists/",
+      },
       attribution: {
         sourceName: "Wiktionary",
         sourceUrl: "https://en.wiktionary.org/wiki/Wiktionary:Main_Page",
@@ -89,7 +93,7 @@ describe("formatToeflVocabMessage", () => {
           "## [adapt](<https://en.wiktionary.org/wiki/adapt>)",
           "*verb*",
           "",
-          "[Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
+          "[AWL](<https://www.eapfoundation.com/vocab/academic/awllists/>) · [Wiktionary](<https://en.wiktionary.org/wiki/Wiktionary:Main_Page>) · [CC BY-SA 4.0](<https://creativecommons.org/licenses/by-sa/4.0/>)",
         ].join("\n"),
       },
     ]);
