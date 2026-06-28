@@ -106,16 +106,12 @@ examples and Traditional Chinese explanations should stay human-reviewed.
 ## Oracle Cloud Free Tier deployment
 
 Oracle's Always Free resources include small VM shapes that are enough for this
-bot. Discord interaction endpoints must be public HTTPS URLs, so the included
-Docker Compose stack runs the service behind Caddy for automatic TLS.
+bot. Discord interaction endpoints must be public HTTPS URLs, so run this app
+behind the shared BotsProxy Caddy service that owns the domain and TLS.
 
 You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
 record pointed at the Oracle VM public IP. Discord will not accept a plain HTTP
-endpoint, and Caddy needs a hostname to issue a trusted TLS certificate.
-
-The included Caddy config also supports a `/wm31` path prefix, so you can use
-`https://bot.example.com/wm31/api/interactions` while keeping `DOMAIN` set to
-only `bot.example.com`.
+endpoint. BotsProxy routes `/wm31/*` to this app on the shared Docker network.
 
 1. Create an Oracle Cloud account and tenancy.
 2. Create a minimal Always Free VM:
@@ -127,28 +123,34 @@ only `bot.example.com`.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM.
+5. Clone this repository onto the VM under the WM31 app directory.
 6. Create `.env.production` from `.env.production.example` and fill in:
-   - `DOMAIN` without a path, such as `bot.example.com`
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
    - `DISCORD_BOT_TOKEN`
    - `DISCORD_GUILD_ID`
    - `SELF_ASSIGNABLE_ROLES`
-7. Start the service:
+7. Make sure the shared `bots_shared` Docker network exists. BotsProxy creates
+   it, or you can create it manually:
+
+```bash
+docker network create bots_shared
+```
+
+8. Start the service:
 
 ```bash
 docker compose up -d --build
 docker compose logs -f
 ```
 
-8. Confirm the health endpoint:
+9. Confirm the proxied health endpoint after BotsProxy is running:
 
 ```bash
-curl https://$DOMAIN/wm31/api/health
+curl https://YOUR_DOMAIN/wm31/api/health
 ```
 
-9. In the Discord Developer Portal, set the Interactions Endpoint URL to:
+10. In the Discord Developer Portal, set the Interactions Endpoint URL to:
 
 ```text
 https://YOUR_DOMAIN/wm31/api/interactions
@@ -157,7 +159,6 @@ https://YOUR_DOMAIN/wm31/api/interactions
 The production Compose stack caps runtime usage so the bot remains small:
 
 - app container: 0.25 CPU and 256 MB RAM
-- Caddy container: 0.25 CPU and 128 MB RAM
 
 The Compose stack also persists the TOEFL vocab send-state in the
 `wm31bot-state` volume when `TOEFL_VOCAB_STATE_FILE` is set to

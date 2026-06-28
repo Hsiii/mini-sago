@@ -8,25 +8,13 @@ services:
       - .env.production
     volumes:
       - wm31bot-state:/app/state
+    networks:
+      - shared
 
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    cpus: 0.25
-    mem_limit: 128m
-    depends_on:
-      - wm31bot
-    env_file:
-      - .env.production
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+networks:
+  shared:
+    external: true
+    name: bots_shared
 
 volumes:
   wm31bot-state:
-  caddy-data:
-  caddy-config:
