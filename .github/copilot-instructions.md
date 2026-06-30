@@ -1,7 +1,4 @@
-- This repository tracks the WM31Bot Bun server code and deployment assets in one repo.
-- The server entrypoint is `src/server.ts`; shared Discord code lives under `lib/discord`.
-- Oracle Cloud deployment must use this same repository and run only the server entrypoint through `bun run start:oracle`.
-- Keep proxy or frontend concerns out of the Oracle container; BotsProxy/Caddy is managed separately and routes to this service.
-- If a client/frontend is added later, keep it runnable independently from the server scripts so client-only environments do not start Discord Gateway or scheduled jobs.
+- This repository is a Next.js TypeScript project deployed to Vercel.
+- Discord functionality must remain compatible with serverless interactions, not websocket gateway bots.
 - Keep role management config driven through environment variables unless persistent storage is explicitly requested.
-- Prefer minimal, focused changes.
+- Prefer minimal, focused changes and preserve the existing visual style on the setup page.
