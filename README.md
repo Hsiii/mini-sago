@@ -41,8 +41,20 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 bun install
 bun run register:commands
 bun run publish:panel -- 1520033288767537263
-bun run dev
+bun run dev:server
 ```
+
+The server-side code is tracked in this repository:
+
+- `src/server.ts` is the HTTP server entrypoint.
+- `lib/discord/` contains Discord interaction, Gateway, role, panel, and
+  scheduler logic.
+- `data/toefl-vocab.json` is the checked-in vocabulary dataset used by the
+  scheduler.
+
+Use `bun run start:server` for the standalone server. The default `dev` and
+`start` scripts are aliases for the server scripts so existing local workflows
+continue to work.
 
 ## Endpoints
 
@@ -123,7 +135,7 @@ endpoint. BotsProxy routes `/wm31/*` to this app on the shared Docker network.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM under the WM31 app directory.
+5. Clone this same repository onto the VM under the WM31 app directory.
 6. Create `.env.production` from `.env.production.example` and fill in:
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
@@ -143,6 +155,10 @@ docker network create bots_shared
 docker compose up -d --build
 docker compose logs -f
 ```
+
+The Oracle container uses the same repository but only runs the server side via
+`bun run start:oracle`, which aliases `bun run start:server`. It does not run or
+own the shared BotsProxy/Caddy process.
 
 9. Confirm the proxied health endpoint after BotsProxy is running:
 
