@@ -44,11 +44,11 @@ function getDiscordRoleErrorMessage(status: number, responseBody: string) {
   }
 
   if (status === 403 && parsedBody?.code === 50001) {
-    return "機器人沒有權限更新這個伺服器的身分組。請確認機器人已安裝在伺服器中，且正式環境 token 對應到這個應用程式。";
+    return "機器人沒有權限更新這個伺服器的身分組。請確認機器人已安裝在伺服器中，Discord Developer Portal 的 Installation -> Default Install Settings 已包含 bot scope 和 Manage Roles 權限，且正式環境 token 對應到這個應用程式。";
   }
 
   if (status === 403 && parsedBody?.code === 50013) {
-    return `Discord 拒絕更新伺服器 ${TARGET_GUILD_ID} 的身分組。請確認機器人有「管理身分組」權限，且機器人的最高身分組在伺服器身分組排序中高於要管理的頻道身分組。`;
+    return `Discord 拒絕更新伺服器 ${TARGET_GUILD_ID} 的身分組。請確認機器人有「管理身分組」權限，且機器人的最高身分組在伺服器身分組排序中高於要管理的頻道身分組。若是從 bot profile 的 Add App 加入，請先執行 bun run sync:install 更新預設安裝權限後重新加入。`;
   }
 
   return `${status}${parsedBody?.message ? ` ${parsedBody.message}` : ""}${responseBody ? `: ${responseBody}` : ""}`;

@@ -28,8 +28,10 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
    under Bot -> Privileged Gateway Intents. Without this, Discord closes the
    Gateway connection with code `4014` and Instagram links cannot be read.
-5. Invite the bot with `applications.commands` plus bot permissions for
-   `Manage Roles`, `Manage Messages`, and `Manage Webhooks`.
+5. Sync the Discord application install settings so the bot profile
+   `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
+   `View Channels`, `Send Messages`, `Read Message History`, `Manage Roles`,
+   `Manage Messages`, and `Manage Webhooks`.
 6. Publish the slash commands.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
@@ -39,6 +41,7 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 
 ```bash
 bun install
+bun run sync:install
 bun run register:commands
 bun run publish:panel -- 1520033288767537263
 bun run dev
@@ -82,6 +85,27 @@ that channel. Threads are reposted through a webhook in the parent channel with
 Discord's `thread_id` webhook parameter. The Gateway client heartbeats,
 resumes sessions when Discord allows it, and logs clearer close reasons for
 authentication or privileged-intent failures.
+
+## Discord installation permissions
+
+Discord's bot profile `Add App` flow uses the application-level Guild Install
+Default Install Settings, not this repository's README invite text. Run
+`bun run sync:install` after setting `DISCORD_APPLICATION_ID` and
+`DISCORD_BOT_TOKEN` to update those settings through the Discord API. In the
+Developer Portal, keep Installation -> Install Link set to
+`Discord Provided Link` so the profile button uses these defaults.
+
+The synced permission bitfield is `805383168`, which includes:
+
+- `View Channels`
+- `Send Messages`
+- `Manage Messages`
+- `Read Message History`
+- `Manage Roles`
+- `Manage Webhooks`
+
+For role assignment to work, the bot's highest role in each server must still
+be above the self-assignable channel roles in Server Settings -> Roles.
 
 ## Daily TOEFL vocabulary
 

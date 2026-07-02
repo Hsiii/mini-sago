@@ -1,0 +1,87 @@
+const applicationId = process.env.DISCORD_APPLICATION_ID;
+const botToken = process.env.DISCORD_BOT_TOKEN;
+
+if (!applicationId || !botToken) {
+  console.error("DISCORD_APPLICATION_ID and DISCORD_BOT_TOKEN are required.");
+  process.exit(1);
+}
+
+const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
+const GUILD_INSTALL = "0";
+
+const requiredGuildPermissionFlags = [
+  ["VIEW_CHANNEL", 1n << 10n],
+  ["SEND_MESSAGES", 1n << 11n],
+  ["MANAGE_MESSAGES", 1n << 13n],
+  ["READ_MESSAGE_HISTORY", 1n << 16n],
+  ["MANAGE_ROLES", 1n << 28n],
+  ["MANAGE_WEBHOOKS", 1n << 29n],
+];
+
+const guildInstallScopes = ["applications.commands", "bot"];
+const guildInstallPermissions = requiredGuildPermissionFlags
+  .reduce((permissions, [, flag]) => permissions | flag, 0n)
+  .toString();
+
+async function discordApi(path, options = {}) {
+  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+  if (response.ok) {
+    return response;
+  }
+
+  const body = await response.text();
+  throw new Error(`${response.status} ${response.statusText}: ${body}`);
+}
+
+const currentApplicationResponse = await discordApi("/applications/@me");
+const currentApplication = await currentApplicationResponse.json();
+
+if (currentApplication.id !== applicationId) {
+  throw new Error(
+    `DISCORD_APPLICATION_ID (${applicationId}) does not match the application for DISCORD_BOT_TOKEN (${currentApplication.id}).`,
+  );
+}
+
+const integrationTypesConfig = {
+  ...(currentApplication.integration_types_config ?? {}),
+  [GUILD_INSTALL]: {
+    ...(currentApplication.integration_types_config?.[GUILD_INSTALL] ?? {}),
+    oauth2_install_params: {
+      scopes: guildInstallScopes,
+      permissions: guildInstallPermissions,
+    },
+  },
+};
+
+await discordApi("/applications/@me", {
+  method: "PATCH",
+  body: JSON.stringify({
+    install_params: {
+      scopes: guildInstallScopes,
+      permissions: guildInstallPermissions,
+    },
+    integration_types_config: integrationTypesConfig,
+  }),
+});
+
+const permissionNames = requiredGuildPermissionFlags
+  .map(([name]) => name)
+  .join(", ");
+const inviteUrl = new URL("https://discord.com/oauth2/authorize");
+inviteUrl.searchParams.set("client_id", applicationId);
+inviteUrl.searchParams.set("scope", guildInstallScopes.join(" "));
+inviteUrl.searchParams.set("permissions", guildInstallPermissions);
+inviteUrl.searchParams.set("integration_type", GUILD_INSTALL);
+
+console.log("Updated Discord Guild Install default settings.");
+console.log(`Scopes: ${guildInstallScopes.join(", ")}`);
+console.log(`Permissions: ${guildInstallPermissions} (${permissionNames})`);
+console.log(`Direct guild install URL: ${inviteUrl.toString()}`);
