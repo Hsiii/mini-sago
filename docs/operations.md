@@ -87,11 +87,13 @@ be above the self-assignable channel roles in Server Settings -> Roles.
 
 Oracle's Always Free resources include small VM shapes that are enough for this
 bot. Discord interaction endpoints must be public HTTPS URLs, so run this app
-behind the shared BotsProxy Caddy service that owns the domain and TLS.
+behind the shared Caddy service in the `oracle` deployment repo that owns the
+domain and TLS.
 
 You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
 record pointed at the Oracle VM public IP. Discord will not accept a plain HTTP
-endpoint. BotsProxy routes `/wm31/*` to this app on the shared Docker network.
+endpoint. The `oracle` repo routes `/wm31/*` to this app on the shared Docker
+network.
 
 1. Create an Oracle Cloud account and tenancy.
 2. Create a minimal Always Free VM:
@@ -103,44 +105,48 @@ endpoint. BotsProxy routes `/wm31/*` to this app on the shared Docker network.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM under the WM31 app directory.
-6. Create `.env.production` from `.env.production.example` and fill in:
+5. Clone this repository onto the VM under `/home/ubuntu/bots/apps/wm31`.
+6. Clone the `oracle` deployment repo under `/home/ubuntu/bots/oracle`.
+7. Create `/home/ubuntu/bots/secrets/wm31.env` from this repo's
+   `.env.production.example` and fill in:
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
    - `DISCORD_BOT_TOKEN`
    - `DISCORD_GUILD_ID`
    - `SELF_ASSIGNABLE_ROLES`
-7. Make sure the shared `bots_shared` Docker network exists. BotsProxy creates
-   it, or you can create it manually:
+8. Make sure the shared `bots_shared` Docker network exists. The `oracle`
+   deploy scripts create it, or you can create it manually:
 
 ```bash
 docker network create bots_shared
 ```
 
-8. Start the service:
+9. Start or update the service from the `oracle` repo:
 
 ```bash
-docker compose up -d --build
-docker compose logs -f
+/home/ubuntu/bots/oracle/scripts/deploy-wm31
+cd /home/ubuntu/bots/oracle
+sudo docker compose logs -f wm31bot
 ```
 
-9. Confirm the proxied health endpoint after BotsProxy is running:
+10. Confirm the proxied health endpoint after Caddy is running:
 
 ```bash
 curl https://YOUR_DOMAIN/wm31/api/health
 ```
 
-10. In the Discord Developer Portal, set the Interactions Endpoint URL to:
+11. In the Discord Developer Portal, set the Interactions Endpoint URL to:
 
 ```text
 https://YOUR_DOMAIN/wm31/api/interactions
 ```
 
-The production Compose stack caps runtime usage so the bot remains small:
+The `oracle` Compose stack caps runtime usage so the bot remains small:
 
 - app container: 0.25 CPU and 256 MB RAM
 
-The Compose stack persists scheduled-post state in the `wm31bot-state` volume:
+The `oracle` Compose stack persists scheduled-post state in the
+`wm31bot-state` volume:
 
 - TOEFL state when `TOEFL_VOCAB_STATE_FILE` is set to
   `/app/state/toefl-vocab-state.json`.
