@@ -3,33 +3,57 @@
 WM31Bot is a small Bun service for a Discord bot. It exposes Discord
 interaction webhooks for channel access slash commands, and it keeps a Discord
 Gateway connection open to transform Instagram links into kkinstagram links.
+Some behavior is universal across every guild where the bot is installed; other
+behavior is intentionally scoped to one configured guild and its channels.
 
-## Features
+## Feature map
 
-- Self-assignable Discord channel roles through localized slash commands.
-- A persistent channel access panel with per-role join/leave buttons for up to
-  five roles, or a select menu for larger role sets.
-- Live panel member counts that refresh after component interactions and when
-  the panel publisher runs.
+### Universal / cross-guild features
+
 - Instagram link reposting across every guild where the bot is installed:
   `instagram.com` links are deleted and reposted as `kkinstagram.com` links
   through a channel webhook.
 - Webhook reposts preserve the member display name and avatar where possible,
   support thread replies through the parent channel webhook, and disable
   allowed mentions to avoid duplicate pings.
+
+### Configured-guild features
+
+- Self-assignable Discord channel roles through localized slash commands in the
+  configured `DISCORD_GUILD_ID`.
+- A persistent channel access panel with per-role join/leave buttons for up to
+  five roles, or a select menu for larger role sets.
+- Live panel member counts that refresh after component interactions and when
+  the panel publisher runs.
 - Daily TOEFL vocabulary posts from a checked-in Wiktionary-attributed dataset.
 - A Gamer forum monitor for the Mahjong Soul gift-code thread that forwards
   new replies to Discord with the post text and first image.
+
+### Admin and maintenance utilities
+
+- `GET /api/health` reports whether the Discord application, public key, bot
+  token, guild ID, and managed roles are configured.
+- `POST /api/interactions` verifies Discord signatures and handles slash
+  commands plus panel component interactions.
+- `bun run sync:install` updates Discord's Guild Install defaults with the
+  scopes and permissions the bot needs.
+- `bun run register:commands` publishes the channel-role slash commands,
+  either to `DISCORD_GUILD_ID` or globally when that variable is omitted.
+- `bun run publish:panel` creates or updates the channel access panel in a
+  chosen Discord channel.
+- `bun run fetch:vocab` fetches candidate Wiktionary data for expanding the
+  checked-in TOEFL vocabulary dataset.
 
 ## Use it
 
 1. Install dependencies and create `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
-3. Set `DISCORD_GUILD_ID` for the Wordle/荒野 role-control server, and
-   optionally set `SELF_ASSIGNABLE_ROLES`.
+3. Set `DISCORD_GUILD_ID` for the configured-guild features, and optionally
+   set `SELF_ASSIGNABLE_ROLES`.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
-   under Bot -> Privileged Gateway Intents. Without this, Discord closes the
-   Gateway connection with code `4014` and Instagram links cannot be read.
+   under Bot -> Privileged Gateway Intents if the universal Instagram repost
+   listener should run. Without this, Discord closes the Gateway connection
+   with code `4014` and Instagram links cannot be read.
 5. Sync the Discord application install settings so the bot profile
    `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
    `View Channels`, `Send Messages`, `Read Message History`, `Manage Roles`,
@@ -57,23 +81,7 @@ bun run dev
 - `POST /api/interactions` handles Discord slash commands and panel
   components.
 
-## Channel access panel
-
-`bun run publish:panel -- CHANNEL_ID` creates or updates the channel access
-panel in the target channel. It recognizes existing panel messages, including
-older legacy panel content, so republishing refreshes the same message instead
-of posting a duplicate.
-
-For one to five managed roles, the panel interleaves each role summary with
-dedicated `加入` and `退出` buttons. For larger role sets, it falls back to a
-Discord select menu. The panel is sent as Components V2, includes localized
-Wordle and 荒野亂鬥 labels for the default roles, and disables allowed mentions.
-
-Component interactions update Discord roles immediately and then refresh the
-panel with the latest member counts. Slash commands remain available for the
-default Wordle and 荒野亂鬥 role flows.
-
-## Instagram link transform
+## Universal: Instagram link transform
 
 When a non-bot guild member posts an `instagram.com` link, the bot deletes the
 original message and reposts the transformed `kkinstagram.com` URL through a
@@ -90,7 +98,36 @@ Discord's `thread_id` webhook parameter. The Gateway client heartbeats,
 resumes sessions when Discord allows it, and logs clearer close reasons for
 authentication or privileged-intent failures.
 
-## Discord installation permissions
+Set `DISCORD_GATEWAY_DISABLED=true` to run only the HTTP endpoints and disable
+the universal Gateway listener.
+
+## Configured guild: channel access roles
+
+All role commands and panel component interactions are guarded by
+`DISCORD_GUILD_ID`. If a command or component interaction comes from another
+guild, the bot responds with an ephemeral "指定伺服器" rejection instead of
+changing roles.
+
+The registered slash commands are `/join-wordle-channel`,
+`/leave-wordle-channel`, `/join-brawlstars-channel`, and
+`/leave-brawlstars-channel`. The join commands also return a member summary for
+the selected role.
+
+`bun run publish:panel -- CHANNEL_ID` creates or updates the channel access
+panel in the target channel. It recognizes existing panel messages, including
+older legacy panel content, so republishing refreshes the same message instead
+of posting a duplicate.
+
+For one to five managed roles, the panel interleaves each role summary with
+dedicated `加入` and `退出` buttons. For larger role sets, it falls back to a
+Discord select menu. The panel is sent as Components V2, includes localized
+Wordle and 荒野亂鬥 labels for the default roles, and disables allowed mentions.
+
+Component interactions update Discord roles immediately and then refresh the
+panel with the latest member counts. Slash commands remain available for the
+default Wordle and 荒野亂鬥 role flows.
+
+## Universal install permissions
 
 Discord's bot profile `Add App` flow uses the application-level Guild Install
 Default Install Settings, not this repository's README invite text. Run
@@ -111,12 +148,14 @@ The synced permission bitfield is `805383168`, which includes:
 For role assignment to work, the bot's highest role in each server must still
 be above the self-assignable channel roles in Server Settings -> Roles.
 
-## Daily TOEFL vocabulary
+## Configured guild: daily TOEFL vocabulary
 
 Set `TOEFL_VOCAB_CHANNEL_ID` to enable the daily vocabulary message. The bot
 posts after `TOEFL_VOCAB_TIME` in `TOEFL_VOCAB_TIMEZONE`; both default to
 `08:00` and `Asia/Taipei`. The selected word is deterministic by date, and the
 state file prevents duplicate sends after restarts on the same day.
+
+The target channel is validated against `DISCORD_GUILD_ID` before sending.
 
 Vocabulary data lives in `data/toefl-vocab.json`. The initial entries are based
 on Wiktionary and every Discord message includes Wiktionary source and
@@ -131,7 +170,7 @@ Review the generated output before replacing or appending to
 `data/toefl-vocab.json`; Wiktionary definitions are broad, so TOEFL-friendly
 examples and Traditional Chinese explanations should stay human-reviewed.
 
-## Gamer forum monitor
+## Configured guild: Gamer forum monitor
 
 The bot watches
 `https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&to=112` for newer
@@ -143,6 +182,10 @@ The alert content includes the floor, author, post time, plain text, canonical
 post link, and the first article image as a Discord embed when one exists. The
 monitor follows the forum pager to the latest page, so the watched `to=112`
 anchor can remain stable after the thread rolls onto a new page.
+
+The target Discord channel is validated against `DISCORD_GUILD_ID` before
+sending. The monitor checks new main article replies, not comments under an
+existing article.
 
 Set `GAMER_FORUM_MONITOR_DISABLED=true` to disable the monitor.
 
@@ -203,30 +246,50 @@ The production Compose stack caps runtime usage so the bot remains small:
 
 - app container: 0.25 CPU and 256 MB RAM
 
-The Compose stack also persists the TOEFL vocab send-state in the
-`wm31bot-state` volume when `TOEFL_VOCAB_STATE_FILE` is set to
-`/app/state/toefl-vocab-state.json`.
+The Compose stack persists scheduled-post state in the `wm31bot-state` volume:
+
+- TOEFL state when `TOEFL_VOCAB_STATE_FILE` is set to
+  `/app/state/toefl-vocab-state.json`.
+- Gamer forum state through the Compose-level `GAMER_FORUM_STATE_FILE` default
+  of `/app/state/gamer-forum-state.json`.
 
 ## Environment variables
 
+### Core Discord configuration
+
+| Name                     | Required | Description                                                                                         |
+| ------------------------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `DISCORD_APPLICATION_ID` | Yes      | Discord application ID                                                                              |
+| `DISCORD_PUBLIC_KEY`     | Yes      | Public key used to verify interaction signatures                                                    |
+| `DISCORD_BOT_TOKEN`      | Yes      | Bot token used for Discord REST calls and the Gateway listener                                      |
+| `DISCORD_GUILD_ID`       | No       | Guild for configured-guild features. Defaults to `1282936453134815275` when omitted by runtime code |
+
+### Universal / cross-guild configuration
+
+| Name                       | Required | Description                                                                         |
+| -------------------------- | -------- | ----------------------------------------------------------------------------------- |
+| `DISCORD_GATEWAY_DISABLED` | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener |
+
+### Configured-guild role access
+
 | Name                                | Required | Description                                                                                                                      |
 | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_APPLICATION_ID`            | Yes      | Discord application ID                                                                                                           |
-| `DISCORD_PUBLIC_KEY`                | Yes      | Public key used to verify interaction signatures                                                                                 |
-| `DISCORD_BOT_TOKEN`                 | Yes      | Bot token used for Discord REST role updates                                                                                     |
-| `DISCORD_GUILD_ID`                  | Yes      | Guild where Wordle/荒野 role-control interactions are allowed. Defaults to `1282936453134815275` when omitted                    |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
-| `DISCORD_GATEWAY_DISABLED`          | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener                                              |
-| `TOEFL_VOCAB_CHANNEL_ID`            | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                      |
-| `TOEFL_VOCAB_TIME`                  | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                        |
-| `TOEFL_VOCAB_TIMEZONE`              | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                               |
-| `TOEFL_VOCAB_STATE_FILE`            | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker        |
-| `GAMER_FORUM_CHANNEL_ID`            | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                      |
-| `GAMER_FORUM_URL`                   | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                      |
-| `GAMER_FORUM_CHECK_INTERVAL_MS`     | No       | Forum polling interval in milliseconds. Defaults to `60000`; minimum `10000`                                                     |
-| `GAMER_FORUM_STATE_FILE`            | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker       |
-| `GAMER_FORUM_MONITOR_DISABLED`      | No       | Set to `true` to disable the Gamer forum monitor                                                                                 |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
+
+### Configured-guild scheduled posts
+
+| Name                            | Required | Description                                                                                                                |
+| ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TOEFL_VOCAB_CHANNEL_ID`        | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                |
+| `TOEFL_VOCAB_TIME`              | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                  |
+| `TOEFL_VOCAB_TIMEZONE`          | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                         |
+| `TOEFL_VOCAB_STATE_FILE`        | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker  |
+| `GAMER_FORUM_CHANNEL_ID`        | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                |
+| `GAMER_FORUM_URL`               | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                |
+| `GAMER_FORUM_CHECK_INTERVAL_MS` | No       | Forum polling interval in milliseconds. Defaults to `60000`; minimum `10000`                                               |
+| `GAMER_FORUM_STATE_FILE`        | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker |
+| `GAMER_FORUM_MONITOR_DISABLED`  | No       | Set to `true` to disable the Gamer forum monitor                                                                           |
 
 Default `SELF_ASSIGNABLE_ROLES` value:
 
