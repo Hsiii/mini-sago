@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --watch src/server.ts",
+    "deploy": "bun scripts/deploy.mjs",
     "build": "tsc --noEmit",
     "start": "bun src/server.ts",
     "test": "bun test",
