@@ -6,6 +6,8 @@ services:
     mem_limit: 256m
     env_file:
       - .env.production
+    environment:
+      GAMER_FORUM_STATE_FILE: /app/state/gamer-forum-state.json
     volumes:
       - wm31bot-state:/app/state
     networks:
