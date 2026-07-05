@@ -18,6 +18,8 @@ Gateway connection open to transform Instagram links into kkinstagram links.
   support thread replies through the parent channel webhook, and disable
   allowed mentions to avoid duplicate pings.
 - Daily TOEFL vocabulary posts from a checked-in Wiktionary-attributed dataset.
+- A Gamer forum monitor for the Mahjong Soul gift-code thread that forwards
+  new replies to Discord with the post text and first image.
 
 ## Use it
 
@@ -36,6 +38,8 @@ Gateway connection open to transform Instagram links into kkinstagram links.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
 8. Optionally set `TOEFL_VOCAB_CHANNEL_ID` to post one vocabulary item per day.
+   The Gamer forum monitor defaults to channel `1518127531968958558`; override
+   `GAMER_FORUM_CHANNEL_ID` only if it should post elsewhere.
 9. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
@@ -127,6 +131,21 @@ Review the generated output before replacing or appending to
 `data/toefl-vocab.json`; Wiktionary definitions are broad, so TOEFL-friendly
 examples and Traditional Chinese explanations should stay human-reviewed.
 
+## Gamer forum monitor
+
+The bot watches
+`https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&to=112` for newer
+article posts. On the first run it records the newest existing `post_<id>` in
+`GAMER_FORUM_STATE_FILE` without sending an alert, then posts future higher
+post IDs to `GAMER_FORUM_CHANNEL_ID`.
+
+The alert content includes the floor, author, post time, plain text, canonical
+post link, and the first article image as a Discord embed when one exists. The
+monitor follows the forum pager to the latest page, so the watched `to=112`
+anchor can remain stable after the thread rolls onto a new page.
+
+Set `GAMER_FORUM_MONITOR_DISABLED=true` to disable the monitor.
+
 ## Oracle Cloud Free Tier deployment
 
 Oracle's Always Free resources include small VM shapes that are enough for this
@@ -202,6 +221,11 @@ The Compose stack also persists the TOEFL vocab send-state in the
 | `TOEFL_VOCAB_TIME`                  | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                        |
 | `TOEFL_VOCAB_TIMEZONE`              | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                               |
 | `TOEFL_VOCAB_STATE_FILE`            | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker        |
+| `GAMER_FORUM_CHANNEL_ID`            | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                      |
+| `GAMER_FORUM_URL`                   | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                      |
+| `GAMER_FORUM_CHECK_INTERVAL_MS`     | No       | Forum polling interval in milliseconds. Defaults to `60000`; minimum `10000`                                                     |
+| `GAMER_FORUM_STATE_FILE`            | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker       |
+| `GAMER_FORUM_MONITOR_DISABLED`      | No       | Set to `true` to disable the Gamer forum monitor                                                                                 |
 | `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
 
 Default `SELF_ASSIGNABLE_ROLES` value:

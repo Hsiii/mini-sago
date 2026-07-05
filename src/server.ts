@@ -1,4 +1,5 @@
 import { getPublicDiscordSummary } from "../lib/discord/env";
+import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
@@ -59,5 +60,6 @@ if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {
 }
 
 startToeflVocabScheduler();
+startGamerForumMonitor();
 
 console.log(`WM31Bot listening on http://${server.hostname}:${server.port}`);
