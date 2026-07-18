@@ -89,7 +89,7 @@ be above the self-assignable channel roles in Server Settings -> Roles.
 
 Oracle's Always Free resources include small VM shapes that are enough for this
 bot. Discord interaction endpoints must be public HTTPS URLs, so run this app
-behind the shared Caddy service in the `oracle` deployment repo that owns the
+behind the shared Caddy service in the platform infrastructure repo that owns the
 domain and TLS.
 
 You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
@@ -107,27 +107,27 @@ network.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM under `/home/ubuntu/bots/apps/wm31`.
-6. Clone the `oracle` deployment repo under `/home/ubuntu/bots/oracle`.
-7. Create `/home/ubuntu/bots/secrets/wm31.env` from this repo's
+5. Clone this repository onto the VM under `/srv/platform/apps/wm31`.
+6. Clone the platform infrastructure repo under `/srv/platform/infra`.
+7. Create `/srv/platform/secrets/wm31.env` from this repo's
    `.env.production.example` and fill in:
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
    - `DISCORD_BOT_TOKEN`
    - `DISCORD_GUILD_ID`
    - `SELF_ASSIGNABLE_ROLES`
-8. Make sure the shared `bots_shared` Docker network exists. The `oracle`
+8. Make sure the shared `platform_shared` Docker network exists. The platform
    deploy scripts create it, or you can create it manually:
 
 ```bash
-docker network create bots_shared
+docker network create platform_shared
 ```
 
-9. Start or update the service from the `oracle` repo:
+9. Start or update the service from the platform infrastructure repo:
 
 ```bash
-/home/ubuntu/bots/oracle/scripts/deploy-wm31
-cd /home/ubuntu/bots/oracle
+/srv/platform/infra/scripts/deploy-wm31
+cd /srv/platform/infra
 sudo docker compose logs -f wm31bot
 ```
 
