@@ -47,21 +47,22 @@ Default `SELF_ASSIGNABLE_ROLES` value:
 
 ## Configured-guild scheduled posts
 
-| Name                            | Required | Description                                                                                                                |
-| ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `TOEFL_VOCAB_CHANNEL_ID`        | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                |
-| `TOEFL_VOCAB_TIME`              | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                  |
-| `TOEFL_VOCAB_TIMEZONE`          | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                         |
-| `TOEFL_VOCAB_STATE_FILE`        | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker  |
-| `GAMER_FORUM_CHANNEL_ID`        | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                |
-| `GAMER_FORUM_URL`               | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                |
-| `GAMER_FORUM_CHECK_INTERVAL_MS` | No       | Forum polling interval in milliseconds. Defaults to `43200000` (12 hours); minimum `10000`                                 |
-| `GAMER_FORUM_READER_BASE_URL`   | No       | Reader prefix used to fetch normalized forum content. Defaults to `https://r.jina.ai/`                                     |
-| `GAMER_FORUM_STATE_FILE`        | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker |
-| `GAMER_FORUM_MONITOR_DISABLED`  | No       | Set to `true` to disable the Gamer forum monitor                                                                           |
-| `X_POST_HANDLE`                 | No       | X handle to monitor. Defaults to `thsottiaux`                                                                              |
-| `X_POST_CHANNEL_ID`             | No       | Discord channel that receives new X posts. Defaults to `1527893157168283668`                                               |
-| `X_POST_FEED_URL`               | No       | RSS source. Defaults to the FxEmbed feed generated from `X_POST_HANDLE`                                                    |
-| `X_POST_CHECK_INTERVAL_MS`      | No       | X feed polling interval in milliseconds. Defaults to `300000` (5 minutes); minimum `10000`                                 |
-| `X_POST_STATE_FILE`             | No       | JSON file used to avoid duplicate X posts. Defaults to `.data/x-post-state.json`; use `/app/state/...` in Docker           |
-| `X_POST_MONITOR_DISABLED`       | No       | Set to `true` to disable the X post monitor                                                                                |
+| Name                           | Required | Description                                                                                                                |
+| ------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TOEFL_VOCAB_CHANNEL_ID`       | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                |
+| `TOEFL_VOCAB_TIME`             | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                  |
+| `TOEFL_VOCAB_TIMEZONE`         | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                         |
+| `TOEFL_VOCAB_STATE_FILE`       | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker  |
+| `GAMER_FORUM_CHANNEL_ID`       | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                |
+| `GAMER_FORUM_URL`              | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                |
+| `GAMER_FORUM_CHECK_TIMES`      | No       | Comma-separated local check times. Defaults to `08:30,20:30`                                                               |
+| `GAMER_FORUM_TIMEZONE`         | No       | IANA timezone for forum checks. Defaults to `Asia/Taipei`                                                                  |
+| `GAMER_FORUM_READER_BASE_URL`  | No       | Reader prefix used to fetch normalized forum content. Defaults to `https://r.jina.ai/`                                     |
+| `GAMER_FORUM_STATE_FILE`       | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker |
+| `GAMER_FORUM_MONITOR_DISABLED` | No       | Set to `true` to disable the Gamer forum monitor                                                                           |
+| `X_POST_HANDLE`                | No       | X handle to monitor. Defaults to `thsottiaux`                                                                              |
+| `X_POST_CHANNEL_ID`            | No       | Discord channel that receives new X posts. Defaults to `1527893157168283668`                                               |
+| `X_POST_FEED_URL`              | No       | RSS source. Defaults to the FxEmbed feed generated from `X_POST_HANDLE`                                                    |
+| `X_POST_CHECK_INTERVAL_MS`     | No       | X feed polling interval in milliseconds. Defaults to `300000` (5 minutes); minimum `10000`                                 |
+| `X_POST_STATE_FILE`            | No       | JSON file used to avoid duplicate X posts. Defaults to `.data/x-post-state.json`; use `/app/state/...` in Docker           |
+| `X_POST_MONITOR_DISABLED`      | No       | Set to `true` to disable the X post monitor                                                                                |

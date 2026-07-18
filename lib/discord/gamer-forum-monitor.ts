@@ -9,7 +9,8 @@ const DEFAULT_FORUM_URL =
 const DEFAULT_READER_BASE_URL = "https://r.jina.ai/";
 const DEFAULT_CHANNEL_ID = "1518127531968958558";
 const DEFAULT_STATE_FILE = ".data/gamer-forum-state.json";
-const DEFAULT_CHECK_INTERVAL_MS = 43_200_000;
+const DEFAULT_CHECK_TIMES = "08:30,20:30";
+const DEFAULT_TIMEZONE = "Asia/Taipei";
 const MESSAGE_LIMIT = 2_000;
 const USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 WM31Bot/0.1";
@@ -31,7 +32,8 @@ type GamerForumMonitorConfig = {
   watchUrl: string;
   readerBaseUrl: string;
   stateFile: string;
-  checkIntervalMs: number;
+  checkTimes: number[];
+  timezone: string;
 };
 
 type GamerForumState = {
@@ -83,26 +85,68 @@ function getGamerForumMonitorConfig(): GamerForumMonitorConfig | null {
       process.env.GAMER_FORUM_READER_BASE_URL?.trim() ||
       DEFAULT_READER_BASE_URL,
     stateFile: process.env.GAMER_FORUM_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
-    checkIntervalMs: parseCheckIntervalMs(
-      process.env.GAMER_FORUM_CHECK_INTERVAL_MS,
+    checkTimes: parseForumCheckTimes(
+      process.env.GAMER_FORUM_CHECK_TIMES?.trim() || DEFAULT_CHECK_TIMES,
     ),
+    timezone: process.env.GAMER_FORUM_TIMEZONE?.trim() || DEFAULT_TIMEZONE,
   };
 }
 
-function parseCheckIntervalMs(value: string | undefined) {
-  if (!value) {
-    return DEFAULT_CHECK_INTERVAL_MS;
-  }
+export function parseForumCheckTimes(value: string) {
+  const times = value.split(",").map((time) => time.trim());
+  const minutes = times.map((time) => {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time);
 
-  const parsed = Number(value);
+    if (!match) {
+      throw new Error(
+        `GAMER_FORUM_CHECK_TIMES must be comma-separated HH:MM times: ${value}`,
+      );
+    }
 
-  if (!Number.isFinite(parsed) || parsed < 10_000) {
+    return Number(match[1]) * 60 + Number(match[2]);
+  });
+
+  if (minutes.length === 0 || new Set(minutes).size !== minutes.length) {
     throw new Error(
-      `GAMER_FORUM_CHECK_INTERVAL_MS must be at least 10000: ${value}`,
+      `GAMER_FORUM_CHECK_TIMES must contain unique HH:MM times: ${value}`,
     );
   }
 
-  return parsed;
+  return minutes.sort((a, b) => a - b);
+}
+
+function getZonedMinutes(date: Date, timezone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value]),
+  );
+
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
+
+export function millisecondsUntilNextForumCheck(
+  now: Date,
+  timezone: string,
+  checkTimes: number[],
+) {
+  const scheduledMinutes = new Set(checkTimes);
+  const firstCandidate = Math.floor(now.getTime() / 60_000) * 60_000 + 60_000;
+
+  for (let offset = 0; offset <= 48 * 60; offset += 1) {
+    const candidate = new Date(firstCandidate + offset * 60_000);
+
+    if (scheduledMinutes.has(getZonedMinutes(candidate, timezone))) {
+      return candidate.getTime() - now.getTime();
+    }
+  }
+
+  throw new Error("Could not find the next Gamer forum check time.");
 }
 
 function comparePostIds(a: string, b: string) {
@@ -652,12 +696,28 @@ export function startGamerForumMonitor() {
 
   void tick();
 
-  const timer = setInterval(() => {
-    void tick();
-  }, config.checkIntervalMs);
+  const scheduleNext = () => {
+    const delay = millisecondsUntilNextForumCheck(
+      new Date(),
+      config.timezone,
+      config.checkTimes,
+    );
+
+    return setTimeout(async () => {
+      await tick();
+      scheduleNext();
+    }, delay);
+  };
+  const timer = scheduleNext();
+  const formattedTimes = config.checkTimes
+    .map(
+      (minutes) =>
+        `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`,
+    )
+    .join(", ");
 
   console.log(
-    `Gamer forum monitor enabled for ${config.watchUrl} every ${config.checkIntervalMs}ms.`,
+    `Gamer forum monitor enabled for ${config.watchUrl} at ${formattedTimes} ${config.timezone}.`,
   );
 
   return timer;
