@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildForumPageUrl,
+  buildForumReaderUrl,
   buildGamerForumPostMessagePayload,
   formatGamerForumPostMessage,
   getForumCurrentPageNumber,
@@ -42,6 +43,13 @@ describe("Gamer forum page helpers", () => {
   test("builds a latest-page URL from the watched anchor URL", () => {
     expect(buildForumPageUrl(watchUrl, 7)).toBe(
       "https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&page=7",
+    );
+  });
+
+  test("routes forum requests through the browser-backed reader", () => {
+    expect(buildForumReaderUrl(watchUrl)).toBe(`https://r.jina.ai/${watchUrl}`);
+    expect(buildForumReaderUrl(watchUrl, "https://reader.example.test")).toBe(
+      `https://reader.example.test/${watchUrl}`,
     );
   });
 });

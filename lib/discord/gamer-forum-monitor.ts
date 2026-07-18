@@ -6,6 +6,7 @@ import { TARGET_GUILD_ID } from "./constants";
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_FORUM_URL =
   "https://m.gamer.com.tw/forum/C.php?bsn=36476&snA=3047&to=112";
+const DEFAULT_READER_BASE_URL = "https://r.jina.ai/";
 const DEFAULT_CHANNEL_ID = "1518127531968958558";
 const DEFAULT_STATE_FILE = ".data/gamer-forum-state.json";
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
@@ -28,6 +29,7 @@ type GamerForumMonitorConfig = {
   channelId: string;
   guildId: string;
   watchUrl: string;
+  readerBaseUrl: string;
   stateFile: string;
   checkIntervalMs: number;
 };
@@ -77,6 +79,9 @@ function getGamerForumMonitorConfig(): GamerForumMonitorConfig | null {
     channelId: process.env.GAMER_FORUM_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
     guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     watchUrl: process.env.GAMER_FORUM_URL?.trim() || DEFAULT_FORUM_URL,
+    readerBaseUrl:
+      process.env.GAMER_FORUM_READER_BASE_URL?.trim() ||
+      DEFAULT_READER_BASE_URL,
     stateFile: process.env.GAMER_FORUM_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
     checkIntervalMs: parseCheckIntervalMs(
       process.env.GAMER_FORUM_CHECK_INTERVAL_MS,
@@ -359,12 +364,21 @@ export function buildGamerForumPostMessagePayload(
   return payload;
 }
 
-async function fetchForumHtml(url: string) {
-  const response = await fetch(url, {
+export function buildForumReaderUrl(
+  sourceUrl: string,
+  readerBaseUrl = DEFAULT_READER_BASE_URL,
+) {
+  return `${readerBaseUrl.replace(/\/*$/, "/")}${sourceUrl}`;
+}
+
+async function fetchForumHtml(url: string, readerBaseUrl: string) {
+  const response = await fetch(buildForumReaderUrl(url, readerBaseUrl), {
     headers: {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
       "User-Agent": USER_AGENT,
+      "X-No-Cache": "true",
+      "X-Respond-With": "html",
     },
   });
 
@@ -375,15 +389,21 @@ async function fetchForumHtml(url: string) {
   return response.text();
 }
 
-async function fetchLatestGamerForumPosts(watchUrl: string) {
-  const html = await fetchForumHtml(watchUrl);
+async function fetchLatestGamerForumPosts(
+  watchUrl: string,
+  readerBaseUrl: string,
+) {
+  const html = await fetchForumHtml(watchUrl, readerBaseUrl);
   const currentPage = getForumCurrentPageNumber(html, watchUrl);
   const lastPage = getForumLastPageNumber(html);
 
   if (currentPage && lastPage && lastPage > currentPage) {
     const lastPageUrl = buildForumPageUrl(watchUrl, lastPage);
 
-    return parseGamerForumPosts(await fetchForumHtml(lastPageUrl), lastPageUrl);
+    return parseGamerForumPosts(
+      await fetchForumHtml(lastPageUrl, readerBaseUrl),
+      lastPageUrl,
+    );
   }
 
   return parseGamerForumPosts(html, watchUrl);
@@ -485,7 +505,10 @@ async function sendGamerForumAlertsIfNeeded(
   config: GamerForumMonitorConfig,
   now = new Date(),
 ) {
-  const posts = await fetchLatestGamerForumPosts(config.watchUrl);
+  const posts = await fetchLatestGamerForumPosts(
+    config.watchUrl,
+    config.readerBaseUrl,
+  );
   const latestPost = posts.at(-1);
 
   if (!latestPost) {
