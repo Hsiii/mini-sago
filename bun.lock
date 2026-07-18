@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "wm31bot",
+      "name": "minisago",
       "dependencies": {
         "tweetnacl": "1.0.3",
       },

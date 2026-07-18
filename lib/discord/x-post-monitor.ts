@@ -9,7 +9,7 @@ const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
 const DEFAULT_CHECK_INTERVAL_MS = 300_000;
 const STATE_CHECKPOINT_INTERVAL_MS = 3_600_000;
-const USER_AGENT = "WM31Bot/0.1";
+const USER_AGENT = "MiniSago/0.1";
 
 export type XPost = {
   id: string;

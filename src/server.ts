@@ -64,4 +64,4 @@ startToeflVocabScheduler();
 startGamerForumMonitor();
 startXPostMonitor();
 
-console.log(`WM31Bot listening on http://${server.hostname}:${server.port}`);
+console.log(`MiniSago listening on http://${server.hostname}:${server.port}`);

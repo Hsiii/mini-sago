@@ -61,7 +61,7 @@ async function fetchEntry(word) {
     `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`,
     {
       headers: {
-        "User-Agent": "WM31Bot/0.1 vocab importer",
+        "User-Agent": "MiniSago/0.1 vocab importer",
       },
     },
   );

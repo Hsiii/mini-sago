@@ -2,7 +2,7 @@ import { transformInstagramLinks } from "./instagram-links";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-const INSTAGRAM_REPOST_WEBHOOK_NAME = "WM31 Instagram";
+const INSTAGRAM_REPOST_WEBHOOK_NAME = "MiniSago Instagram";
 const MESSAGE_CONTENT_LIMIT = 2_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const GUILDS_INTENT = 1 << 0;
@@ -221,7 +221,7 @@ class InstagramGatewayClient {
   stop() {
     this.stopped = true;
     this.clearHeartbeat();
-    this.socket?.close(1000, "WM31Bot shutdown");
+    this.socket?.close(1000, "MiniSago shutdown");
   }
 
   private async openSocket(resume: boolean) {
@@ -355,8 +355,8 @@ class InstagramGatewayClient {
         intents: GUILDS_INTENT | GUILD_MESSAGES_INTENT | MESSAGE_CONTENT_INTENT,
         properties: {
           os: process.platform,
-          browser: "wm31bot",
-          device: "wm31bot",
+          browser: "minisago",
+          device: "minisago",
         },
       },
     });

@@ -7,6 +7,7 @@ export const JOIN_BRAWL_STARS_CHANNEL_COMMAND_NAME = "join-brawlstars-channel";
 export const LEAVE_BRAWL_STARS_CHANNEL_COMMAND_NAME =
   "leave-brawlstars-channel";
 export const CHANNEL_ACCESS_PANEL_TITLE = "遊戲頻道入口";
-export const CHANNEL_ACCESS_SELECT_CUSTOM_ID = "wm31:channel-access:select:v1";
-export const CHANNEL_ACCESS_JOIN_PREFIX = "wm31:channel-access:join:";
-export const CHANNEL_ACCESS_LEAVE_PREFIX = "wm31:channel-access:leave:";
+export const CHANNEL_ACCESS_SELECT_CUSTOM_ID =
+  "minisago:channel-access:select:v1";
+export const CHANNEL_ACCESS_JOIN_PREFIX = "minisago:channel-access:join:";
+export const CHANNEL_ACCESS_LEAVE_PREFIX = "minisago:channel-access:leave:";

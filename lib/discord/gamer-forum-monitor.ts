@@ -13,7 +13,7 @@ const DEFAULT_CHECK_TIMES = "08:30,20:30";
 const DEFAULT_TIMEZONE = "Asia/Taipei";
 const MESSAGE_LIMIT = 2_000;
 const USER_AGENT =
-  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 WM31Bot/0.1";
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 MiniSago/0.1";
 
 export type GamerForumPost = {
   id: string;

@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 
-const service = "wm31";
+const service = "minisago";
 const remoteHost = process.env.PLATFORM_HOST ?? "platform";
 const remoteDeployRoot =
   process.env.PLATFORM_INFRA_ROOT ?? "/srv/platform/infra";
