@@ -24,6 +24,8 @@ in [README.md](../README.md).
 8. Optionally set `TOEFL_VOCAB_CHANNEL_ID` to post one vocabulary item per day.
    The Gamer forum monitor defaults to channel `1518127531968958558`; override
    `GAMER_FORUM_CHANNEL_ID` only if it should post elsewhere.
+   The X post monitor defaults to `@thsottiaux` and channel
+   `1527893157168283668`.
 9. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
@@ -152,3 +154,5 @@ The `oracle` Compose stack persists scheduled-post state in the
   `/app/state/toefl-vocab-state.json`.
 - Gamer forum state through the Compose-level `GAMER_FORUM_STATE_FILE` default
   of `/app/state/gamer-forum-state.json`.
+- X post state when `X_POST_STATE_FILE` is set to
+  `/app/state/x-post-state.json`.

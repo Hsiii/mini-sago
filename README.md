@@ -30,6 +30,8 @@ behavior is intentionally scoped to one configured guild and its channels.
 - Daily TOEFL vocabulary posts from a checked-in Wiktionary-attributed dataset.
 - A Gamer forum monitor for the Mahjong Soul gift-code thread that forwards
   new replies to Discord with the post text and first image.
+- An X post monitor that forwards new posts from `@thsottiaux` to Discord using
+  FxEmbed's RSS feed and Discord-friendly post links.
 
 ## Universal: Instagram link transform
 
@@ -98,6 +100,17 @@ anchor can remain stable after the thread rolls onto a new page.
 The target Discord channel is validated against the configured guild before
 sending. The monitor checks new main article replies, not comments under an
 existing article.
+
+## Configured guild: X post monitor
+
+The bot checks FxEmbed's RSS feed for `@thsottiaux` once per minute and posts
+new entries to Discord channel `1527893157168283668`. Forwarded links use
+`fxtwitter.com` so Discord can render the post text and media reliably.
+
+On the first run, the monitor records the newest visible post without sending
+older entries. Its state file prevents duplicate sends on later checks. The
+handle, feed URL, channel, interval, and state path can all be overridden with
+environment variables.
 
 ## Operator docs
 
