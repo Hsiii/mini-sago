@@ -4,12 +4,26 @@ This document covers setup, maintenance commands, runtime endpoints, Discord
 installation permissions, and deployment. The user-facing feature overview lives
 in [README.md](../README.md).
 
+## Feature boundaries
+
+- **Universal:** Instagram link replies run in every server and channel where
+  MiniSago has the required message permissions.
+- **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
+  TOEFL posts, Gamer forum alerts, and X alerts are restricted to
+  `DISCORD_GUILD_ID`. The current deployment uses the WM31 guild
+  `1282936453134815275`.
+
+Installing MiniSago in another server does not expose or activate the WM31 role
+controls or scheduled feeds there.
+
 ## Local setup
 
 1. Install dependencies and copy `.env.example` to `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
-3. Set `DISCORD_GUILD_ID` for the configured-guild features, and optionally
-   set `SELF_ASSIGNABLE_ROLES`.
+3. Set `DISCORD_GUILD_ID` for the one server allowed to use configured-guild
+   features, and optionally set `SELF_ASSIGNABLE_ROLES`. The checked-in defaults
+   target the WM31 Wordle and Brawl Stars roles and should not be treated as
+   universal examples.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
    under Bot -> Privileged Gateway Intents if universal Instagram link replies
    should run. Without it, Discord closes the Gateway connection with code
@@ -74,8 +88,10 @@ slash commands and channel access components.
 
 - `bun run sync:install` updates Discord's Guild Install defaults with the
   scopes and permissions the bot needs.
-- `bun run register:commands` publishes the channel-role slash commands,
-  either to `DISCORD_GUILD_ID` or globally when that variable is omitted.
+- `bun run register:commands` publishes the channel-role slash commands to
+  `DISCORD_GUILD_ID`. Omitting it publishes the commands globally, but the
+  runtime still rejects them outside its configured guild; normal deployments
+  should therefore always set the guild ID.
 - `bun run publish:panel` creates or updates the channel access panel in a
   chosen Discord channel.
 - `bun run fetch:vocab` fetches candidate Wiktionary data for expanding the
@@ -118,6 +134,10 @@ is needed only for the configured-guild channel access commands and panel.
 MiniSago does not request Manage Messages or Manage Webhooks. Channel-specific
 overrides must still allow View Channel, Send Messages, and Read Message History
 where Instagram replies should work.
+
+Servers that only use universal Instagram replies may disable Manage Roles for
+MiniSago. That does not affect link replies; it only prevents the configured
+channel-role feature, which is not available outside `DISCORD_GUILD_ID` anyway.
 
 For role assignment to work, the bot's highest role in each server must still
 be above the self-assignable channel roles in Server Settings -> Roles.

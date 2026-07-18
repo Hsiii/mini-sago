@@ -7,15 +7,20 @@
 MiniSago keeps shared Discord spaces easier to use. It manages optional channel
 access, improves Instagram embeds, and delivers selected community updates.
 
-## Features
+## Feature scope
 
-- Replies to Instagram links with only their `kkinstagram.com` URLs for reliable
-  Discord embeds. The original message stays in place; MiniSago does not delete
-  messages, impersonate users, or create webhooks.
-- Lets members join or leave configured channels from a persistent access panel.
-- Provides slash commands for the default Wordle and Brawl Stars channels.
-- Posts a daily TOEFL vocabulary item when enabled.
-- Forwards configured Gamer forum and X updates without replaying old posts.
+MiniSago is portable, but not every feature is intended for every server:
+
+| Feature                         | Scope                        | Intent                                                                                                                         |
+| ------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Instagram link replies          | Universal                    | Works in every installed server and visible channel. Leaves the original message and replies with only `kkinstagram.com` URLs. |
+| Channel access panel            | Configured guild only        | Manages deployment-specific opt-in roles. The current defaults are the WM31 Wordle and Brawl Stars channel roles.              |
+| Wordle/Brawl Stars commands     | WM31 configured guild only   | Convenience commands for that server's existing channels; they are not a general cross-server feature.                         |
+| TOEFL vocabulary                | Configured guild and channel | Posts one daily item only when a target channel is configured.                                                                 |
+| Gamer forum and X post monitors | Configured guild and channel | Delivers this deployment's selected feeds without replaying old posts.                                                         |
+
+Other servers use MiniSago's universal Instagram behavior; they do not receive
+the WM31 role controls, commands, or scheduled feeds.
 
 ## Commands
 
@@ -27,7 +32,8 @@ access, improves Instagram embeds, and delivers selected community updates.
 | `/leave-brawlstars-channel` | Leave the Brawl Stars channel |
 
 The channel access panel provides the same join and leave actions without slash
-commands. Features that target a configured server are unavailable elsewhere.
+commands. These commands and components are accepted only in
+`DISCORD_GUILD_ID`, which currently identifies the WM31 server.
 
 ## Server Setup
 

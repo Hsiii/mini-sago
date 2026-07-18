@@ -6,12 +6,17 @@ live in [operations.md](operations.md).
 
 ## Core Discord configuration
 
-| Name                     | Required | Description                                                                                         |
-| ------------------------ | -------- | --------------------------------------------------------------------------------------------------- |
-| `DISCORD_APPLICATION_ID` | Yes      | Discord application ID                                                                              |
-| `DISCORD_PUBLIC_KEY`     | Yes      | Public key used to verify interaction signatures                                                    |
-| `DISCORD_BOT_TOKEN`      | Yes      | Bot token used for Discord REST calls and the Gateway listener                                      |
-| `DISCORD_GUILD_ID`       | No       | Guild for configured-guild features. Defaults to `1282936453134815275` when omitted by runtime code |
+| Name                     | Required | Description                                                                                                         |
+| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_APPLICATION_ID` | Yes      | Discord application ID                                                                                              |
+| `DISCORD_PUBLIC_KEY`     | Yes      | Public key used to verify interaction signatures                                                                    |
+| `DISCORD_BOT_TOKEN`      | Yes      | Bot token used for Discord REST calls and the Gateway listener                                                      |
+| `DISCORD_GUILD_ID`       | No       | Only guild allowed to use role access and scheduled-post features. Defaults to the WM31 guild `1282936453134815275` |
+
+`DISCORD_GUILD_ID` is the boundary between universal and server-specific
+behavior. Guilds other than this value receive Instagram link replies only;
+they cannot use the Wordle/Brawl Stars commands, channel access panel, or this
+deployment's scheduled posts.
 
 ## Universal / cross-guild configuration
 
@@ -29,7 +34,7 @@ Only one Gateway-enabled instance should use a bot token at a time. When
 production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
 environments unless that instance is intentionally replacing production.
 
-## Configured-guild role access
+## Configured-guild role access (WM31 by default)
 
 | Name                                | Required | Description                                                                                                                      |
 | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -55,7 +60,16 @@ Default `SELF_ASSIGNABLE_ROLES` value:
 ]
 ```
 
+The defaults above are existing WM31 channel roles. They are intentionally not
+portable defaults for other servers. Change both `DISCORD_GUILD_ID` and
+`SELF_ASSIGNABLE_ROLES` only when deliberately moving or repurposing the
+configured-guild role feature.
+
 ## Configured-guild scheduled posts
+
+Every configured channel below must belong to `DISCORD_GUILD_ID`. These are
+deployment-specific outbound jobs, not features automatically enabled for every
+server where MiniSago is installed.
 
 | Name                           | Required | Description                                                                                                                |
 | ------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
