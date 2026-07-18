@@ -9,7 +9,7 @@ const DEFAULT_FORUM_URL =
 const DEFAULT_READER_BASE_URL = "https://r.jina.ai/";
 const DEFAULT_CHANNEL_ID = "1518127531968958558";
 const DEFAULT_STATE_FILE = ".data/gamer-forum-state.json";
-const DEFAULT_CHECK_INTERVAL_MS = 60_000;
+const DEFAULT_CHECK_INTERVAL_MS = 43_200_000;
 const MESSAGE_LIMIT = 2_000;
 const USER_AGENT =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 WM31Bot/0.1";

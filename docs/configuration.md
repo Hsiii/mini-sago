@@ -55,7 +55,7 @@ Default `SELF_ASSIGNABLE_ROLES` value:
 | `TOEFL_VOCAB_STATE_FILE`        | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker  |
 | `GAMER_FORUM_CHANNEL_ID`        | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                |
 | `GAMER_FORUM_URL`               | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                |
-| `GAMER_FORUM_CHECK_INTERVAL_MS` | No       | Forum polling interval in milliseconds. Defaults to `60000`; minimum `10000`                                               |
+| `GAMER_FORUM_CHECK_INTERVAL_MS` | No       | Forum polling interval in milliseconds. Defaults to `43200000` (12 hours); minimum `10000`                                 |
 | `GAMER_FORUM_READER_BASE_URL`   | No       | Reader prefix used to fetch normalized forum content. Defaults to `https://r.jina.ai/`                                     |
 | `GAMER_FORUM_STATE_FILE`        | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker |
 | `GAMER_FORUM_MONITOR_DISABLED`  | No       | Set to `true` to disable the Gamer forum monitor                                                                           |
