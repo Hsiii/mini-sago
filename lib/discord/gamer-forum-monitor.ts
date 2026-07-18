@@ -251,6 +251,79 @@ export function parseGamerForumPosts(
   return posts;
 }
 
+function markdownToText(markdown: string) {
+  return decodeHtmlEntities(
+    markdown
+      .replace(/\[!\[[^\]]*\]\([^)]*\)\]\([^)]*\)/g, "")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/<[^>]+>/g, ""),
+  )
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
+function extractMarkdownAuthor(markdown: string) {
+  const matches = [
+    ...markdown.matchAll(
+      /\)([^\[\]\n]+?\([a-zA-Z\d_-]+\))(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/g,
+    ),
+  ];
+  const match = matches.at(-1);
+
+  return {
+    author: match?.[1].trim(),
+    postedAt: match?.[2],
+  };
+}
+
+export function parseGamerForumMarkdownPosts(
+  markdown: string,
+  sourceUrl = DEFAULT_FORUM_URL,
+) {
+  const headings = [...markdown.matchAll(/^#(\d+)\s*$/gm)];
+  const posts: GamerForumPost[] = [];
+
+  for (const [index, heading] of headings.entries()) {
+    const floor = Number(heading[1]);
+    const blockStart = (heading.index ?? 0) + heading[0].length;
+    const blockEnd = headings[index + 1]?.index ?? markdown.length;
+    const block = markdown.slice(blockStart, blockEnd);
+    const id = /otheraction\((\d+)\)/.exec(block)?.[1];
+
+    if (!id) {
+      continue;
+    }
+
+    const content = block.split(/\n\n\[\]\(javascript:;\)/, 1)[0].trim();
+    const imageUrl =
+      /!\[[^\]]*\]\((https:\/\/(?:truth|im)\.bahamut\.com\.tw\/[^)]+)\)/i.exec(
+        content,
+      )?.[1];
+    const previousHeadingEnd =
+      index === 0
+        ? 0
+        : (headings[index - 1].index ?? 0) + headings[index - 1][0].length;
+    const { author, postedAt } = extractMarkdownAuthor(
+      markdown.slice(previousHeadingEnd, heading.index),
+    );
+
+    posts.push({
+      id,
+      floor,
+      author,
+      postedAt,
+      text: markdownToText(content),
+      imageUrl: imageUrl ? normalizeUrl(imageUrl) : undefined,
+      url: buildPostUrl(sourceUrl, id),
+    });
+  }
+
+  return posts;
+}
+
 export function getForumLastPageNumber(html: string) {
   const optionPattern =
     /<option\b[^>]*value="(\d+)"[^>]*>\s*\d+\s*頁\s*\/\s*(\d+)\s*頁/gi;
@@ -374,11 +447,9 @@ export function buildForumReaderUrl(
 async function fetchForumHtml(url: string, readerBaseUrl: string) {
   const response = await fetch(buildForumReaderUrl(url, readerBaseUrl), {
     headers: {
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
       "User-Agent": USER_AGENT,
-      "X-No-Cache": "true",
-      "X-Respond-With": "html",
+      "X-Cache-Tolerance": "300",
+      "X-Respond-With": "markdown",
     },
   });
 
@@ -387,6 +458,13 @@ async function fetchForumHtml(url: string, readerBaseUrl: string) {
   }
 
   return response.text();
+}
+
+function parseForumReaderResponse(response: string, sourceUrl: string) {
+  const htmlPosts = parseGamerForumPosts(response, sourceUrl);
+  return htmlPosts.length > 0
+    ? htmlPosts
+    : parseGamerForumMarkdownPosts(response, sourceUrl);
 }
 
 async function fetchLatestGamerForumPosts(
@@ -400,13 +478,13 @@ async function fetchLatestGamerForumPosts(
   if (currentPage && lastPage && lastPage > currentPage) {
     const lastPageUrl = buildForumPageUrl(watchUrl, lastPage);
 
-    return parseGamerForumPosts(
+    return parseForumReaderResponse(
       await fetchForumHtml(lastPageUrl, readerBaseUrl),
       lastPageUrl,
     );
   }
 
-  return parseGamerForumPosts(html, watchUrl);
+  return parseForumReaderResponse(html, watchUrl);
 }
 
 async function readState(stateFile: string): Promise<GamerForumState> {
