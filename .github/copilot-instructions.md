@@ -1,4 +1,5 @@
-- This repository is a Next.js TypeScript project deployed to Vercel.
-- Discord functionality must remain compatible with serverless interactions, not websocket gateway bots.
+- This repository is MiniSago, a Bun and TypeScript Discord bot deployed as a long-running Docker service.
+- Keep universal features cross-guild and isolate configured-guild behavior behind `DISCORD_GUILD_ID`.
+- Discord interactions arrive over HTTP, while universal message features use the Discord Gateway.
 - Keep role management config driven through environment variables unless persistent storage is explicitly requested.
-- Prefer minimal, focused changes and preserve the existing visual style on the setup page.
+- Prefer minimal, focused changes.

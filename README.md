@@ -1,12 +1,16 @@
-# WM31Bot
+# MiniSago
 
-WM31Bot is a small Discord bot service. It exposes Discord interaction
+<img src="assets/minisago.png" alt="MiniSago icon" width="160">
+
+**迷你西米露 — a tiny personal bot that follows you everywhere.**
+
+MiniSago is a personal Discord bot service. It exposes Discord interaction
 webhooks for channel access controls, keeps a Discord Gateway connection open
-to transform Instagram links, and runs a few configured-channel notification
-jobs.
+to transform Instagram links, and runs configured-channel notification jobs.
 
 Some behavior is universal across every guild where the bot is installed; other
 behavior is intentionally scoped to one configured guild and its channels.
+WM31 is currently one of those guilds, not the identity or boundary of the bot.
 
 ## What it does
 
@@ -44,7 +48,7 @@ Instagram link transforms run in every guild where the bot is installed. The
 bot still needs channel permissions to manage messages and webhooks in each
 guild/channel.
 
-The first transformed link in a channel creates a `WM31 Instagram` webhook in
+The first transformed link in a channel creates a `MiniSago Instagram` webhook in
 that channel. Threads are reposted through a webhook in the parent channel with
 Discord's `thread_id` webhook parameter. The Gateway client heartbeats,
 resumes sessions when Discord allows it, and logs clearer close reasons for

@@ -94,8 +94,8 @@ domain and TLS.
 
 You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
 record pointed at the Oracle VM public IP. Discord will not accept a plain HTTP
-endpoint. The `oracle` repo routes `/wm31/*` to this app on the shared Docker
-network.
+endpoint. The `oracle` repo routes the bot domain to this app on the shared
+Docker network.
 
 1. Create an Oracle Cloud account and tenancy.
 2. Create a minimal Always Free VM:
@@ -107,9 +107,9 @@ network.
    - Ingress: TCP `22`, `80`, and `443`.
 3. Point your DNS `A` record to the VM public IP.
 4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM under `/srv/platform/apps/wm31`.
+5. Clone this repository onto the VM under `/srv/platform/apps/minisago`.
 6. Clone the platform infrastructure repo under `/srv/platform/infra`.
-7. Create `/srv/platform/secrets/wm31.env` from this repo's
+7. Create `/srv/platform/secrets/minisago.env` from this repo's
    `.env.production.example` and fill in:
    - `DISCORD_APPLICATION_ID`
    - `DISCORD_PUBLIC_KEY`
@@ -126,21 +126,21 @@ docker network create platform_shared
 9. Start or update the service from the platform infrastructure repo:
 
 ```bash
-/srv/platform/infra/scripts/deploy-wm31
+/srv/platform/infra/scripts/deploy-minisago
 cd /srv/platform/infra
-sudo docker compose logs -f wm31bot
+sudo docker compose logs -f minisago
 ```
 
 10. Confirm the proxied health endpoint after Caddy is running:
 
 ```bash
-curl https://YOUR_DOMAIN/wm31/api/health
+curl https://YOUR_DOMAIN/api/health
 ```
 
 11. In the Discord Developer Portal, set the Interactions Endpoint URL to:
 
 ```text
-https://YOUR_DOMAIN/wm31/api/interactions
+https://YOUR_DOMAIN/api/interactions
 ```
 
 The `oracle` Compose stack caps runtime usage so the bot remains small:
@@ -148,7 +148,7 @@ The `oracle` Compose stack caps runtime usage so the bot remains small:
 - app container: 0.25 CPU and 256 MB RAM
 
 The `oracle` Compose stack persists scheduled-post state in the
-`wm31bot-state` volume:
+`minisago-state` volume:
 
 - TOEFL state when `TOEFL_VOCAB_STATE_FILE` is set to
   `/app/state/toefl-vocab-state.json`.
