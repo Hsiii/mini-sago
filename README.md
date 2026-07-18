@@ -10,7 +10,8 @@ access, improves Instagram embeds, and delivers selected community updates.
 ## Features
 
 - Replies to Instagram links with only their `kkinstagram.com` URLs for reliable
-  Discord embeds.
+  Discord embeds. The original message stays in place; MiniSago does not delete
+  messages, impersonate users, or create webhooks.
 - Lets members join or leave configured channels from a persistent access panel.
 - Provides slash commands for the default Wordle and Brawl Stars channels.
 - Posts a daily TOEFL vocabulary item when enabled.
@@ -39,7 +40,12 @@ permissions are:
 - Manage Roles
 
 Place MiniSago's role above every role it should assign. Enable Discord's Message
-Content privileged intent to use Instagram link transforms.
+Content privileged intent to use Instagram link replies. MiniSago does not need
+the Manage Messages or Manage Webhooks permissions.
+
+Run only one Gateway-enabled MiniSago instance per bot token. If production is
+already running, set `DISCORD_GATEWAY_DISABLED=true` for local development to
+prevent duplicate Instagram replies.
 
 ## Development
 

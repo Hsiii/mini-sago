@@ -15,9 +15,19 @@ live in [operations.md](operations.md).
 
 ## Universal / cross-guild configuration
 
-| Name                       | Required | Description                                                                         |
-| -------------------------- | -------- | ----------------------------------------------------------------------------------- |
-| `DISCORD_GATEWAY_DISABLED` | No       | Set to `true` to run only the HTTP endpoints without the Instagram Gateway listener |
+| Name                       | Required | Description                                                                          |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `DISCORD_GATEWAY_DISABLED` | No       | Set to `true` to run only HTTP features and disable universal Instagram link replies |
+
+Instagram link replies are enabled by default whenever `DISCORD_BOT_TOKEN` is
+set and `DISCORD_GATEWAY_DISABLED` is not `true`. The listener works in every
+server and channel where MiniSago can view messages, read message history, and
+send messages. It replies with only converted `kkinstagram.com` URLs, leaves the
+original message untouched, and never creates webhooks.
+
+Only one Gateway-enabled instance should use a bot token at a time. When
+production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
+environments unless that instance is intentionally replacing production.
 
 ## Configured-guild role access
 

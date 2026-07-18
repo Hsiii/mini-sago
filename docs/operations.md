@@ -6,14 +6,14 @@ in [README.md](../README.md).
 
 ## Local setup
 
-1. Install dependencies and create `.env.local`.
+1. Install dependencies and copy `.env.example` to `.env.local`.
 2. Set `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN`.
 3. Set `DISCORD_GUILD_ID` for the configured-guild features, and optionally
    set `SELF_ASSIGNABLE_ROLES`.
 4. Enable the Message Content privileged intent in the Discord Developer Portal
-   under Bot -> Privileged Gateway Intents if the universal Instagram repost
-   listener should run. Without this, Discord closes the Gateway connection
-   with code `4014` and Instagram links cannot be read.
+   under Bot -> Privileged Gateway Intents if universal Instagram link replies
+   should run. Without it, Discord closes the Gateway connection with code
+   `4014` and Instagram messages cannot be read.
 5. Sync the Discord application install settings so the bot profile
    `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
    `View Channels`, `Send Messages`, `Read Message History`, and `Manage Roles`.
@@ -28,6 +28,12 @@ in [README.md](../README.md).
 9. Run locally or deploy, then point the Discord Interactions Endpoint URL at
    `/api/interactions`.
 
+If production already uses the same bot token, set
+`DISCORD_GATEWAY_DISABLED=true` locally before running the development server.
+Discord delivers Gateway events to every connected unsharded instance, so a
+second listener can produce duplicate replies. HTTP interactions and local
+endpoint development continue to work with the Gateway disabled.
+
 ```bash
 bun install
 bun run sync:install
@@ -35,6 +41,28 @@ bun run register:commands
 bun run publish:panel -- 1520033288767537263
 bun run dev
 ```
+
+## Instagram link replies
+
+The Instagram feature is a universal Gateway listener, not a Discord webhook.
+For each non-bot server message containing an `instagram.com` URL, MiniSago:
+
+1. leaves the user's message untouched;
+2. converts each Instagram URL to the matching `kkinstagram.com` URL; and
+3. replies to the original message with only the converted URL or URLs.
+
+MiniSago ignores bot and webhook-authored messages to avoid loops. It does not
+need Manage Messages or Manage Webhooks, and there should be no MiniSago or
+`WM31 Instagram` entries under Server Settings -> Integrations -> Webhooks.
+
+If messages are deleted or reappear under a user's display name, a retired
+webhook-based instance is still running. Stop that duplicate deployment first,
+then delete its webhook from Server Settings -> Integrations -> Webhooks. Keep
+exactly one Gateway-enabled MiniSago instance running for a bot token.
+
+The Gateway connection is outbound, so Instagram replies do not require a
+public webhook endpoint. The `/api/interactions` endpoint is still required for
+slash commands and channel access components.
 
 ## Endpoints
 
@@ -78,6 +106,18 @@ The synced permission bitfield is `268504064`, which includes:
 - `Send Messages`
 - `Read Message History`
 - `Manage Roles`
+
+The integer is used by Discord's API and generated install URL; Server Settings
+does not provide an integer field. For an existing installation, open Server
+Settings -> Roles -> 迷你西米露 and configure the corresponding permission
+checkboxes. Application install defaults affect new installations and do not
+retroactively rewrite an existing server role.
+
+The first three permissions support universal Instagram replies. `Manage Roles`
+is needed only for the configured-guild channel access commands and panel.
+MiniSago does not request Manage Messages or Manage Webhooks. Channel-specific
+overrides must still allow View Channel, Send Messages, and Read Message History
+where Instagram replies should work.
 
 For role assignment to work, the bot's highest role in each server must still
 be above the self-assignable channel roles in Server Settings -> Roles.
