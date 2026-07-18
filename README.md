@@ -99,7 +99,9 @@ anchor can remain stable after the thread rolls onto a new page.
 
 The target Discord channel is validated against the configured guild before
 sending. The monitor checks new main article replies, not comments under an
-existing article.
+existing article. Forum pages are fetched through Jina Reader's browser-backed
+HTML response because Bahamut applies a Cloudflare browser challenge to the
+production server's direct requests.
 
 ## Configured guild: X post monitor
 
