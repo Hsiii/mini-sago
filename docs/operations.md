@@ -82,70 +82,37 @@ The synced permission bitfield is `268504064`, which includes:
 For role assignment to work, the bot's highest role in each server must still
 be above the self-assignable channel roles in Server Settings -> Roles.
 
-## Oracle Cloud Free Tier deployment
+## Production deployment
 
-Oracle's Always Free resources include small VM shapes that are enough for this
-bot. Discord interaction endpoints must be public HTTPS URLs, so run this app
-behind the shared Caddy service in the platform infrastructure repo that owns the
-domain and TLS.
+Every push to `main` publishes Linux AMD64 images to GitHub Container Registry
+under `ghcr.io/hsiii/minisago`. The workflow maintains a moving `main` tag and
+an immutable `sha-<commit>` tag.
 
-You need a domain or subdomain, such as `bot.example.com`, with a DNS `A`
-record pointed at the Oracle VM public IP. Discord will not accept a plain HTTP
-endpoint. The `oracle` repo routes the bot domain to this app on the shared
-Docker network.
-
-1. Create an Oracle Cloud account and tenancy.
-2. Create a minimal Always Free VM:
-   - Image: Ubuntu 24.04 or 22.04.
-   - Shape: `VM.Standard.E2.1.Micro`, or `VM.Standard.A1.Flex` if you prefer Arm.
-   - Size: 1 OCPU and 1 GB RAM.
-   - Boot volume: 50 GB.
-   - Networking: public subnet with a public IPv4 address.
-   - Ingress: TCP `22`, `80`, and `443`.
-3. Point your DNS `A` record to the VM public IP.
-4. SSH into the VM and install Docker.
-5. Clone this repository onto the VM under `/srv/platform/apps/minisago`.
-6. Clone the platform infrastructure repo under `/srv/platform/infra`.
-7. Create `/srv/platform/secrets/minisago.env` from this repo's
-   `.env.production.example` and fill in:
-   - `DISCORD_APPLICATION_ID`
-   - `DISCORD_PUBLIC_KEY`
-   - `DISCORD_BOT_TOKEN`
-   - `DISCORD_GUILD_ID`
-   - `SELF_ASSIGNABLE_ROLES`
-8. Make sure the shared `platform_shared` Docker network exists. The platform
-   deploy scripts create it, or you can create it manually:
+`bun run deploy` pushes `main`, waits for the image workflow, and asks the
+platform operations checkout at `/srv/platform/operations` to deploy the
+neutral `bot-core` service:
 
 ```bash
-docker network create platform_shared
+bun run deploy
 ```
 
-9. Start or update the service from the platform infrastructure repo:
+The VM pulls the published image rather than cloning or building this
+repository. Production configuration lives in
+`/srv/platform/secrets/bot-core.env`, and the container joins the external
+`platform_edge` network under the `bot-core` alias.
 
-```bash
-/srv/platform/infra/scripts/deploy-minisago
-cd /srv/platform/infra
-sudo docker compose logs -f minisago
-```
-
-10. Confirm the proxied health endpoint after Caddy is running:
+Confirm the public endpoints after deployment:
 
 ```bash
 curl https://YOUR_DOMAIN/api/health
 ```
 
-11. In the Discord Developer Portal, set the Interactions Endpoint URL to:
-
 ```text
 https://YOUR_DOMAIN/api/interactions
 ```
 
-The `oracle` Compose stack caps runtime usage so the bot remains small:
-
-- app container: 0.25 CPU and 256 MB RAM
-
-The `oracle` Compose stack persists scheduled-post state in the
-`minisago-state` volume:
+The platform caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
+stored in the external `platform_bot-core-state` volume:
 
 - TOEFL state when `TOEFL_VOCAB_STATE_FILE` is set to
   `/app/state/toefl-vocab-state.json`.
