@@ -9,8 +9,8 @@ access, improves Instagram embeds, and delivers selected community updates.
 
 ## Features
 
-- Reposts Instagram links through `kkinstagram.com` for reliable Discord embeds
-  while preserving the sender's display name and avatar.
+- Replies to Instagram links with only their `kkinstagram.com` URLs for reliable
+  Discord embeds.
 - Lets members join or leave configured channels from a persistent access panel.
 - Provides slash commands for the default Wordle and Brawl Stars channels.
 - Posts a daily TOEFL vocabulary item when enabled.
@@ -37,8 +37,6 @@ permissions are:
 - Send Messages
 - Read Message History
 - Manage Roles
-- Manage Messages
-- Manage Webhooks
 
 Place MiniSago's role above every role it should assign. Enable Discord's Message
 Content privileged intent to use Instagram link transforms.

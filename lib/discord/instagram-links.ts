@@ -1,8 +1,3 @@
-type InstagramLinkTransform = {
-  changed: boolean;
-  content: string;
-};
-
 const URL_PATTERN = /\bhttps?:\/\/[^\s<>"']+/gi;
 const TRAILING_URL_PUNCTUATION = /[),.!?:;]+$/;
 
@@ -63,24 +58,19 @@ function toKkInstagramUrl(rawUrl: string) {
   return parsed.toString();
 }
 
-export function transformInstagramLinks(
-  content: string,
-): InstagramLinkTransform {
-  let changed = false;
-  const transformed = content.replace(URL_PATTERN, (candidate) => {
-    const { urlText, trailing } = splitTrailingPunctuation(candidate);
+export function getInstagramReplyUrls(content: string) {
+  const urls: string[] = [];
+
+  content.replace(URL_PATTERN, (candidate) => {
+    const { urlText } = splitTrailingPunctuation(candidate);
     const nextUrl = toKkInstagramUrl(urlText);
 
-    if (!nextUrl) {
-      return candidate;
+    if (nextUrl) {
+      urls.push(nextUrl);
     }
 
-    changed = true;
-    return `${nextUrl}${trailing}`;
+    return candidate;
   });
 
-  return {
-    changed,
-    content: transformed,
-  };
+  return urls;
 }

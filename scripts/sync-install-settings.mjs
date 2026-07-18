@@ -12,10 +12,8 @@ const GUILD_INSTALL = "0";
 const requiredGuildPermissionFlags = [
   ["VIEW_CHANNEL", 1n << 10n],
   ["SEND_MESSAGES", 1n << 11n],
-  ["MANAGE_MESSAGES", 1n << 13n],
   ["READ_MESSAGE_HISTORY", 1n << 16n],
   ["MANAGE_ROLES", 1n << 28n],
-  ["MANAGE_WEBHOOKS", 1n << 29n],
 ];
 
 const guildInstallScopes = ["applications.commands", "bot"];

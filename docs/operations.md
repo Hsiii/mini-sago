@@ -16,8 +16,7 @@ in [README.md](../README.md).
    with code `4014` and Instagram links cannot be read.
 5. Sync the Discord application install settings so the bot profile
    `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
-   `View Channels`, `Send Messages`, `Read Message History`, `Manage Roles`,
-   `Manage Messages`, and `Manage Webhooks`.
+   `View Channels`, `Send Messages`, `Read Message History`, and `Manage Roles`.
 6. Publish the slash commands.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
@@ -73,14 +72,12 @@ settings through the Discord API. In the Developer Portal, keep
 Installation -> Install Link set to `Discord Provided Link` so the profile
 button uses these defaults.
 
-The synced permission bitfield is `805383168`, which includes:
+The synced permission bitfield is `268504064`, which includes:
 
 - `View Channels`
 - `Send Messages`
-- `Manage Messages`
 - `Read Message History`
 - `Manage Roles`
-- `Manage Webhooks`
 
 For role assignment to work, the bot's highest role in each server must still
 be above the self-assignable channel roles in Server Settings -> Roles.

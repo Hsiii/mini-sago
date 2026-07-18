@@ -1,8 +1,7 @@
-import { transformInstagramLinks } from "./instagram-links";
+import { getInstagramReplyUrls } from "./instagram-links";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
-const INSTAGRAM_REPOST_WEBHOOK_NAME = "MiniSago Instagram";
 const MESSAGE_CONTENT_LIMIT = 2_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const GUILDS_INTENT = 1 << 0;
@@ -30,46 +29,16 @@ type GatewayReady = {
 
 type DiscordUser = {
   id?: string;
-  username?: string;
-  discriminator?: string;
-  global_name?: string | null;
-  avatar?: string | null;
   bot?: boolean;
-};
-
-type DiscordGuildMember = {
-  nick?: string | null;
-  avatar?: string | null;
-  user?: DiscordUser;
 };
 
 type DiscordMessageCreate = {
   id: string;
   channel_id: string;
-  channel_type?: number;
   guild_id?: string;
   content?: string;
   webhook_id?: string;
   author?: DiscordUser;
-  member?: DiscordGuildMember;
-};
-
-type DiscordWebhook = {
-  id: string;
-  name?: string | null;
-  token?: string;
-  channel_id?: string | null;
-};
-
-type DiscordChannel = {
-  id: string;
-  type?: number;
-  parent_id?: string | null;
-};
-
-type WebhookTarget = {
-  webhook: DiscordWebhook;
-  threadId?: string;
 };
 
 type InstagramGatewayConfig = {
@@ -89,87 +58,8 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
   };
 }
 
-function isThreadChannelType(channelType: number | undefined) {
-  return channelType === 10 || channelType === 11 || channelType === 12;
-}
-
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function getDisplayName(message: DiscordMessageCreate) {
-  return (
-    message.member?.nick?.trim() ||
-    message.author?.global_name?.trim() ||
-    message.author?.username?.trim() ||
-    "Instagram"
-  ).slice(0, 80);
-}
-
-function getAvatarUrl({
-  user,
-  guildId,
-  guildAvatar,
-}: {
-  user: DiscordUser | undefined;
-  guildId?: string;
-  guildAvatar?: string | null;
-}) {
-  const userId = user?.id;
-
-  if (!userId) {
-    return undefined;
-  }
-
-  if (guildAvatar && guildId) {
-    const extension = guildAvatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/guilds/${guildId}/users/${userId}/avatars/${guildAvatar}.${extension}`;
-  }
-
-  if (user.avatar) {
-    const extension = user.avatar.startsWith("a_") ? "gif" : "png";
-    return `https://cdn.discordapp.com/avatars/${userId}/${user.avatar}.${extension}`;
-  }
-
-  return `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(user)}.png`;
-}
-
-function hasCustomAvatar({
-  user,
-  guildAvatar,
-}: {
-  user: DiscordUser | undefined;
-  guildAvatar?: string | null;
-}) {
-  return Boolean(guildAvatar || user?.avatar);
-}
-
-function getDefaultAvatarIndex(user: DiscordUser | undefined) {
-  const discriminator = user?.discriminator;
-
-  if (discriminator && discriminator !== "0") {
-    return Number(discriminator) % 5;
-  }
-
-  if (!user?.id) {
-    return 0;
-  }
-
-  return Number((BigInt(user.id) >> 22n) % 6n);
-}
-
-function toWebhookExecutionUrl(target: WebhookTarget) {
-  const url = new URL(
-    `${DISCORD_API_BASE_URL}/webhooks/${target.webhook.id}/${target.webhook.token}`,
-  );
-
-  url.searchParams.set("wait", "true");
-
-  if (target.threadId) {
-    url.searchParams.set("thread_id", target.threadId);
-  }
-
-  return url.toString();
 }
 
 function readGatewayMessage(data: MessageEvent["data"]) {
@@ -210,7 +100,6 @@ class InstagramGatewayClient {
   private socket: WebSocket | null = null;
   private stopped = false;
   private botUserId: string | null = null;
-  private readonly webhooksByChannelId = new Map<string, DiscordWebhook>();
 
   constructor(private readonly config: InstagramGatewayConfig) {}
 
@@ -415,26 +304,26 @@ class InstagramGatewayClient {
       return;
     }
 
-    const transformed = transformInstagramLinks(message.content ?? "");
+    const replyUrls = getInstagramReplyUrls(message.content ?? "");
 
-    if (!transformed.changed) {
+    if (replyUrls.length === 0) {
       return;
     }
 
-    if (transformed.content.length > MESSAGE_CONTENT_LIMIT) {
+    const content = replyUrls.join("\n");
+
+    if (content.length > MESSAGE_CONTENT_LIMIT) {
       console.warn(
-        `Skipped Instagram transform for message ${message.id}: transformed content exceeds ${MESSAGE_CONTENT_LIMIT} characters.`,
+        `Skipped Instagram reply for message ${message.id}: reply content exceeds ${MESSAGE_CONTENT_LIMIT} characters.`,
       );
       return;
     }
 
     try {
-      const webhookTarget = await this.getWebhookTarget(message);
-      await this.deleteMessage(message);
-      await this.executeWebhook(webhookTarget, message, transformed.content);
+      await this.replyToMessage(message, content);
     } catch (error) {
       console.error(
-        `Failed to transform Instagram link for message ${message.id}:`,
+        `Failed to reply to Instagram link for message ${message.id}:`,
         error,
       );
     }
@@ -452,139 +341,21 @@ class InstagramGatewayClient {
     return message.author?.id !== this.botUserId;
   }
 
-  private async getWebhookTarget(
-    message: DiscordMessageCreate,
-  ): Promise<WebhookTarget> {
-    if (!isThreadChannelType(message.channel_type)) {
-      return {
-        webhook: await this.getOrCreateWebhook(message.channel_id),
-      };
-    }
-
-    const channel = await this.discordRequest<DiscordChannel>(
-      `/channels/${message.channel_id}`,
-    );
-
-    if (!channel.parent_id) {
-      throw new Error(`Thread ${message.channel_id} has no parent channel.`);
-    }
-
-    return {
-      webhook: await this.getOrCreateWebhook(channel.parent_id),
-      threadId: message.channel_id,
-    };
-  }
-
-  private async getOrCreateWebhook(channelId: string) {
-    const cachedWebhook = this.webhooksByChannelId.get(channelId);
-
-    if (cachedWebhook?.token) {
-      return cachedWebhook;
-    }
-
-    const webhooks = await this.discordRequest<DiscordWebhook[]>(
-      `/channels/${channelId}/webhooks`,
-    );
-    const existingWebhook = webhooks.find(
-      (webhook) =>
-        webhook.name === INSTAGRAM_REPOST_WEBHOOK_NAME &&
-        Boolean(webhook.token),
-    );
-
-    if (existingWebhook) {
-      this.webhooksByChannelId.set(channelId, existingWebhook);
-      return existingWebhook;
-    }
-
-    const webhook = await this.discordRequest<DiscordWebhook>(
-      `/channels/${channelId}/webhooks`,
-      {
-        method: "POST",
-        body: {
-          name: INSTAGRAM_REPOST_WEBHOOK_NAME,
+  private async replyToMessage(message: DiscordMessageCreate, content: string) {
+    await this.discordRequest(`/channels/${message.channel_id}/messages`, {
+      method: "POST",
+      body: {
+        content,
+        message_reference: {
+          message_id: message.id,
+          fail_if_not_exists: false,
+        },
+        allowed_mentions: {
+          parse: [],
+          replied_user: false,
         },
       },
-    );
-
-    this.webhooksByChannelId.set(channelId, webhook);
-
-    return webhook;
-  }
-
-  private async deleteMessage(message: DiscordMessageCreate) {
-    await this.discordRequest(
-      `/channels/${message.channel_id}/messages/${message.id}`,
-      {
-        method: "DELETE",
-      },
-    );
-  }
-
-  private async executeWebhook(
-    target: WebhookTarget,
-    message: DiscordMessageCreate,
-    content: string,
-  ) {
-    if (!target.webhook.token) {
-      throw new Error(`Webhook ${target.webhook.id} is missing a token.`);
-    }
-
-    const body: Record<string, unknown> = {
-      content,
-      username: getDisplayName(message),
-      allowed_mentions: {
-        parse: [],
-      },
-    };
-    const avatarUrl = await this.getMessageAuthorAvatarUrl(message);
-
-    if (avatarUrl) {
-      body.avatar_url = avatarUrl;
-    }
-
-    await this.fetchJson(toWebhookExecutionUrl(target), {
-      method: "POST",
-      body,
-      authenticated: false,
     });
-  }
-
-  private async getMessageAuthorAvatarUrl(message: DiscordMessageCreate) {
-    const gatewayAvatarUrl = getAvatarUrl({
-      user: message.author,
-      guildId: message.guild_id,
-      guildAvatar: message.member?.avatar,
-    });
-
-    if (
-      hasCustomAvatar({
-        user: message.author,
-        guildAvatar: message.member?.avatar,
-      })
-    ) {
-      return gatewayAvatarUrl;
-    }
-
-    if (message.guild_id && message.author?.id) {
-      try {
-        const member = await this.discordRequest<DiscordGuildMember>(
-          `/guilds/${message.guild_id}/members/${message.author.id}`,
-        );
-
-        return getAvatarUrl({
-          user: member.user ?? message.author,
-          guildId: message.guild_id,
-          guildAvatar: member.avatar,
-        });
-      } catch (error) {
-        console.warn(
-          `Failed to refresh avatar for user ${message.author.id}; falling back to gateway payload.`,
-          error,
-        );
-      }
-    }
-
-    return gatewayAvatarUrl;
   }
 
   private async discordRequest<T>(
@@ -594,31 +365,15 @@ class InstagramGatewayClient {
       body?: unknown;
     } = {},
   ) {
-    return this.fetchJson<T>(`${DISCORD_API_BASE_URL}${path}`, {
-      ...options,
-      authenticated: true,
-    });
-  }
-
-  private async fetchJson<T>(
-    url: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      authenticated: boolean;
-    },
-  ): Promise<T> {
-    const headers: Record<string, string> = {};
-
-    if (options.authenticated) {
-      headers.Authorization = `Bot ${this.config.botToken}`;
-    }
+    const headers: Record<string, string> = {
+      Authorization: `Bot ${this.config.botToken}`,
+    };
 
     if (options.body !== undefined) {
       headers["Content-Type"] = "application/json";
     }
 
-    const response = await fetch(url, {
+    const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
       method: options.method ?? "GET",
       headers,
       body:
