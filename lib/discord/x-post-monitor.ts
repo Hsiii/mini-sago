@@ -7,7 +7,8 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DEFAULT_HANDLE = "thsottiaux";
 const DEFAULT_CHANNEL_ID = "1527893157168283668";
 const DEFAULT_STATE_FILE = ".data/x-post-state.json";
-const DEFAULT_CHECK_INTERVAL_MS = 60_000;
+const DEFAULT_CHECK_INTERVAL_MS = 300_000;
+const STATE_CHECKPOINT_INTERVAL_MS = 3_600_000;
 const USER_AGENT = "WM31Bot/0.1";
 
 export type XPost = {
@@ -131,6 +132,22 @@ export function parseXPosts(feedXml: string) {
 
 function comparePostIds(a: string, b: string) {
   return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
+}
+
+export function shouldCheckpointXPostState(
+  lastCheckedAt: string | undefined,
+  now: Date,
+) {
+  if (!lastCheckedAt) {
+    return true;
+  }
+
+  const lastCheckedTime = Date.parse(lastCheckedAt);
+
+  return (
+    !Number.isFinite(lastCheckedTime) ||
+    now.getTime() - lastCheckedTime >= STATE_CHECKPOINT_INTERVAL_MS
+  );
 }
 
 export function buildXPostMessage(post: XPost, handle = DEFAULT_HANDLE) {
@@ -300,7 +317,10 @@ async function sendXPostAlertsIfNeeded(
     console.log(`Sent @${config.handle} X post ${post.id} to Discord.`);
   }
 
-  if (newPosts.length === 0) {
+  if (
+    newPosts.length === 0 &&
+    shouldCheckpointXPostState(state.lastCheckedAt, now)
+  ) {
     await writeState(config.stateFile, {
       ...state,
       lastCheckedAt: now.toISOString(),

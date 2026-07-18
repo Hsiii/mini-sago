@@ -62,6 +62,6 @@ Default `SELF_ASSIGNABLE_ROLES` value:
 | `X_POST_HANDLE`                 | No       | X handle to monitor. Defaults to `thsottiaux`                                                                              |
 | `X_POST_CHANNEL_ID`             | No       | Discord channel that receives new X posts. Defaults to `1527893157168283668`                                               |
 | `X_POST_FEED_URL`               | No       | RSS source. Defaults to the FxEmbed feed generated from `X_POST_HANDLE`                                                    |
-| `X_POST_CHECK_INTERVAL_MS`      | No       | X feed polling interval in milliseconds. Defaults to `60000`; minimum `10000`                                              |
+| `X_POST_CHECK_INTERVAL_MS`      | No       | X feed polling interval in milliseconds. Defaults to `300000` (5 minutes); minimum `10000`                                 |
 | `X_POST_STATE_FILE`             | No       | JSON file used to avoid duplicate X posts. Defaults to `.data/x-post-state.json`; use `/app/state/...` in Docker           |
 | `X_POST_MONITOR_DISABLED`       | No       | Set to `true` to disable the X post monitor                                                                                |

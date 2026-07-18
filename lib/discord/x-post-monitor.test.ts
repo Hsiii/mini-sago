@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildXPostMessage, parseXPosts } from "./x-post-monitor";
+import {
+  buildXPostMessage,
+  parseXPosts,
+  shouldCheckpointXPostState,
+} from "./x-post-monitor";
 
 const sampleFeed = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
@@ -36,5 +40,17 @@ describe("X post monitor", () => {
       content: "https://fxtwitter.com/thsottiaux/status/2078320950488297917",
       allowed_mentions: { parse: [] },
     });
+  });
+
+  test("checkpoints idle state no more than once per hour", () => {
+    const now = new Date("2026-07-18T06:00:00.000Z");
+
+    expect(shouldCheckpointXPostState(undefined, now)).toBe(true);
+    expect(shouldCheckpointXPostState("2026-07-18T05:30:00.000Z", now)).toBe(
+      false,
+    );
+    expect(shouldCheckpointXPostState("2026-07-18T05:00:00.000Z", now)).toBe(
+      true,
+    );
   });
 });
