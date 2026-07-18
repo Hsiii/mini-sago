@@ -1,0 +1,341 @@
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+
+import { TARGET_GUILD_ID } from "./constants";
+
+const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
+const DEFAULT_HANDLE = "thsottiaux";
+const DEFAULT_CHANNEL_ID = "1527893157168283668";
+const DEFAULT_STATE_FILE = ".data/x-post-state.json";
+const DEFAULT_CHECK_INTERVAL_MS = 60_000;
+const USER_AGENT = "WM31Bot/0.1";
+
+export type XPost = {
+  id: string;
+  text: string;
+  url: string;
+  publishedAt?: string;
+  imageUrl?: string;
+};
+
+type XPostMonitorConfig = {
+  botToken: string;
+  channelId: string;
+  guildId: string;
+  handle: string;
+  feedUrl: string;
+  stateFile: string;
+  checkIntervalMs: number;
+};
+
+type XPostState = {
+  lastPostId?: string;
+  lastPostUrl?: string;
+  lastCheckedAt?: string;
+};
+
+type DiscordChannel = {
+  guild_id?: string;
+};
+
+function decodeXmlEntities(value: string) {
+  return value.replace(
+    /&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,
+    (entity, rawEntity: string) => {
+      const normalized = rawEntity.toLowerCase();
+
+      if (normalized.startsWith("#x")) {
+        return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
+      }
+
+      if (normalized.startsWith("#")) {
+        return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
+      }
+
+      const namedEntities: Record<string, string> = {
+        amp: "&",
+        lt: "<",
+        gt: ">",
+        quot: '"',
+        apos: "'",
+        nbsp: " ",
+      };
+
+      return namedEntities[normalized] ?? entity;
+    },
+  );
+}
+
+function readElement(xml: string, name: string) {
+  const match = new RegExp(
+    `<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`,
+    "i",
+  ).exec(xml);
+
+  if (!match) {
+    return undefined;
+  }
+
+  const value = match[1].replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/, "$1");
+  return decodeXmlEntities(value.trim());
+}
+
+function htmlToText(value: string) {
+  return decodeXmlEntities(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<blockquote[\s\S]*?<\/blockquote>/gi, "")
+      .replace(/<[^>]+>/g, ""),
+  )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractPostId(url: string) {
+  return /\/status\/(\d+)/.exec(url)?.[1];
+}
+
+function extractEnclosureUrl(itemXml: string) {
+  const tag = /<enclosure\b[^>]*>/i.exec(itemXml)?.[0];
+  const url = tag ? /\burl=(?:"([^"]+)"|'([^']+)')/i.exec(tag) : undefined;
+  return url ? decodeXmlEntities(url[1] ?? url[2]) : undefined;
+}
+
+export function parseXPosts(feedXml: string) {
+  const posts: XPost[] = [];
+
+  for (const match of feedXml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)) {
+    const itemXml = match[1];
+    const url = readElement(itemXml, "link");
+    const id = url ? extractPostId(url) : undefined;
+
+    if (!url || !id) {
+      continue;
+    }
+
+    const description = readElement(itemXml, "description");
+    const title = readElement(itemXml, "title") ?? "";
+
+    posts.push({
+      id,
+      text: description ? htmlToText(description) : title,
+      url,
+      publishedAt: readElement(itemXml, "pubDate"),
+      imageUrl: extractEnclosureUrl(itemXml),
+    });
+  }
+
+  return posts;
+}
+
+function comparePostIds(a: string, b: string) {
+  return BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0;
+}
+
+export function buildXPostMessage(post: XPost, handle = DEFAULT_HANDLE) {
+  return {
+    content: `https://fxtwitter.com/${handle}/status/${post.id}`,
+    allowed_mentions: { parse: [] as [] },
+  };
+}
+
+function parseCheckIntervalMs(value: string | undefined) {
+  if (!value) {
+    return DEFAULT_CHECK_INTERVAL_MS;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 10_000) {
+    throw new Error(
+      `X_POST_CHECK_INTERVAL_MS must be at least 10000: ${value}`,
+    );
+  }
+
+  return parsed;
+}
+
+function getXPostMonitorConfig(): XPostMonitorConfig | null {
+  if (process.env.X_POST_MONITOR_DISABLED === "true") {
+    return null;
+  }
+
+  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+
+  if (!botToken) {
+    console.warn("X post monitor disabled: DISCORD_BOT_TOKEN is missing.");
+    return null;
+  }
+
+  const handle = process.env.X_POST_HANDLE?.trim() || DEFAULT_HANDLE;
+
+  return {
+    botToken,
+    channelId: process.env.X_POST_CHANNEL_ID?.trim() || DEFAULT_CHANNEL_ID,
+    guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
+    handle,
+    feedUrl:
+      process.env.X_POST_FEED_URL?.trim() ||
+      `https://fxtwitter.com/${handle}/feed.xml?count=20`,
+    stateFile: process.env.X_POST_STATE_FILE?.trim() || DEFAULT_STATE_FILE,
+    checkIntervalMs: parseCheckIntervalMs(process.env.X_POST_CHECK_INTERVAL_MS),
+  };
+}
+
+async function readState(path: string): Promise<XPostState> {
+  try {
+    return JSON.parse(await readFile(path, "utf8")) as XPostState;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {};
+    }
+
+    throw error;
+  }
+}
+
+async function writeState(path: string, state: XPostState) {
+  await mkdir(dirname(path), { recursive: true });
+  const temporaryPath = `${path}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`);
+  await rename(temporaryPath, path);
+}
+
+async function fetchLatestXPosts(feedUrl: string) {
+  const response = await fetch(feedUrl, {
+    headers: { "User-Agent": USER_AGENT },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `X feed returned ${response.status}: ${await response.text()}`,
+    );
+  }
+
+  return parseXPosts(await response.text());
+}
+
+async function discordRequest<T>(
+  botToken: string,
+  path: string,
+  init?: RequestInit,
+) {
+  const response = await fetch(`${DISCORD_API_BASE_URL}${path}`, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      Authorization: `Bot ${botToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Discord returned ${response.status}: ${await response.text()}`,
+    );
+  }
+
+  return response.status === 204 ? undefined : ((await response.json()) as T);
+}
+
+async function sendXPost(config: XPostMonitorConfig, post: XPost) {
+  const channel = await discordRequest<DiscordChannel>(
+    config.botToken,
+    `/channels/${config.channelId}`,
+  );
+
+  if (channel?.guild_id !== config.guildId) {
+    throw new Error(
+      `X post channel ${config.channelId} belongs to guild ${channel?.guild_id ?? "unknown"}, not configured guild ${config.guildId}.`,
+    );
+  }
+
+  await discordRequest(
+    config.botToken,
+    `/channels/${config.channelId}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify(buildXPostMessage(post, config.handle)),
+    },
+  );
+}
+
+async function sendXPostAlertsIfNeeded(
+  config: XPostMonitorConfig,
+  now = new Date(),
+) {
+  const posts = await fetchLatestXPosts(config.feedUrl);
+  const latestPost = posts.sort((a, b) => comparePostIds(a.id, b.id)).at(-1);
+
+  if (!latestPost) {
+    throw new Error("X feed did not contain any posts.");
+  }
+
+  const state = await readState(config.stateFile);
+
+  if (!state.lastPostId) {
+    await writeState(config.stateFile, {
+      lastPostId: latestPost.id,
+      lastPostUrl: latestPost.url,
+      lastCheckedAt: now.toISOString(),
+    });
+    console.log(
+      `Initialized @${config.handle} X post monitor at ${latestPost.id}; future posts will be sent.`,
+    );
+    return;
+  }
+
+  const newPosts = posts
+    .filter((post) => comparePostIds(post.id, state.lastPostId ?? "0") > 0)
+    .sort((a, b) => comparePostIds(a.id, b.id));
+
+  for (const post of newPosts) {
+    await sendXPost(config, post);
+    await writeState(config.stateFile, {
+      lastPostId: post.id,
+      lastPostUrl: post.url,
+      lastCheckedAt: now.toISOString(),
+    });
+    console.log(`Sent @${config.handle} X post ${post.id} to Discord.`);
+  }
+
+  if (newPosts.length === 0) {
+    await writeState(config.stateFile, {
+      ...state,
+      lastCheckedAt: now.toISOString(),
+    });
+  }
+}
+
+export function startXPostMonitor() {
+  const config = getXPostMonitorConfig();
+
+  if (!config) {
+    return null;
+  }
+
+  let running = false;
+  const tick = async () => {
+    if (running) {
+      return;
+    }
+
+    running = true;
+
+    try {
+      await sendXPostAlertsIfNeeded(config);
+    } catch (error) {
+      console.error(`Failed to check @${config.handle} X posts:`, error);
+    } finally {
+      running = false;
+    }
+  };
+
+  void tick();
+  const timer = setInterval(() => void tick(), config.checkIntervalMs);
+  console.log(
+    `X post monitor enabled for @${config.handle} every ${config.checkIntervalMs}ms.`,
+  );
+  return timer;
+}

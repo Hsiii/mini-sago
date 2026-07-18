@@ -3,6 +3,7 @@ import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
+import { startXPostMonitor } from "../lib/discord/x-post-monitor";
 
 function jsonResponse(body: unknown, status = 200) {
   return Response.json(body, { status });
@@ -61,5 +62,6 @@ if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {
 
 startToeflVocabScheduler();
 startGamerForumMonitor();
+startXPostMonitor();
 
 console.log(`WM31Bot listening on http://${server.hostname}:${server.port}`);
