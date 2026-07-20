@@ -13,6 +13,8 @@ const AUTHORIZED_GUILD_IDS = new Set([
   "917436845187563610",
   "1282936453134815275",
 ]);
+const LOCAL_CONTEXT_LIMIT = 20;
+const LOCAL_CONTEXT_FETCH_LIMIT = 25;
 const MESSAGE_LIMIT = 100;
 const MESSAGE_PAGE_LIMIT = 100;
 const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -103,6 +105,11 @@ export type DiscordSearchQuery = {
   attachmentExtension?: string;
   sortBy?: "relevance" | "timestamp";
   sortOrder?: "asc" | "desc";
+};
+
+export type DiscordContextPlan = {
+  history: "local" | "extended";
+  queries: DiscordSearchQuery[];
 };
 
 type DiscordRequest = <T>(
@@ -216,16 +223,20 @@ function shortString(value: unknown, maximumLength: number) {
     : undefined;
 }
 
-export function parseDiscordSearchPlan(content: string): DiscordSearchQuery[] {
+export function parseDiscordContextPlan(content: string): DiscordContextPlan {
   try {
     const normalized = content
       .trim()
       .replace(/^```(?:json)?\s*/iu, "")
       .replace(/\s*```$/u, "");
-    const payload = JSON.parse(normalized) as { queries?: unknown };
-    if (!Array.isArray(payload.queries)) return [];
+    const payload = JSON.parse(normalized) as {
+      history?: unknown;
+      queries?: unknown;
+    };
+    const history = payload.history === "extended" ? "extended" : "local";
+    if (!Array.isArray(payload.queries)) return { history, queries: [] };
 
-    return payload.queries.slice(0, 4).flatMap((value) => {
+    const queries = payload.queries.slice(0, 4).flatMap((value) => {
       if (!value || typeof value !== "object") return [];
       const query = value as Record<string, unknown>;
       const author = shortString(query.author, 64);
@@ -280,8 +291,10 @@ export function parseDiscordSearchPlan(content: string): DiscordSearchQuery[] {
         },
       ];
     });
+
+    return { history, queries };
   } catch {
-    return [];
+    return { history: "local", queries: [] };
   }
 }
 
@@ -448,6 +461,30 @@ export async function searchGuildMessages({
   );
 }
 
+export async function getNearbyHumanMessages({
+  channelId,
+  requestMessageId,
+  discordRequest,
+}: {
+  channelId: string;
+  requestMessageId: string;
+  discordRequest: DiscordRequest;
+}) {
+  const query = new URLSearchParams({
+    around: requestMessageId,
+    limit: String(LOCAL_CONTEXT_FETCH_LIMIT),
+  });
+  const messages = await discordRequest<DiscordMessage[]>(
+    `/channels/${channelId}/messages?${query}`,
+  );
+
+  return messages
+    .filter((message) => isHumanContextMessage(message, requestMessageId))
+    .slice(0, LOCAL_CONTEXT_LIMIT)
+    .map(toChatbotMessage)
+    .reverse();
+}
+
 export async function getRecentHumanMessages({
   channelId,
   requestMessageId,
@@ -591,65 +628,87 @@ export async function handleChatbotMention({
     message.channel_id,
     discordRequest,
     async () => {
-      const messages = await getRecentHumanMessages({
-        channelId: message.channel_id,
-        requestMessageId: message.id,
-        discordRequest,
-      });
+      const requestMessage = toChatbotMessage(message);
+      let messages = message.guild_id
+        ? await getNearbyHumanMessages({
+            channelId: message.channel_id,
+            requestMessageId: message.id,
+            discordRequest,
+          })
+        : await getRecentHumanMessages({
+            channelId: message.channel_id,
+            requestMessageId: message.id,
+            discordRequest,
+          });
       let search: {
         status: "not_requested" | "complete" | "unavailable";
         results: ChatbotMessage[];
       } = { status: "not_requested", results: [] };
 
       if (message.guild_id) {
-        let queries = fallbackGuildSearchQueries(request);
+        const fallbackQueries = fallbackGuildSearchQueries(request);
+        let plan: DiscordContextPlan = {
+          history: "local",
+          queries: fallbackQueries,
+        };
+        const plannerJob: ChatbotJob = {
+          id: randomUUID(),
+          purpose: "context_plan",
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages,
+        };
+        const plannerDispatch = macAgentBridge.dispatch(plannerJob);
 
-        if (queries.length === 0) {
-          const plannerJob: ChatbotJob = {
-            id: randomUUID(),
-            purpose: "search_plan",
-            channelId: message.channel_id,
-            requestMessageId: message.id,
-            request,
-            messages,
-          };
-          const plannerDispatch = macAgentBridge.dispatch(plannerJob);
-
-          if (plannerDispatch.status !== "accepted") {
-            search = { status: "unavailable", results: [] };
+        if (plannerDispatch.status === "accepted") {
+          const plannerResult = await plannerDispatch.result;
+          if (!plannerResult.ok) {
+            console.warn(
+              `Discord context planning unavailable: ${plannerResult.error}`,
+            );
           } else {
-            const plannerResult = await plannerDispatch.result;
-            if (!plannerResult.ok) {
-              console.warn(
-                `Discord search planning unavailable: ${plannerResult.error}`,
-              );
-              search = { status: "unavailable", results: [] };
-            } else {
-              queries = parseDiscordSearchPlan(plannerResult.content);
+            plan = parseDiscordContextPlan(plannerResult.content);
+            if (plan.queries.length === 0 && fallbackQueries.length > 0) {
+              plan.queries = fallbackQueries;
             }
           }
+        } else {
+          console.warn("Discord context planning unavailable.");
         }
 
-        if (queries.length > 0) {
-          search = await searchGuildMessages({
-            guildId: message.guild_id,
-            requesterUserId,
-            requestMessageId: message.id,
-            queries,
-            discordRequest,
-          })
-            .then((results) => ({
-              status: "complete" as const,
-              results,
-            }))
-            .catch(() => {
-              console.warn("Discord message search unavailable.");
-              return {
-                status: "unavailable" as const,
-                results: [] as ChatbotMessage[],
-              };
-            });
-        }
+        const historyPromise =
+          plan.history === "extended"
+            ? getRecentHumanMessages({
+                channelId: message.channel_id,
+                requestMessageId: message.id,
+                discordRequest,
+              })
+            : Promise.resolve(messages);
+        const searchPromise =
+          plan.queries.length > 0
+            ? searchGuildMessages({
+                guildId: message.guild_id,
+                requesterUserId,
+                requestMessageId: message.id,
+                queries: plan.queries,
+                discordRequest,
+              })
+                .then((results) => ({
+                  status: "complete" as const,
+                  results,
+                }))
+                .catch(() => {
+                  console.warn("Discord message search unavailable.");
+                  return {
+                    status: "unavailable" as const,
+                    results: [] as ChatbotMessage[],
+                  };
+                })
+            : Promise.resolve(search);
+
+        [messages, search] = await Promise.all([historyPromise, searchPromise]);
       }
 
       const job: ChatbotJob = {
@@ -658,6 +717,7 @@ export async function handleChatbotMention({
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,
+        requestMessage,
         messages,
         searchStatus: search.status,
         searchResults: search.results,

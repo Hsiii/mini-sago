@@ -95,26 +95,25 @@ slash commands and channel access components.
 
 The hosted process receives `@MiniSago` messages from any member of the two
 chatbot guilds through the existing Discord Gateway. Hsi retains access in
-other visible servers and direct messages. It fetches up to 100 human messages
-from the same channel, covering the previous seven days and continuing further
-back when needed to reach 100 messages, and sends one transient job through the
-authenticated WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac
-endpoint, or durable queue.
+other visible servers and direct messages. In a guild, it first fetches up to 20
+human messages around the mention and sends a transient context-planning job
+through the authenticated WebSocket at `/api/mac-agent/ws`. There is no
+polling, public Mac endpoint, or durable queue.
 
 Natural requests to find an older message use Discord's official guild message
-search endpoint. Codex first plans up to four complementary searches using
-bounded text, sender, link, file, media, embed, hostname, and attachment-type
-filters for every guild request; the planner may return no searches for an
-ordinary chat and can resolve a short follow-up from recent human messages.
-MiniSago validates those filters, resolves a named sender—or the owner
-from “I” and “我”—excludes the triggering message, deduplicates the bot-visible
-guild results, and supplies up to 25 indexed matches with their channel names
-and original Discord jump links. The second Codex run chooses and explains the
-best match. Its jump link acts as the safe repost path without copying or
-re-uploading someone else's attachment. Discord requires View Channel, Read
-Message History, and the Message Content privileged intent for these results.
+search endpoint. Codex returns a JSON Schema-constrained plan that chooses the
+nearby window or up to 100 same-channel messages and may add up to four guild
+searches using bounded text, sender, link, file, media, embed, hostname, and
+attachment-type filters. MiniSago validates the plan, performs same-channel and
+guild reads in parallel, resolves a named sender—or the requester from “I” and
+“我”—excludes the triggering message, and deduplicates results. The answer run
+receives compact message records plus up to 25 guild matches with channel names
+and original Discord jump links. A jump link acts as the safe repost path
+without copying or re-uploading someone else's attachment. Discord requires
+View Channel, Read Message History, and the Message Content privileged intent
+for these reads.
 
-The Mac helper runs `gpt-5.6-terra` with high reasoning and live public web
+The Mac helper runs `gpt-5.6-luna` with high reasoning and live public web
 search. Each run is ephemeral. Codex receives only the current transcript and
 up to 10 relevant supported attachments of at most 20 MB each. Images, PDFs,
 DOCX, and common text formats are supported. Temporary files are removed after

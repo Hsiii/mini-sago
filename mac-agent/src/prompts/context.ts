@@ -5,11 +5,63 @@ function block(name: string, value: unknown) {
   return `<${name}>\n${content}\n</${name}>`;
 }
 
-export function requestContext(job: ChatbotJob) {
-  return [
-    block("current_request", job.request),
-    block("discord_messages_json", job.messages),
-  ].join("\n\n");
+function promptAttachment({
+  filename,
+  contentType,
+}: ChatbotMessage["attachments"][number]) {
+  return {
+    filename,
+    ...(contentType ? { contentType } : {}),
+  };
+}
+
+function promptMessage(message: ChatbotMessage): Record<string, unknown> {
+  return {
+    author: message.author,
+    timestamp: message.timestamp,
+    content: message.content,
+    ...(message.attachments.length > 0
+      ? { attachments: message.attachments.map(promptAttachment) }
+      : {}),
+    ...(message.channelName ? { channelName: message.channelName } : {}),
+    ...(message.jumpUrl ? { jumpUrl: message.jumpUrl } : {}),
+    ...(message.referencedMessage
+      ? { referencedMessage: promptMessage(message.referencedMessage) }
+      : {}),
+  };
+}
+
+function requestMessageContext(job: ChatbotJob) {
+  const message = job.requestMessage;
+  if (!message || (!message.attachments.length && !message.referencedMessage)) {
+    return undefined;
+  }
+
+  return {
+    author: message.author,
+    timestamp: message.timestamp,
+    ...(message.attachments.length > 0
+      ? { attachments: message.attachments.map(promptAttachment) }
+      : {}),
+    ...(message.referencedMessage
+      ? { referencedMessage: promptMessage(message.referencedMessage) }
+      : {}),
+  };
+}
+
+export function requestContext(
+  job: ChatbotJob,
+  messageBlock = "discord_messages_json",
+) {
+  const sections = [block("current_request", job.request)];
+  const currentMessage = requestMessageContext(job);
+
+  if (currentMessage) {
+    sections.push(block("current_message_context_json", currentMessage));
+  }
+
+  sections.push(block(messageBlock, job.messages.map(promptMessage)));
+  return sections.join("\n\n");
 }
 
 export function answerContext(
@@ -22,7 +74,10 @@ export function answerContext(
   if (job.searchStatus && job.searchStatus !== "not_requested") {
     sections.push(
       block("discord_search_status", job.searchStatus),
-      block("discord_search_results_json", job.searchResults ?? []),
+      block(
+        "discord_search_results_json",
+        (job.searchResults ?? []).map(promptMessage),
+      ),
     );
   }
 

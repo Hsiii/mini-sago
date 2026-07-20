@@ -27,22 +27,24 @@ configured destinations.
 Every member of guilds `917436845187563610` and `1282936453134815275` can
 mention MiniSago with a conversational request. The configured owner can also
 use the chatbot in other visible servers, threads, and direct messages.
-MiniSago supplies up to 100 human-authored messages from the same channel or
-thread, covering the previous seven days and continuing further back when
-needed to reach 100 messages, to a locked-down local Codex runner. Users outside
-those guilds are silently ignored unless they are the configured owner.
+MiniSago starts with up to 20 human-authored messages around the mention. A
+locked-down local Codex planner can keep that local window, expand to up to 100
+same-channel messages, request guild-wide searches, or combine both before a
+second Codex run answers. Users outside those guilds are silently ignored
+unless they are the configured owner.
 
 The chatbot can summarize recent discussion, reason about attachments, and
 search public web pages. Questions such as “When did Daniel send the meme?” use
 Codex to plan up to four read-only searches across Discord's indexed guild
-history. It can combine shorter text terms with sender, link, file, and media
-filters, then returns the matching channel, timestamp, and a jump link to the
-best original message. Guild history can also supply evidence for questions
-about a member or recurring topic. Codex makes this decision for every guild
-request, so a short follow-up such as “try again” can continue the prior lookup.
-English and Chinese requests can refer to the owner as “I” or “我”. Member
-lookup is used only to resolve a named sender for that search; roles, join
-dates, and presence are not exposed to Codex.
+history. The schema-constrained plan can combine shorter text terms with
+sender, link, file, and media filters. MiniSago validates and executes only
+those bounded reads, then supplies matching channels, timestamps, and original
+jump links to the answer run. Guild history can also supply evidence for
+questions about a member or recurring topic. Codex makes this decision for
+every guild request, so a short follow-up such as “try again” can continue the
+prior lookup. English and Chinese requests can refer to the requester as “I” or
+“我”. Member lookup is used only to resolve a named sender for that search;
+roles, join dates, and presence are not exposed to Codex.
 
 The chatbot is available only while the Mac is awake, unlocked, authenticated,
 connected, and idle. Requests are not queued. Each run is independent;

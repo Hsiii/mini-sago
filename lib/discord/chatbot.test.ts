@@ -4,10 +4,11 @@ import {
   extractMentionRequest,
   fallbackGuildSearchQueries,
   formatDiscordAnswer,
+  getNearbyHumanMessages,
   getRecentHumanMessages,
   isChatbotAuthorized,
   isHumanContextMessage,
-  parseDiscordSearchPlan,
+  parseDiscordContextPlan,
   searchGuildMessages,
   toChatbotMessage,
 } from "./chatbot";
@@ -88,18 +89,57 @@ describe("Discord chatbot", () => {
     expect(messages.at(-1)?.id).toBe("recent-0");
   });
 
-  test("validates and limits Codex Discord search plans", () => {
-    expect(
-      parseDiscordSearchPlan(`\`\`\`json
-{"queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
-\`\`\``),
-    ).toEqual([
-      { author: "self", content: "new app" },
-      { has: ["link", "file"] },
-      { embedType: "gif" },
-      { attachmentExtension: "pdf" },
+  test("loads a small human context window around the request", async () => {
+    const requestedPaths: string[] = [];
+    const nearby = Array.from({ length: 25 }, (_, index) => ({
+      id: index === 4 ? "request" : `message-${index}`,
+      channel_id: "channel-1",
+      content: `message ${index}`,
+      timestamp: `2026-07-20T11:${String(59 - index).padStart(2, "0")}:00.000Z`,
+      author: {
+        id: `user-${index}`,
+        username: `User ${index}`,
+        bot: index === 3,
+      },
+    }));
+
+    const messages = await getNearbyHumanMessages({
+      channelId: "channel-1",
+      requestMessageId: "request",
+      discordRequest: async (path) => {
+        requestedPaths.push(path);
+        return nearby as never;
+      },
+    });
+
+    expect(requestedPaths).toEqual([
+      "/channels/channel-1/messages?around=request&limit=25",
     ]);
-    expect(parseDiscordSearchPlan("not json")).toEqual([]);
+    expect(messages).toHaveLength(20);
+    expect(messages[0]?.id).toBe("message-21");
+    expect(messages.at(-1)?.id).toBe("message-0");
+    expect(messages.some((message) => message.id === "request")).toBe(false);
+    expect(messages.some((message) => message.id === "message-3")).toBe(false);
+  });
+
+  test("validates and limits Codex Discord context plans", () => {
+    expect(
+      parseDiscordContextPlan(`\`\`\`json
+{"history":"extended","queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
+\`\`\``),
+    ).toEqual({
+      history: "extended",
+      queries: [
+        { author: "self", content: "new app" },
+        { has: ["link", "file"] },
+        { embedType: "gif" },
+        { attachmentExtension: "pdf" },
+      ],
+    });
+    expect(parseDiscordContextPlan("not json")).toEqual({
+      history: "local",
+      queries: [],
+    });
   });
 
   test("falls back to guild-wide author and mention searches for member questions", () => {

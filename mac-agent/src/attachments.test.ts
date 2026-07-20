@@ -79,4 +79,45 @@ describe("chatbot attachment limits", () => {
       }
     },
   );
+
+  test.serial("includes attachments on the triggering mention", async () => {
+    const originalFetch = globalThis.fetch;
+    const job: ChatbotJob = {
+      id: "job-2",
+      channelId: "channel-1",
+      requestMessageId: "message-2",
+      request: "read this",
+      requestMessage: {
+        id: "message-2",
+        author: "Hsi",
+        timestamp: "2026-07-20T10:00:00.000Z",
+        content: "@MiniSago read this",
+        attachments: [
+          {
+            id: "attachment-2",
+            filename: "request.txt",
+            contentType: "text/plain",
+            size: 15,
+            url: "https://cdn.discordapp.com/request.txt",
+          },
+        ],
+      },
+      messages: [],
+    };
+
+    globalThis.fetch = (async () =>
+      new Response("Mention context", {
+        headers: { "Content-Length": "15" },
+      })) as unknown as typeof fetch;
+
+    try {
+      const prepared = await prepareAttachments(job);
+      expect(prepared.textBlocks).toEqual([
+        "Attachment: request.txt\nMention context",
+      ]);
+      await prepared.cleanup();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

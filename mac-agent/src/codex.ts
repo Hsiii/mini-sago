@@ -1,10 +1,19 @@
+import { join } from "node:path";
+
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
-import { buildCodexPrompt } from "./prompts";
+import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
 
-export { buildCodexPrompt, PROMPT_VERSION } from "./prompts";
+export {
+  buildCodexPrompt,
+  CONTEXT_PLAN_OUTPUT_SCHEMA,
+  outputSchemaForJob,
+  PROMPT_VERSION,
+} from "./prompts";
 
 const LOCAL_TIMEOUT_MS = 110_000;
+export const CHATBOT_MODEL = "gpt-5.6-luna";
+export const CHATBOT_REASONING_EFFORT = "high";
 
 type CodexRunOptions = {
   codexHome: string;
@@ -106,8 +115,13 @@ export async function checkCodexAuthentication({
 
 export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   const prepared = await prepareAttachments(
-    job.purpose === "search_plan"
-      ? { ...job, messages: [], searchResults: [] }
+    job.purpose === "context_plan"
+      ? {
+          ...job,
+          requestMessage: undefined,
+          messages: [],
+          searchResults: [],
+        }
       : job,
   );
   const timeoutController = new AbortController();
@@ -117,6 +131,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
   try {
     const prompt = buildCodexPrompt(job, prepared.textBlocks, prepared.ignored);
+    const outputSchema = outputSchemaForJob(job);
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -126,11 +141,11 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--ignore-user-config",
       "--strict-config",
       "--model",
-      "gpt-5.6-terra",
+      CHATBOT_MODEL,
       "--cd",
       prepared.directory,
       "--config",
-      'model_reasoning_effort="high"',
+      `model_reasoning_effort="${CHATBOT_REASONING_EFFORT}"`,
       "--config",
       'model_verbosity="low"',
       "--config",
@@ -150,6 +165,12 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       "allow_login_shell=false",
     ];
+
+    if (outputSchema) {
+      const schemaPath = join(prepared.directory, "output-schema.json");
+      await Bun.write(schemaPath, JSON.stringify(outputSchema));
+      codexArguments.push("--output-schema", schemaPath);
+    }
 
     for (const imagePath of prepared.imagePaths) {
       codexArguments.push("--image", imagePath);
