@@ -5,6 +5,7 @@ import {
   fallbackGuildSearchQueries,
   formatDiscordAnswer,
   getRecentHumanMessages,
+  isChatbotAuthorized,
   isHumanContextMessage,
   parseDiscordSearchPlan,
   searchGuildMessages,
@@ -20,6 +21,15 @@ describe("Discord chatbot", () => {
     );
     expect(extractMentionRequest(`hello <@!${BOT_ID}>`, BOT_ID)).toBe("hello");
     expect(extractMentionRequest("summarize this", BOT_ID)).toBeNull();
+  });
+
+  test("authorizes every member of the two chatbot guilds", () => {
+    expect(isChatbotAuthorized("member-1", "917436845187563610")).toBe(true);
+    expect(isChatbotAuthorized("member-2", "1282936453134815275")).toBe(true);
+    expect(isChatbotAuthorized("member-3", "other-guild")).toBe(false);
+    expect(isChatbotAuthorized("member-3")).toBe(false);
+    expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);
+    expect(isChatbotAuthorized("917446775873343600")).toBe(true);
   });
 
   test("accepts only human context messages other than the request", () => {

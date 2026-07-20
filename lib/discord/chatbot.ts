@@ -9,6 +9,10 @@ import type {
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const AUTHORIZED_USER_ID = "917446775873343600";
+const AUTHORIZED_GUILD_IDS = new Set([
+  "917436845187563610",
+  "1282936453134815275",
+]);
 const MESSAGE_LIMIT = 100;
 const MESSAGE_PAGE_LIMIT = 100;
 const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -185,6 +189,13 @@ export function extractMentionRequest(content: string, botUserId: string) {
   }
 
   return content.replace(mentionPattern, "").trim();
+}
+
+export function isChatbotAuthorized(userId: string, guildId?: string) {
+  return (
+    userId === AUTHORIZED_USER_ID ||
+    (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId))
+  );
 }
 
 export function formatDiscordAnswer(content: string) {
@@ -533,16 +544,18 @@ export async function handleChatbotMention({
   botUserId: string;
   discordRequest: DiscordRequest;
 }) {
+  const requesterUserId = message.author?.id;
+
   if (
-    message.author?.id !== AUTHORIZED_USER_ID ||
-    message.author.bot ||
+    !requesterUserId ||
+    !isChatbotAuthorized(requesterUserId, message.guild_id) ||
+    message.author?.bot ||
     message.webhook_id ||
     !message.content
   ) {
     return false;
   }
 
-  const requesterUserId = message.author.id;
   const request = extractMentionRequest(message.content, botUserId);
   if (request === null) {
     return false;

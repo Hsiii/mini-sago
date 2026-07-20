@@ -14,9 +14,10 @@ live in [operations.md](operations.md).
 | `DISCORD_GUILD_ID`       | No       | Only guild allowed to use role access and scheduled-post features. Defaults to the WM31 guild `1282936453134815275` |
 
 `DISCORD_GUILD_ID` is the boundary between universal and server-specific
-behavior. Guilds other than this value receive Instagram link replies only;
-they cannot use the Wordle/Brawl Stars commands, channel access panel, or this
-deployment's scheduled posts.
+behavior. Guilds other than this value cannot use the Wordle/Brawl Stars
+commands, channel access panel, or this deployment's scheduled posts. Chatbot
+access is governed separately by its two built-in allowed guilds and owner
+fallback.
 
 ## Universal / cross-guild configuration
 

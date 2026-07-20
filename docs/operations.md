@@ -7,9 +7,10 @@ in [README.md](../README.md).
 ## Feature boundaries
 
 - **Universal:** Instagram link replies run in every server and channel where
-  MiniSago has the required message permissions. Hsi's owner-only chatbot
-  mentions work in those locations and in direct messages when the Mac helper
-  is available.
+  MiniSago has the required message permissions. Hsi's chatbot mentions work in
+  those locations and in direct messages when the Mac helper is available.
+- **Chatbot guilds:** every member of guilds `917436845187563610` and
+  `1282936453134815275` can mention MiniSago and use the chatbot.
 - **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
   TOEFL posts, Gamer forum alerts, and X alerts are restricted to
   `DISCORD_GUILD_ID`. The current deployment uses the WM31 guild
@@ -90,14 +91,15 @@ The Gateway connection is outbound, so Instagram replies do not require a
 public webhook endpoint. The `/api/interactions` endpoint is still required for
 slash commands and channel access components.
 
-## Private Codex chatbot
+## Codex chatbot
 
-The hosted process receives Hsi's `@MiniSago` messages through the existing
-Discord Gateway. It fetches up to 100 human messages from the same channel,
-covering the previous seven days and continuing further back when needed to
-reach 100 messages, and sends one transient job through the authenticated
-WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac endpoint, or
-durable queue.
+The hosted process receives `@MiniSago` messages from any member of the two
+chatbot guilds through the existing Discord Gateway. Hsi retains access in
+other visible servers and direct messages. It fetches up to 100 human messages
+from the same channel, covering the previous seven days and continuing further
+back when needed to reach 100 messages, and sends one transient job through the
+authenticated WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac
+endpoint, or durable queue.
 
 Natural requests to find an older message use Discord's official guild message
 search endpoint. Codex first plans up to four complementary searches using

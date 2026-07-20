@@ -5,7 +5,7 @@
 **迷你西米露 — a tiny personal Discord bot that follows you everywhere.**
 
 MiniSago improves shared Discord spaces with better Instagram embeds, optional
-channel access, selected community updates, and an owner-only Codex chatbot
+channel access, selected community updates, and a guild-aware Codex chatbot
 running on an unlocked Mac.
 
 ## Features
@@ -13,7 +13,7 @@ running on an unlocked Mac.
 | Feature                     | Scope                               |
 | --------------------------- | ----------------------------------- |
 | Instagram link replies      | Every visible server/channel        |
-| Owner Codex chatbot         | Every visible server, thread, or DM |
+| Codex chatbot               | Two allowed guilds; owner elsewhere |
 | Channel access and commands | Configured guild only               |
 | Vocabulary and feed updates | Configured guild/channel            |
 | GitHub PR review threads    | Configured repository/channel       |
@@ -22,13 +22,15 @@ Other servers receive only the universal Instagram replies and owner chatbot;
 deployment-specific roles, commands, and scheduled updates stay in their
 configured destinations.
 
-## Owner chatbot
+## Codex chatbot
 
-The configured owner can mention MiniSago with a conversational request.
+Every member of guilds `917436845187563610` and `1282936453134815275` can
+mention MiniSago with a conversational request. The configured owner can also
+use the chatbot in other visible servers, threads, and direct messages.
 MiniSago supplies up to 100 human-authored messages from the same channel or
 thread, covering the previous seven days and continuing further back when
-needed to reach 100 messages, to a locked-down local Codex runner. Everyone else
-is silently ignored.
+needed to reach 100 messages, to a locked-down local Codex runner. Users outside
+those guilds are silently ignored unless they are the configured owner.
 
 The chatbot can summarize recent discussion, reason about attachments, and
 search public web pages. Questions such as “When did Daniel send the meme?” use
