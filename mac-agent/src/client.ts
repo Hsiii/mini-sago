@@ -189,11 +189,13 @@ export class MacAgentClient {
       });
 
       if (!controller.signal.aborted && this.authenticated) {
+        this.currentJob = null;
         this.send({ type: "result", jobId: job.id, ok: true, content });
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
     } catch (error) {
       if (!controller.signal.aborted && this.authenticated) {
+        this.currentJob = null;
         this.send({
           type: "result",
           jobId: job.id,

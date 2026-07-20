@@ -102,7 +102,9 @@ durable queue.
 Natural requests to find an older message use Discord's official guild message
 search endpoint. Codex first plans up to four complementary searches using
 bounded text, sender, link, file, media, embed, hostname, and attachment-type
-filters. MiniSago validates those filters, resolves a named sender—or the owner
+filters for every guild request; the planner may return no searches for an
+ordinary chat and can resolve a short follow-up from recent human messages.
+MiniSago validates those filters, resolves a named sender—or the owner
 from “I” and “我”—excludes the triggering message, deduplicates the bot-visible
 guild results, and supplies up to 25 indexed matches with their channel names
 and original Discord jump links. The second Codex run chooses and explains the

@@ -35,7 +35,9 @@ search public web pages. Questions such as “When did Daniel send the meme?” 
 Codex to plan up to four read-only searches across Discord's indexed guild
 history. It can combine shorter text terms with sender, link, file, and media
 filters, then returns the matching channel, timestamp, and a jump link to the
-best original message. English and Chinese requests can refer to the owner as
+best original message. Codex makes this decision for every guild request, so a
+short follow-up such as “try again” can continue the prior lookup. English and
+Chinese requests can refer to the owner as
 “I” or “我”. Member lookup is used only to resolve a named sender for that
 search; roles, join dates, and presence are not exposed to Codex.
 

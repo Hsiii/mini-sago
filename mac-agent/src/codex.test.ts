@@ -37,7 +37,17 @@ describe("Codex chatbot runner", () => {
       {
         ...job,
         purpose: "search_plan",
-        request: "我在哪裡分享新 app 的",
+        request: "try again",
+        messages: [
+          ...job.messages,
+          {
+            id: "message-previous",
+            author: "Hsi",
+            timestamp: "2026-07-20T10:01:00.000Z",
+            content: "我在哪裡分享新 app 的",
+            attachments: [],
+          },
+        ],
       },
       [],
       [],
@@ -45,7 +55,8 @@ describe("Codex chatbot runner", () => {
 
     expect(prompt).toContain("Do not answer the request");
     expect(prompt).toContain("at most four complementary queries");
-    expect(prompt).toContain("links for shared apps/sites");
+    expect(prompt).toContain('always include a query with has:["link"]');
+    expect(prompt).toContain('short follow-ups such as "try again"');
     expect(prompt).toContain("我在哪裡分享新 app 的");
     expect(prompt).toContain('{"queries":[]}');
   });

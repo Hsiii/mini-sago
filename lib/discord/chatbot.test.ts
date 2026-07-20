@@ -7,7 +7,6 @@ import {
   isHumanContextMessage,
   parseDiscordSearchPlan,
   searchGuildMessages,
-  shouldPlanDiscordSearch,
   toChatbotMessage,
 } from "./chatbot";
 
@@ -76,16 +75,6 @@ describe("Discord chatbot", () => {
     expect(messages).toHaveLength(100);
     expect(messages[0]?.id).toBe("older-49");
     expect(messages.at(-1)?.id).toBe("recent-0");
-  });
-
-  test("recognizes message lookups without hardcoding their search plan", () => {
-    expect(shouldPlanDiscordSearch("When did Daniel send the meme?")).toBe(
-      true,
-    );
-    expect(shouldPlanDiscordSearch("我在哪裡分享新 app 的")).toBe(true);
-    expect(shouldPlanDiscordSearch("summarize the recent discussion")).toBe(
-      false,
-    );
   });
 
   test("validates and limits Codex Discord search plans", () => {

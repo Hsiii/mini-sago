@@ -198,12 +198,6 @@ export function formatDiscordAnswer(content: string) {
 }
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
-const MESSAGE_SEARCH_HINT =
-  /(?:\b(?:when|where|find|search|repost|resend|sent|posted|shared|uploaded)\b|哪裡|哪里|哪儿|何時|何时|什麼時候|什么时候|找|搜尋|搜索|分享|發過|发过|貼過|贴过|傳過|传过)/iu;
-
-export function shouldPlanDiscordSearch(request: string) {
-  return MESSAGE_SEARCH_HINT.test(request);
-}
 
 function shortString(value: unknown, maximumLength: number) {
   return typeof value === "string" && value.trim()
@@ -573,7 +567,7 @@ export async function handleChatbotMention({
         results: ChatbotMessage[];
       } = { status: "not_requested", results: [] };
 
-      if (message.guild_id && shouldPlanDiscordSearch(request)) {
+      if (message.guild_id) {
         const plannerJob: ChatbotJob = {
           id: randomUUID(),
           purpose: "search_plan",
@@ -589,6 +583,9 @@ export async function handleChatbotMention({
         } else {
           const plannerResult = await plannerDispatch.result;
           if (!plannerResult.ok) {
+            console.warn(
+              `Discord search planning unavailable: ${plannerResult.error}`,
+            );
             search = { status: "unavailable", results: [] };
           } else {
             const queries = parseDiscordSearchPlan(plannerResult.content);
