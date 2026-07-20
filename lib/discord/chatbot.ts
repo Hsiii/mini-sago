@@ -274,6 +274,27 @@ export function parseDiscordSearchPlan(content: string): DiscordSearchQuery[] {
   }
 }
 
+const GUILD_MEMBER_QUESTION_PATTERNS = [
+  /^(?:誰是|who\s+is)\s*(.+?)\s*[?？。！!]*$/iu,
+  /^(.+?)\s*(?:是誰|是什麼人|是怎樣的人)\s*[?？。！!]*$/u,
+];
+
+export function fallbackGuildSearchQueries(
+  request: string,
+): DiscordSearchQuery[] {
+  for (const pattern of GUILD_MEMBER_QUESTION_PATTERNS) {
+    const subject = pattern.exec(request.trim())?.[1]?.trim();
+    if (!subject || subject.length > 64) continue;
+
+    return [
+      { author: subject, sortBy: "timestamp", sortOrder: "desc" },
+      { content: subject, sortBy: "relevance", sortOrder: "desc" },
+    ];
+  }
+
+  return [];
+}
+
 function memberNames(member: DiscordGuildMember) {
   return [member.nick, member.user?.global_name, member.user?.username].filter(
     (name): name is string => Boolean(name),
@@ -568,48 +589,53 @@ export async function handleChatbotMention({
       } = { status: "not_requested", results: [] };
 
       if (message.guild_id) {
-        const plannerJob: ChatbotJob = {
-          id: randomUUID(),
-          purpose: "search_plan",
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          request,
-          messages,
-        };
-        const plannerDispatch = macAgentBridge.dispatch(plannerJob);
+        let queries = fallbackGuildSearchQueries(request);
 
-        if (plannerDispatch.status !== "accepted") {
-          search = { status: "unavailable", results: [] };
-        } else {
-          const plannerResult = await plannerDispatch.result;
-          if (!plannerResult.ok) {
-            console.warn(
-              `Discord search planning unavailable: ${plannerResult.error}`,
-            );
+        if (queries.length === 0) {
+          const plannerJob: ChatbotJob = {
+            id: randomUUID(),
+            purpose: "search_plan",
+            channelId: message.channel_id,
+            requestMessageId: message.id,
+            request,
+            messages,
+          };
+          const plannerDispatch = macAgentBridge.dispatch(plannerJob);
+
+          if (plannerDispatch.status !== "accepted") {
             search = { status: "unavailable", results: [] };
           } else {
-            const queries = parseDiscordSearchPlan(plannerResult.content);
-            if (queries.length > 0) {
-              search = await searchGuildMessages({
-                guildId: message.guild_id,
-                requesterUserId,
-                requestMessageId: message.id,
-                queries,
-                discordRequest,
-              })
-                .then((results) => ({
-                  status: "complete" as const,
-                  results,
-                }))
-                .catch(() => {
-                  console.warn("Discord message search unavailable.");
-                  return {
-                    status: "unavailable" as const,
-                    results: [] as ChatbotMessage[],
-                  };
-                });
+            const plannerResult = await plannerDispatch.result;
+            if (!plannerResult.ok) {
+              console.warn(
+                `Discord search planning unavailable: ${plannerResult.error}`,
+              );
+              search = { status: "unavailable", results: [] };
+            } else {
+              queries = parseDiscordSearchPlan(plannerResult.content);
             }
           }
+        }
+
+        if (queries.length > 0) {
+          search = await searchGuildMessages({
+            guildId: message.guild_id,
+            requesterUserId,
+            requestMessageId: message.id,
+            queries,
+            discordRequest,
+          })
+            .then((results) => ({
+              status: "complete" as const,
+              results,
+            }))
+            .catch(() => {
+              console.warn("Discord message search unavailable.");
+              return {
+                status: "unavailable" as const,
+                results: [] as ChatbotMessage[],
+              };
+            });
         }
       }
 

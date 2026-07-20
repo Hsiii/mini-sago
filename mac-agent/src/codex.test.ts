@@ -61,6 +61,8 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("at most four complementary, narrow queries");
     expect(prompt).toContain('shared app/site means has:["link"]');
     expect(prompt).toContain('follow-ups such as "try again"');
+    expect(prompt).toContain('member question such as "誰是 6uc"');
+    expect(prompt).toContain('author:"6uc" and content:"6uc"');
     expect(prompt).toContain("我在哪裡分享新 app 的");
     expect(prompt).toContain('{"queries":[]}');
   });
@@ -72,7 +74,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(1);
+    expect(PROMPT_VERSION).toBe(2);
     expect(prompt).toContain("ordinary, technical, and analytical questions");
     expect(prompt).toContain("Accuracy, reasoning, and evidence");
     expect(prompt).toContain("natural Taiwanese Traditional Chinese");
@@ -83,6 +85,8 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("<current_request>\nWhat did we decide?");
     expect(prompt).toContain('"author":"Daniel"');
     expect(prompt).toContain("<discord_search_status>\ncomplete");
+    expect(prompt).toContain("broader evidence than the current channel");
+    expect(prompt).toContain("distinguish evidence from inference");
     expect(prompt).toContain(
       "https://discord.com/channels/guild-1/channel-1/older-message",
     );

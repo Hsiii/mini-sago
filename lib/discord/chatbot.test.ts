@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   extractMentionRequest,
+  fallbackGuildSearchQueries,
   formatDiscordAnswer,
   getRecentHumanMessages,
   isHumanContextMessage,
@@ -89,6 +90,20 @@ describe("Discord chatbot", () => {
       { attachmentExtension: "pdf" },
     ]);
     expect(parseDiscordSearchPlan("not json")).toEqual([]);
+  });
+
+  test("falls back to guild-wide author and mention searches for member questions", () => {
+    expect(fallbackGuildSearchQueries("誰是 6uc")).toEqual([
+      { author: "6uc", sortBy: "timestamp", sortOrder: "desc" },
+      { content: "6uc", sortBy: "relevance", sortOrder: "desc" },
+    ]);
+    expect(fallbackGuildSearchQueries("6uc 是誰？")).toEqual([
+      { author: "6uc", sortBy: "timestamp", sortOrder: "desc" },
+      { content: "6uc", sortBy: "relevance", sortOrder: "desc" },
+    ]);
+    expect(
+      fallbackGuildSearchQueries("explain TCP congestion control"),
+    ).toEqual([]);
   });
 
   test("searches the guild and returns channel names and safe jump links", async () => {
