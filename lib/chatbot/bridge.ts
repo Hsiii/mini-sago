@@ -59,6 +59,7 @@ export class MacAgentBridge {
     Socket,
     ReturnType<typeof setTimeout>
   >();
+  private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingJob: PendingJob | null = null;
 
   isConfigured() {
@@ -143,6 +144,12 @@ export class MacAgentBridge {
       return;
     }
 
+    this.armHeartbeatTimeout(socket);
+
+    if (message.type === "heartbeat") {
+      return;
+    }
+
     if (message.type === "availability") {
       this.available = message.available;
       return;
@@ -170,6 +177,7 @@ export class MacAgentBridge {
 
     this.activeSocket = null;
     this.available = false;
+    this.clearHeartbeatTimeout();
     this.failPendingJob("The Mac disconnected while answering.");
   }
 
@@ -201,6 +209,7 @@ export class MacAgentBridge {
     socket.data.authenticated = true;
     this.activeSocket = socket;
     this.available = false;
+    this.armHeartbeatTimeout(socket);
     send(socket, {
       type: "authenticated",
       protocolVersion: CHATBOT_PROTOCOL_VERSION,
@@ -235,6 +244,22 @@ export class MacAgentBridge {
     this.pendingJob = null;
     clearTimeout(pendingJob.timer);
     pendingJob.resolve({ ok: false, error });
+  }
+
+  private armHeartbeatTimeout(socket: Socket) {
+    this.clearHeartbeatTimeout();
+    this.heartbeatTimer = setTimeout(() => {
+      if (socket === this.activeSocket) {
+        socket.close(4004, "Heartbeat timeout");
+      }
+    }, 45_000);
+  }
+
+  private clearHeartbeatTimeout() {
+    if (this.heartbeatTimer) {
+      clearTimeout(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
+    }
   }
 }
 

@@ -1,0 +1,19 @@
+{
+  "name": "minisago-mac-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "build": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "mammoth": "1.12.0",
+    "pdfjs-dist": "6.1.200"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.4",
+    "typescript": "5.8.3"
+  }
+}

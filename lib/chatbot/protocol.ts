@@ -37,6 +37,9 @@ export type MacAgentClientMessage =
       available: boolean;
     }
   | {
+      type: "heartbeat";
+    }
+  | {
       type: "result";
       jobId: string;
       ok: true;
