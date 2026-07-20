@@ -7,7 +7,9 @@ in [README.md](../README.md).
 ## Feature boundaries
 
 - **Universal:** Instagram link replies run in every server and channel where
-  MiniSago has the required message permissions.
+  MiniSago has the required message permissions. Hsi's owner-only chatbot
+  mentions work in those locations and in direct messages when the Mac helper
+  is available.
 - **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
   TOEFL posts, Gamer forum alerts, and X alerts are restricted to
   `DISCORD_GUILD_ID`. The current deployment uses the WM31 guild
@@ -48,6 +50,9 @@ controls or scheduled feeds there.
    repository webhook described below.
 10. Run locally or deploy, then point the Discord Interactions Endpoint URL at
     `/api/interactions`.
+11. To enable the private chatbot, configure the same
+    `MINISAGO_MAC_BRIDGE_SECRET` in production and `.env.local`, deploy the
+    hosted bridge, then install the Mac helper as described below.
 
 If production already uses the same bot token, set
 `DISCORD_GATEWAY_DISABLED=true` locally before running the development server.
@@ -85,9 +90,68 @@ The Gateway connection is outbound, so Instagram replies do not require a
 public webhook endpoint. The `/api/interactions` endpoint is still required for
 slash commands and channel access components.
 
+## Private Codex chatbot
+
+The hosted process receives Hsi's `@MiniSago` messages through the existing
+Discord Gateway. It fetches the same channel's previous 24 hours, keeps at most
+100 human messages, and sends one transient job through the authenticated
+WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac endpoint, or
+durable queue.
+
+The Mac helper runs `gpt-5.6-terra` with high reasoning and live public web
+search. Each run is ephemeral. Codex receives only the current transcript and
+up to 10 relevant supported attachments of at most 20 MB each. Images, PDFs,
+DOCX, and common text formats are supported. Temporary files are removed after
+the run, and output is shortened to one Discord message.
+
+The local process uses an isolated workspace and Codex home, a restrictive
+permission profile, and a macOS process sandbox that prevents Codex from
+launching child processes. Local commands, code execution, file changes, normal
+Codex configuration, memories, MCP servers, plugins, and private browser
+sessions are unavailable. Hosted web search remains available.
+
+### Install the Mac helper
+
+Prerequisites:
+
+- Bun and the Xcode command-line tools, including `swiftc`.
+- A working local Codex login: the installer expects `~/.codex/auth.json`.
+- The same random `MINISAGO_MAC_BRIDGE_SECRET` in `.env.local` and the hosted
+  `bot-core` environment.
+- The hosted service deployed with WebSocket upgrade support at
+  `/api/mac-agent/ws`.
+
+Run:
+
+```bash
+bun run mac-agent:install
+bun run mac-agent:status
+```
+
+The installer compiles a small native session monitor and registers
+`dev.hsichen.minisago-mac-agent` as a per-user LaunchAgent. It connects only
+while the session is unlocked, disconnects before sleep or on lock, reconnects
+after unlock, and starts automatically at login. A display sleeping without a
+session lock does not disable it.
+
+Metadata-only logs live under
+`~/Library/Application Support/MiniSago/logs`. They contain job IDs, timestamps,
+durations, availability, and failures—not prompts, Discord messages, answers,
+links, or attachment contents.
+
+To stop and remove the helper, its secret file, compiled monitor, and logs:
+
+```bash
+bun run mac-agent:uninstall
+```
+
+Uninstalling does not change the normal `~/.codex` login or configuration.
+
 ## Endpoints
 
 - `GET /api/health` returns configuration health.
+- `GET /api/mac-agent/ws` upgrades an authenticated Mac helper connection to a
+  WebSocket. It returns `404` when the bridge secret is not configured.
 - `POST /api/interactions` handles Discord slash commands and panel
   components.
 - `POST /api/github/webhook` verifies and handles GitHub pull request events.
@@ -124,6 +188,8 @@ history, creating public threads, sending in threads, and managing threads.
   chosen Discord channel.
 - `bun run fetch:vocab` fetches candidate Wiktionary data for expanding the
   checked-in TOEFL vocabulary dataset.
+- `bun run mac-agent:install`, `mac-agent:status`, and `mac-agent:uninstall`
+  manage the unlocked-session Codex helper on this Mac.
 
 To fetch raw Wiktionary definitions for new words, run:
 
@@ -160,8 +226,9 @@ Settings -> Roles -> 迷你西米露 and configure the corresponding permission
 checkboxes. Application install defaults affect new installations and do not
 retroactively rewrite an existing server role.
 
-The first three permissions support universal Instagram replies. `Manage Roles`
-is needed only for the configured-guild channel access commands and panel.
+The first three permissions support universal Instagram replies and owner
+chatbot context. `Manage Roles` is needed only for the configured-guild channel
+access commands and panel.
 The thread permissions let the GitHub bridge create public threads, add team
 members, post review requests, and archive threads after merge. MiniSago does
 not request Manage Messages or Manage Webhooks. Channel-specific overrides must
@@ -202,7 +269,10 @@ curl https://bot.hsichen.dev/api/health
 ```text
 https://bot.hsichen.dev/api/interactions
 https://bot.hsichen.dev/api/github/webhook
+wss://bot.hsichen.dev/api/mac-agent/ws
 ```
+
+The edge proxy must preserve WebSocket upgrade headers for the Mac bridge.
 
 The platform caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
 stored in the external `platform_bot-core-state` volume:

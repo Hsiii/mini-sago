@@ -20,19 +20,37 @@ deployment's scheduled posts.
 
 ## Universal / cross-guild configuration
 
-| Name                       | Required | Description                                                                          |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `DISCORD_GATEWAY_DISABLED` | No       | Set to `true` to run only HTTP features and disable universal Instagram link replies |
+| Name                         | Required | Description                                                                                                                   |
+| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_GATEWAY_DISABLED`   | No       | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions                          |
+| `MINISAGO_MAC_BRIDGE_SECRET` | Chatbot  | High-entropy secret shared only by the hosted MiniSago process and Mac helper; leaving it blank disables the WebSocket bridge |
 
-Instagram link replies are enabled by default whenever `DISCORD_BOT_TOKEN` is
-set and `DISCORD_GATEWAY_DISABLED` is not `true`. The listener works in every
-server and channel where MiniSago can view messages, read message history, and
-send messages. It replies with only converted `kkinstagram.com` URLs, leaves the
-original message untouched, and never creates webhooks.
+Gateway features are enabled by default whenever `DISCORD_BOT_TOKEN` is set and
+`DISCORD_GATEWAY_DISABLED` is not `true`. They work in every server and channel
+where MiniSago can view messages, read message history, and send messages.
+Instagram handling replies with only converted `kkinstagram.com` URLs, leaves
+the original message untouched, and never creates webhooks.
 
 Only one Gateway-enabled instance should use a bot token at a time. When
 production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
 environments unless that instance is intentionally replacing production.
+
+## Local Mac chatbot helper
+
+These values are consumed by `bun run mac-agent:install` from `.env.local`. Only
+the bridge secret must also be present in production.
+
+| Name                            | Required | Description                                                                                             |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| `MINISAGO_MAC_BRIDGE_SECRET`    | Yes      | Same random secret configured on the hosted server                                                      |
+| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only |
+| `MINISAGO_CODEX_PATH`           | No       | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                         |
+| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`  |
+| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled native lock monitor; the installer creates and configures it automatically                     |
+
+The helper uses the existing `~/.codex/auth.json` through a symlink inside its
+isolated Codex home. It does not copy the credential or load normal Codex
+config, skills, memories, plugins, MCP servers, or repository instructions.
 
 ## GitHub pull request review threads
 
