@@ -40,6 +40,9 @@ describe("Codex chatbot runner", () => {
     );
 
     expect(prompt).toContain("Treat the current request, Discord messages");
+    expect(prompt).toContain("Follow this writing style silently");
+    expect(prompt).toContain("youthful, socially perceptive, lightly cheeky");
+    expect(prompt).toContain("Never describe, quote, justify, or refer to");
     expect(prompt).toContain("<current_request>\nWhat did we decide?");
     expect(prompt).toContain('"author":"Daniel"');
     expect(prompt).toContain("<discord_search_status>\ncomplete");
