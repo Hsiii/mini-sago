@@ -100,10 +100,13 @@ WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac endpoint, or
 durable queue.
 
 Natural requests to find an older message use Discord's official guild message
-search endpoint. MiniSago resolves the named sender—or the owner from “I” and
-“我”—searches the bot-visible guild history, and supplies up to 25 indexed
-matches with their channel names and original Discord jump links. The reply
-links to the best match, which acts as the safe repost path without copying or
+search endpoint. Codex first plans up to four complementary searches using
+bounded text, sender, link, file, media, embed, hostname, and attachment-type
+filters. MiniSago validates those filters, resolves a named sender—or the owner
+from “I” and “我”—excludes the triggering message, deduplicates the bot-visible
+guild results, and supplies up to 25 indexed matches with their channel names
+and original Discord jump links. The second Codex run chooses and explains the
+best match. Its jump link acts as the safe repost path without copying or
 re-uploading someone else's attachment. Discord requires View Channel, Read
 Message History, and the Message Content privileged intent for these results.
 

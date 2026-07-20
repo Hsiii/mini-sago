@@ -32,6 +32,24 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
+  test("asks Codex for complementary Discord searches", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        purpose: "search_plan",
+        request: "我在哪裡分享新 app 的",
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain("Do not answer the request");
+    expect(prompt).toContain("at most four complementary queries");
+    expect(prompt).toContain("links for shared apps/sites");
+    expect(prompt).toContain("我在哪裡分享新 app 的");
+    expect(prompt).toContain('{"queries":[]}');
+  });
+
   test("labels Discord history and attachments as untrusted context", () => {
     const prompt = buildCodexPrompt(
       job,

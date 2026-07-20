@@ -5,8 +5,9 @@ import {
   formatDiscordAnswer,
   getRecentHumanMessages,
   isHumanContextMessage,
-  parseMessageSearchRequest,
+  parseDiscordSearchPlan,
   searchGuildMessages,
+  shouldPlanDiscordSearch,
   toChatbotMessage,
 } from "./chatbot";
 
@@ -77,29 +78,28 @@ describe("Discord chatbot", () => {
     expect(messages.at(-1)?.id).toBe("recent-0");
   });
 
-  test("turns a natural message lookup into Discord search filters", () => {
-    expect(parseMessageSearchRequest("When did Daniel send the meme?")).toEqual(
-      {
-        authorQuery: "Daniel",
-        has: "image",
-        content: undefined,
-      },
+  test("recognizes message lookups without hardcoding their search plan", () => {
+    expect(shouldPlanDiscordSearch("When did Daniel send the meme?")).toBe(
+      true,
     );
+    expect(shouldPlanDiscordSearch("我在哪裡分享新 app 的")).toBe(true);
+    expect(shouldPlanDiscordSearch("summarize the recent discussion")).toBe(
+      false,
+    );
+  });
+
+  test("validates and limits Codex Discord search plans", () => {
     expect(
-      parseMessageSearchRequest("find the deployment message Jasmine posted"),
-    ).toEqual({
-      authorQuery: "Jasmine",
-      content: "deployment",
-      has: undefined,
-    });
-    expect(parseMessageSearchRequest("我在哪裡分享新 app 的")).toEqual({
-      authorQuery: "我",
-      content: "新 app",
-      has: undefined,
-    });
-    expect(parseMessageSearchRequest("summarize the recent discussion")).toBe(
-      null,
-    );
+      parseDiscordSearchPlan(`\`\`\`json
+{"queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
+\`\`\``),
+    ).toEqual([
+      { author: "self", content: "new app" },
+      { has: ["link", "file"] },
+      { embedType: "gif" },
+      { attachmentExtension: "pdf" },
+    ]);
+    expect(parseDiscordSearchPlan("not json")).toEqual([]);
   });
 
   test("searches the guild and returns channel names and safe jump links", async () => {
@@ -107,7 +107,8 @@ describe("Discord chatbot", () => {
     const results = await searchGuildMessages({
       guildId: "guild-1",
       requesterUserId: "owner-1",
-      plan: { authorQuery: "Daniel", has: "image" },
+      requestMessageId: "request-1",
+      queries: [{ author: "Daniel", has: ["image"] }],
       discordRequest: async (path) => {
         requestedPaths.push(path);
         if (path.includes("/members/search?")) {
@@ -161,22 +162,49 @@ describe("Discord chatbot", () => {
 
   test("uses the requester directly for Chinese self-reference", async () => {
     const requestedPaths: string[] = [];
+    let searchRequestCount = 0;
 
-    await searchGuildMessages({
+    const results = await searchGuildMessages({
       guildId: "guild-1",
       requesterUserId: "owner-1",
-      plan: { authorQuery: "我", content: "新 app" },
+      requestMessageId: "request-1",
+      queries: [
+        { author: "self", content: "新 app" },
+        { author: "self", content: "app", has: ["link"] },
+      ],
       discordRequest: async (path) => {
         requestedPaths.push(path);
-        if (path === "/guilds/guild-1/channels") return [] as never;
-        return { total_results: 0, messages: [] } as never;
+        if (path === "/guilds/guild-1/channels") {
+          return [{ id: "channel-2", name: "projects" }] as never;
+        }
+
+        searchRequestCount += 1;
+        const id = searchRequestCount === 1 ? "request-1" : "target-1";
+        return {
+          total_results: 1,
+          messages: [
+            [
+              {
+                id,
+                channel_id: "channel-2",
+                content: searchRequestCount === 1 ? "新 app" : "app launch",
+                timestamp: "2026-07-01T12:00:00.000Z",
+                author: { id: "owner-1", username: "Hsi" },
+              },
+            ],
+          ],
+        } as never;
       },
     });
 
-    expect(requestedPaths).toHaveLength(2);
+    expect(requestedPaths).toHaveLength(3);
     expect(requestedPaths[0]).not.toContain("/members/search");
     expect(requestedPaths[0]).toContain("author_id=owner-1");
     expect(requestedPaths[0]).toContain("content=%E6%96%B0+app");
+    expect(requestedPaths[1]).toContain("content=app");
+    expect(requestedPaths[1]).toContain("has=link");
+    expect(results.map((result) => result.id)).toEqual(["target-1"]);
+    expect(results[0]?.channelName).toBe("projects");
   });
 
   test("preserves attachments and an older referenced human message", () => {
