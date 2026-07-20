@@ -56,6 +56,11 @@ type DiscordGuildMember = {
   };
 };
 
+type DiscordChannel = {
+  id: string;
+  name?: string;
+};
+
 type DiscordMessageSearchResponse = {
   code?: number;
   retry_after?: number;
@@ -167,6 +172,7 @@ export function formatDiscordAnswer(content: string) {
 const SEARCH_PATTERNS = [
   /\b(?:when|where)\s+did\s+(?<author>.{1,64}?)\s+(?:send|post|share|upload)\s+(?:me\s+)?(?:the\s+|an?\s+)?(?<subject>.+?)[?!.]*$/iu,
   /\b(?:find|show me|repost|resend|link me to)\s+(?:the\s+|an?\s+)?(?<subject>.+?)\s+(?:message\s+)?(?:that\s+)?(?<author>.{1,64}?)\s+(?:sent|posted|shared|uploaded)\b/iu,
+  /(?<author>我|[\p{L}\p{N}_-]{1,32})\s*在(?:哪裡|哪里|哪儿)\s*(?:分享|發|发|貼|贴|傳|传|上傳|上传)(?:過|过)?\s*(?<subject>.+?)(?:的)?[？?。！!]*$/u,
 ];
 
 const SEARCH_MEDIA_TYPES: Array<{
@@ -181,7 +187,9 @@ const SEARCH_MEDIA_TYPES: Array<{
 ];
 
 const GENERIC_SEARCH_WORDS =
-  /\b(?:the|a|an|message|meme|image|photo|pic|picture|gif|video|clip|file|attachment|document|sticker|link)\b/giu;
+  /(?:\b(?:the|a|an|message|meme|image|photo|pic|picture|gif|video|clip|file|attachment|document|sticker|link)\b|那個|那个|這個|这个|的)/giu;
+
+const SELF_AUTHOR_PATTERN = /^(?:i|me|myself|我|自己)$/iu;
 
 export function parseMessageSearchRequest(
   request: string,
@@ -247,35 +255,38 @@ async function resolveGuildMemberId({
 function toSearchResult(
   message: DiscordMessage,
   guildId: string,
+  channelNames: Map<string, string>,
 ): ChatbotMessage {
   return {
     ...toChatbotMessage(message),
     channelId: message.channel_id,
+    channelName: channelNames.get(message.channel_id),
     jumpUrl: `https://discord.com/channels/${guildId}/${message.channel_id}/${message.id}`,
   };
 }
 
 export async function searchGuildMessages({
   guildId,
-  channelId,
+  requesterUserId,
   plan,
   discordRequest,
 }: {
   guildId: string;
-  channelId: string;
+  requesterUserId: string;
   plan: MessageSearchPlan;
   discordRequest: DiscordRequest;
 }) {
-  const authorId = await resolveGuildMemberId({
-    guildId,
-    authorQuery: plan.authorQuery,
-    discordRequest,
-  });
+  const authorId = SELF_AUTHOR_PATTERN.test(plan.authorQuery)
+    ? requesterUserId
+    : await resolveGuildMemberId({
+        guildId,
+        authorQuery: plan.authorQuery,
+        discordRequest,
+      });
   if (!authorId) return [];
 
   const query = new URLSearchParams({
     limit: String(SEARCH_RESULT_LIMIT),
-    channel_id: channelId,
     author_type: "user",
     sort_by: plan.content ? "relevance" : "timestamp",
   });
@@ -290,6 +301,14 @@ export async function searchGuildMessages({
     );
 
     if (response.messages) {
+      const channels = await discordRequest<DiscordChannel[]>(
+        `/guilds/${guildId}/channels`,
+      );
+      const channelNames = new Map(
+        channels.flatMap((channel) =>
+          channel.name ? [[channel.id, channel.name] as const] : [],
+        ),
+      );
       const seen = new Set<string>();
       return response.messages
         .flat()
@@ -299,7 +318,7 @@ export async function searchGuildMessages({
           return !message.webhook_id && !message.author?.bot;
         })
         .slice(0, SEARCH_RESULT_LIMIT)
-        .map((message) => toSearchResult(message, guildId));
+        .map((message) => toSearchResult(message, guildId, channelNames));
     }
 
     if (response.code !== 110000 || attempt === 2) break;
@@ -414,6 +433,7 @@ export async function handleChatbotMention({
     return false;
   }
 
+  const requesterUserId = message.author.id;
   const request = extractMentionRequest(message.content, botUserId);
   if (request === null) {
     return false;
@@ -456,7 +476,7 @@ export async function handleChatbotMention({
         message.guild_id && searchPlan
           ? searchGuildMessages({
               guildId: message.guild_id,
-              channelId: message.channel_id,
+              requesterUserId,
               plan: searchPlan,
               discordRequest,
             })

@@ -25,6 +25,7 @@ const job: ChatbotJob = {
       timestamp: "2026-06-01T10:00:00.000Z",
       content: "the requested meme",
       attachments: [],
+      channelName: "memes",
       jumpUrl: "https://discord.com/channels/guild-1/channel-1/older-message",
     },
   ],
@@ -45,6 +46,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain(
       "https://discord.com/channels/guild-1/channel-1/older-message",
     );
+    expect(prompt).toContain('"channelName":"memes"');
     expect(prompt).toContain("Attachment: notes.txt");
     expect(prompt).toContain("archive.zip: unsupported");
   });

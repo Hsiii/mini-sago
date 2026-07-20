@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 2;
+export const CHATBOT_PROTOCOL_VERSION = 3;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 
 export type ChatbotAttachment = {
@@ -16,6 +16,7 @@ export type ChatbotMessage = {
   content: string;
   attachments: ChatbotAttachment[];
   channelId?: string;
+  channelName?: string;
   jumpUrl?: string;
   referencedMessage?: Omit<ChatbotMessage, "referencedMessage">;
 };

@@ -32,10 +32,10 @@ is silently ignored.
 
 The chatbot can summarize recent discussion, reason about attachments, and
 search public web pages. Questions such as “When did Daniel send the meme?” use
-Discord's indexed history for the current guild channel and return a jump link
-to the best matching original message. Member lookup is used only to resolve the
-named sender for that search; roles, join dates, and presence are not exposed to
-Codex.
+Discord's indexed guild history and return the matching channel, timestamp, and
+a jump link to the best original message. English and Chinese requests can refer
+to the owner as “I” or “我”. Member lookup is used only to resolve a named sender
+for that search; roles, join dates, and presence are not exposed to Codex.
 
 The chatbot is available only while the Mac is awake, unlocked, authenticated,
 connected, and idle. Requests are not queued. Each run is independent;

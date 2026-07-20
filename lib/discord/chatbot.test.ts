@@ -92,16 +92,21 @@ describe("Discord chatbot", () => {
       content: "deployment",
       has: undefined,
     });
+    expect(parseMessageSearchRequest("我在哪裡分享新 app 的")).toEqual({
+      authorQuery: "我",
+      content: "新 app",
+      has: undefined,
+    });
     expect(parseMessageSearchRequest("summarize the recent discussion")).toBe(
       null,
     );
   });
 
-  test("searches the current guild channel and returns safe jump links", async () => {
+  test("searches the guild and returns channel names and safe jump links", async () => {
     const requestedPaths: string[] = [];
     const results = await searchGuildMessages({
       guildId: "guild-1",
-      channelId: "channel-1",
+      requesterUserId: "owner-1",
       plan: { authorQuery: "Daniel", has: "image" },
       discordRequest: async (path) => {
         requestedPaths.push(path);
@@ -112,6 +117,9 @@ describe("Discord chatbot", () => {
               user: { id: "user-1", username: "daniel" },
             },
           ] as never;
+        }
+        if (path === "/guilds/guild-1/channels") {
+          return [{ id: "channel-1", name: "memes" }] as never;
         }
 
         return {
@@ -140,14 +148,35 @@ describe("Discord chatbot", () => {
       },
     });
 
-    expect(requestedPaths).toHaveLength(2);
-    expect(requestedPaths[1]).toContain("channel_id=channel-1");
+    expect(requestedPaths).toHaveLength(3);
+    expect(requestedPaths[1]).not.toContain("channel_id=");
     expect(requestedPaths[1]).toContain("author_id=user-1");
     expect(requestedPaths[1]).toContain("has=image");
     expect(results).toHaveLength(1);
+    expect(results[0]?.channelName).toBe("memes");
     expect(results[0]?.jumpUrl).toBe(
       "https://discord.com/channels/guild-1/channel-1/message-1",
     );
+  });
+
+  test("uses the requester directly for Chinese self-reference", async () => {
+    const requestedPaths: string[] = [];
+
+    await searchGuildMessages({
+      guildId: "guild-1",
+      requesterUserId: "owner-1",
+      plan: { authorQuery: "我", content: "新 app" },
+      discordRequest: async (path) => {
+        requestedPaths.push(path);
+        if (path === "/guilds/guild-1/channels") return [] as never;
+        return { total_results: 0, messages: [] } as never;
+      },
+    });
+
+    expect(requestedPaths).toHaveLength(2);
+    expect(requestedPaths[0]).not.toContain("/members/search");
+    expect(requestedPaths[0]).toContain("author_id=owner-1");
+    expect(requestedPaths[0]).toContain("content=%E6%96%B0+app");
   });
 
   test("preserves attachments and an older referenced human message", () => {
