@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   canMemberSearchChannel,
+  extractChatbotRequest,
   extractMentionRequest,
   fallbackGuildSearchQueries,
   formatDiscordAnswer,
@@ -27,6 +28,67 @@ describe("Discord chatbot", () => {
     expect(extractMentionRequest("summarize this", BOT_ID)).toBeNull();
   });
 
+  test("treats replies to MiniSago as chatbot requests", () => {
+    const message = {
+      id: "reply-1",
+      channel_id: "channel-1",
+      content: "再找一次",
+      timestamp: "2026-07-20T11:00:00.000Z",
+      author: { id: "user-1", username: "Hsi" },
+      referenced_message: {
+        id: "bot-message-1",
+        channel_id: "channel-1",
+        content: "我剛剛沒找到",
+        timestamp: "2026-07-20T10:59:00.000Z",
+        author: { id: BOT_ID, username: "MiniSago", bot: true },
+      },
+    };
+
+    expect(extractChatbotRequest(message, BOT_ID)).toBe("再找一次");
+    expect(
+      extractChatbotRequest({ ...message, content: undefined }, BOT_ID),
+    ).toBe("");
+    expect(
+      extractChatbotRequest(
+        {
+          ...message,
+          referenced_message: {
+            ...message.referenced_message,
+            author: { id: "other-user", username: "Other" },
+          },
+        },
+        BOT_ID,
+      ),
+    ).toBeNull();
+  });
+
+  test("keeps the replied-to MiniSago message in request context", () => {
+    const requestMessage = toChatbotMessage(
+      {
+        id: "reply-1",
+        channel_id: "channel-1",
+        content: "再找一次",
+        timestamp: "2026-07-20T11:00:00.000Z",
+        author: { id: "user-1", username: "Hsi" },
+        referenced_message: {
+          id: "bot-message-1",
+          channel_id: "channel-1",
+          content: "我剛剛沒找到",
+          timestamp: "2026-07-20T10:59:00.000Z",
+          author: { id: BOT_ID, username: "MiniSago", bot: true },
+        },
+      },
+      BOT_ID,
+    );
+
+    expect(requestMessage.referencedMessage).toMatchObject({
+      id: "bot-message-1",
+      role: "assistant",
+      author: "MiniSago",
+      content: "我剛剛沒找到",
+    });
+  });
+
   test("authorizes every member of the two chatbot guilds", () => {
     expect(isChatbotAuthorized("member-1", "917436845187563610")).toBe(true);
     expect(isChatbotAuthorized("member-2", "1282936453134815275")).toBe(true);
@@ -50,6 +112,9 @@ describe("Discord chatbot", () => {
       botUserId: BOT_ID,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "message-unauthorized" }] as never;
+        }
         return undefined as never;
       },
     });
@@ -57,17 +122,87 @@ describe("Discord chatbot", () => {
     expect(handled).toBe(true);
     expect(requests).toEqual([
       {
+        path: "/channels/channel-1/messages?limit=1",
+        body: undefined,
+      },
+      {
         path: "/channels/channel-1/messages",
         body: {
           content: "在這個伺服器裡我暫時只聽 <@917446775873343600> 的 抱歉啦",
-          message_reference: {
-            message_id: "message-unauthorized",
-            fail_if_not_exists: false,
-          },
-          allowed_mentions: { parse: [], replied_user: true },
+          allowed_mentions: { parse: [] },
         },
       },
     ]);
+  });
+
+  test("responds to a MiniSago reply without requiring another mention", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "reply-1",
+        channel_id: "channel-1",
+        guild_id: "917436845187563610",
+        content: "再找一次",
+        timestamp: "2026-07-20T11:00:00.000Z",
+        author: { id: "member-1", username: "Member" },
+        referenced_message: {
+          id: "bot-message-1",
+          channel_id: "channel-1",
+          content: "我剛剛沒找到",
+          timestamp: "2026-07-20T10:59:00.000Z",
+          author: { id: BOT_ID, username: "MiniSago", bot: true },
+        },
+      },
+      botUserId: BOT_ID,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "reply-1" }] as never;
+        }
+        return undefined as never;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(requests.at(-1)).toEqual({
+      path: "/channels/channel-1/messages",
+      body: {
+        content: "叫曦打開他的 Mac 我才能動啦 💤",
+        allowed_mentions: { parse: [] },
+      },
+    });
+  });
+
+  test("uses a reply when newer channel messages make the relationship unclear", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    await handleChatbotMention({
+      message: {
+        id: "message-unauthorized",
+        channel_id: "channel-1",
+        guild_id: "other-guild",
+        content: `<@${BOT_ID}> help`,
+        timestamp: "2026-07-20T11:00:00.000Z",
+        author: { id: "other-user", username: "Other" },
+      },
+      botUserId: BOT_ID,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "newer-message" }] as never;
+        }
+        return undefined as never;
+      },
+    });
+
+    expect(requests.at(-1)).toMatchObject({
+      path: "/channels/channel-1/messages",
+      body: {
+        message_reference: {
+          message_id: "message-unauthorized",
+          fail_if_not_exists: false,
+        },
+      },
+    });
   });
 
   test("accepts only human context messages other than the request", () => {

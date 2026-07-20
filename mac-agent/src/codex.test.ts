@@ -112,9 +112,11 @@ describe("Codex chatbot runner", () => {
       [],
     );
 
-    expect(plannerPrompt).toContain("mentioned only MiniSago");
+    expect(plannerPrompt).toContain(
+      "mentioned MiniSago or replied to its message",
+    );
     expect(plannerPrompt).toContain("幫我整理一下這段討論");
-    expect(answerPrompt).toContain("Infer the most likely task");
+    expect(answerPrompt).toContain("referenced and nearby context");
     expect(answerPrompt).toContain("ask one short, specific clarification");
   });
 

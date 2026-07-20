@@ -260,6 +260,22 @@ export function extractMentionRequest(content: string, botUserId: string) {
   return content.replace(mentionPattern, "").trim();
 }
 
+export function extractChatbotRequest(
+  message: ChatbotMention,
+  botUserId: string,
+) {
+  const content = message.content ?? "";
+  const mentionRequest = extractMentionRequest(content, botUserId);
+
+  if (mentionRequest !== null) {
+    return mentionRequest;
+  }
+
+  return message.referenced_message?.author?.id === botUserId
+    ? content.trim()
+    : null;
+}
+
 export function isChatbotAuthorized(userId: string, guildId?: string) {
   return (
     userId === AUTHORIZED_USER_ID ||
@@ -738,6 +754,39 @@ function replyBody(message: DiscordMessage, content: string) {
   };
 }
 
+function channelMessageBody(content: string) {
+  return {
+    content,
+    allowed_mentions: {
+      parse: [],
+    },
+  };
+}
+
+async function postChatbotResponse(
+  message: DiscordMessage,
+  content: string,
+  discordRequest: DiscordRequest,
+) {
+  let canPostDirectly = false;
+
+  try {
+    const latestMessages = await discordRequest<DiscordMessage[]>(
+      `/channels/${message.channel_id}/messages?limit=1`,
+    );
+    canPostDirectly = latestMessages[0]?.id === message.id;
+  } catch {
+    // A reply keeps the relationship clear when the latest message is unknown.
+  }
+
+  await discordRequest(`/channels/${message.channel_id}/messages`, {
+    method: "POST",
+    body: canPostDirectly
+      ? channelMessageBody(content)
+      : replyBody(message, content),
+  });
+}
+
 async function withTyping<T>(
   channelId: string,
   discordRequest: DiscordRequest,
@@ -770,16 +819,11 @@ export async function handleChatbotMention({
 }) {
   const requesterUserId = message.author?.id;
 
-  if (
-    !requesterUserId ||
-    message.author?.bot ||
-    message.webhook_id ||
-    !message.content
-  ) {
+  if (!requesterUserId || message.author?.bot || message.webhook_id) {
     return false;
   }
 
-  const request = extractMentionRequest(message.content, botUserId);
+  const request = extractChatbotRequest(message, botUserId);
   if (request === null) {
     return false;
   }
@@ -789,31 +833,31 @@ export async function handleChatbotMention({
       return false;
     }
 
-    await discordRequest(`/channels/${message.channel_id}/messages`, {
-      method: "POST",
-      body: replyBody(
-        message,
-        `在這個伺服器裡我暫時只聽 <@${AUTHORIZED_USER_ID}> 的 抱歉啦`,
-      ),
-    });
+    await postChatbotResponse(
+      message,
+      `在這個伺服器裡我暫時只聽 <@${AUTHORIZED_USER_ID}> 的 抱歉啦`,
+      discordRequest,
+    );
     return true;
   }
 
   const acquired = macAgentBridge.acquireWorkflow();
 
   if (acquired.status === "offline") {
-    await discordRequest(`/channels/${message.channel_id}/messages`, {
-      method: "POST",
-      body: replyBody(message, "叫曦打開他的 Mac 我才能動啦 💤"),
-    });
+    await postChatbotResponse(
+      message,
+      "叫曦打開他的 Mac 我才能動啦 💤",
+      discordRequest,
+    );
     return true;
   }
 
   if (acquired.status === "busy") {
-    await discordRequest(`/channels/${message.channel_id}/messages`, {
-      method: "POST",
-      body: replyBody(message, "我正在幫別人做事 等我一下下"),
-    });
+    await postChatbotResponse(
+      message,
+      "我正在幫別人做事 等我一下下",
+      discordRequest,
+    );
     return true;
   }
 
@@ -955,10 +999,7 @@ export async function handleChatbotMention({
       )
     : "我剛剛卡住了 晚點再叫我一次";
 
-  await discordRequest(`/channels/${message.channel_id}/messages`, {
-    method: "POST",
-    body: replyBody(message, content),
-  });
+  await postChatbotResponse(message, content, discordRequest);
 
   return true;
 }

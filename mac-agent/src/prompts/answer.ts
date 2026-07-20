@@ -23,7 +23,7 @@ Return only the reply, lead with the answer, max 1,900 characters.`;
 
 const DISCORD_SEARCH_INSTRUCTIONS = `Treat guild search results as broader evidence than channel context. Answer like a chat message, not a research report. Lead with the conclusion and weave supporting details into natural sentences. Do not add labels such as evidence, original message, or explanation. Distinguish inference only when material, using conversational wording such as "看起來" or "應該". For a message lookup, include its time, channel, and exact jumpUrl naturally. Never invent Discord URLs. If search failed, say it was unavailable, not that no match exists.`;
 
-const MENTION_ONLY_INSTRUCTIONS = `The user mentioned only MiniSago. Infer the most likely task or message to handle from nearby context and act on it when clear. If multiple interpretations remain plausible, ask one short, specific clarification question.`;
+const MENTION_ONLY_INSTRUCTIONS = `The user mentioned MiniSago or replied to its message without a text request. Infer the most likely task or message to handle from the referenced and nearby context, then act when clear. If multiple interpretations remain plausible, ask one short, specific clarification question.`;
 
 export function buildAnswerPrompt(
   job: ChatbotJob,
