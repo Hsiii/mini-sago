@@ -354,6 +354,17 @@ class InstagramGatewayClient {
       console.warn(
         `Skipped Instagram reply for message ${message.id}: reply content exceeds ${MESSAGE_CONTENT_LIMIT} characters.`,
       );
+      try {
+        await this.replyToMessage(
+          message,
+          "這則訊息裡的 Instagram 連結太多了 我一次回不完",
+        );
+      } catch (error) {
+        console.error(
+          `Failed to send Instagram length warning for message ${message.id}:`,
+          error,
+        );
+      }
       return;
     }
 

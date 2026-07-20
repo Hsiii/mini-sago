@@ -270,6 +270,10 @@ export function isChatbotAuthorized(userId: string, guildId?: string) {
 export function formatDiscordAnswer(content: string) {
   const normalized = content.trim();
 
+  if (!normalized) {
+    return "我剛剛腦袋一片空白 再問我一次";
+  }
+
   if (normalized.length <= DISCORD_MESSAGE_LIMIT) {
     return normalized;
   }
@@ -768,7 +772,6 @@ export async function handleChatbotMention({
 
   if (
     !requesterUserId ||
-    !isChatbotAuthorized(requesterUserId, message.guild_id) ||
     message.author?.bot ||
     message.webhook_id ||
     !message.content
@@ -781,10 +784,17 @@ export async function handleChatbotMention({
     return false;
   }
 
-  if (!request) {
+  if (!isChatbotAuthorized(requesterUserId, message.guild_id)) {
+    if (!message.guild_id) {
+      return false;
+    }
+
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
-      body: replyBody(message, "What would you like me to help with?"),
+      body: replyBody(
+        message,
+        `在這個伺服器裡我暫時只聽 <@${AUTHORIZED_USER_ID}> 的 抱歉啦`,
+      ),
     });
     return true;
   }
@@ -794,7 +804,7 @@ export async function handleChatbotMention({
   if (acquired.status === "offline") {
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
-      body: replyBody(message, "My Mac is offline right now."),
+      body: replyBody(message, "叫曦打開他的 Mac 我才能動啦 💤"),
     });
     return true;
   }
@@ -802,13 +812,14 @@ export async function handleChatbotMention({
   if (acquired.status === "busy") {
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
-      body: replyBody(message, "I’m busy with another request right now."),
+      body: replyBody(message, "我正在幫別人做事 等我一下下"),
     });
     return true;
   }
 
   const { workflow } = acquired;
   let result: MacAgentJobResult;
+  let searchUnavailable = false;
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
       const requestMessage = toChatbotMessage(message, botUserId);
@@ -904,6 +915,7 @@ export async function handleChatbotMention({
             : Promise.resolve(search);
 
         [messages, search] = await Promise.all([historyPromise, searchPromise]);
+        searchUnavailable = search.status === "unavailable";
       }
 
       const job: ChatbotJob = {
@@ -929,12 +941,19 @@ export async function handleChatbotMention({
 
       return dispatch.result;
     });
+  } catch (error) {
+    console.error(`Chatbot request ${message.id} failed:`, error);
+    result = { ok: false, error: "聊天機器人請求失敗" };
   } finally {
     workflow.release();
   }
   const content = result.ok
-    ? formatDiscordAnswer(result.content)
-    : "I couldn’t finish that request. Please try again.";
+    ? formatDiscordAnswer(
+        searchUnavailable
+          ? `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${result.content}`
+          : result.content,
+      )
+    : "我剛剛卡住了 晚點再叫我一次";
 
   await discordRequest(`/channels/${message.channel_id}/messages`, {
     method: "POST",

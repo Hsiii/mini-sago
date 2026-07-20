@@ -89,7 +89,7 @@ export class MacAgentBridge {
 
   handleUpgrade(request: Request, server: Server<MacAgentSocketData>) {
     if (!this.isConfigured()) {
-      return new Response("Mac bridge is disabled", { status: 404 });
+      return new Response("本機連線服務尚未啟用", { status: 404 });
     }
 
     const upgraded = server.upgrade(request, {
@@ -98,7 +98,7 @@ export class MacAgentBridge {
 
     return upgraded
       ? undefined
-      : new Response("WebSocket upgrade required", { status: 426 });
+      : new Response("需要 WebSocket 連線", { status: 426 });
   }
 
   dispatch(job: ChatbotJob): DispatchResult {

@@ -37,10 +37,11 @@ function buildHealthResponse() {
       roleCount: summary.roleCount,
     });
   } catch (error) {
+    console.error("Invalid health check configuration:", error);
     return jsonResponse(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "服務設定無效",
       },
       500,
     );
@@ -66,7 +67,7 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
     return handleGithubWebhookRequest(request);
   }
 
-  return new Response("Not found", { status: 404 });
+  return new Response("找不到此頁面", { status: 404 });
 }
 
 const port = Number(process.env.PORT ?? 3000);
