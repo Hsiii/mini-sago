@@ -1,4 +1,11 @@
+import type { Server } from "bun";
+
 import { getPublicDiscordSummary } from "../lib/discord/env";
+import {
+  macAgentBridge,
+  macAgentWebSocketHandler,
+  type MacAgentSocketData,
+} from "../lib/chatbot/bridge";
 import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import {
@@ -39,8 +46,12 @@ function buildHealthResponse() {
   }
 }
 
-function handleRequest(request: Request) {
+function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
   const { pathname } = new URL(request.url);
+
+  if (request.method === "GET" && pathname === "/api/mac-agent/ws") {
+    return macAgentBridge.handleUpgrade(request, server);
+  }
 
   if (request.method === "GET" && pathname === "/api/health") {
     return buildHealthResponse();
@@ -63,6 +74,7 @@ const server = Bun.serve({
   port,
   hostname,
   fetch: handleRequest,
+  websocket: macAgentWebSocketHandler,
 });
 
 if (process.env.DISCORD_GATEWAY_DISABLED !== "true") {

@@ -1,4 +1,5 @@
 import { getInstagramReplyUrls } from "./instagram-links";
+import { createDiscordRequest, handleChatbotMention } from "./chatbot";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -6,6 +7,7 @@ const MESSAGE_CONTENT_LIMIT = 2_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 const GUILDS_INTENT = 1 << 0;
 const GUILD_MESSAGES_INTENT = 1 << 9;
+const DIRECT_MESSAGES_INTENT = 1 << 12;
 const MESSAGE_CONTENT_INTENT = 1 << 15;
 
 type GatewayPayload = {
@@ -37,6 +39,21 @@ type DiscordMessageCreate = {
   channel_id: string;
   guild_id?: string;
   content?: string;
+  timestamp: string;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    content_type?: string;
+    size: number;
+    url: string;
+  }>;
+  embeds?: Array<{
+    title?: string;
+    description?: string;
+    url?: string;
+  }>;
+  sticker_items?: Array<{ name?: string }>;
+  referenced_message?: DiscordMessageCreate | null;
   webhook_id?: string;
   author?: DiscordUser;
 };
@@ -241,7 +258,11 @@ class InstagramGatewayClient {
       op: 2,
       d: {
         token: this.config.botToken,
-        intents: GUILDS_INTENT | GUILD_MESSAGES_INTENT | MESSAGE_CONTENT_INTENT,
+        intents:
+          GUILDS_INTENT |
+          GUILD_MESSAGES_INTENT |
+          DIRECT_MESSAGES_INTENT |
+          MESSAGE_CONTENT_INTENT,
         properties: {
           os: process.platform,
           browser: "minisago",
@@ -300,6 +321,23 @@ class InstagramGatewayClient {
   }
 
   private async handleMessageCreate(message: DiscordMessageCreate) {
+    if (this.botUserId) {
+      try {
+        const handled = await handleChatbotMention({
+          message,
+          botUserId: this.botUserId,
+          discordRequest: createDiscordRequest(this.config.botToken),
+        });
+
+        if (handled) {
+          return;
+        }
+      } catch (error) {
+        console.error(`Failed to handle chatbot mention ${message.id}:`, error);
+        return;
+      }
+    }
+
     if (!this.shouldTransformMessage(message)) {
       return;
     }
