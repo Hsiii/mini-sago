@@ -10,13 +10,13 @@ running on an unlocked Mac.
 
 ## Features
 
-| Feature                     | Scope                         |
-| --------------------------- | ----------------------------- |
-| Instagram link replies      | Every visible server/channel  |
+| Feature                     | Scope                               |
+| --------------------------- | ----------------------------------- |
+| Instagram link replies      | Every visible server/channel        |
 | Owner Codex chatbot         | Every visible server, thread, or DM |
-| Channel access and commands | Configured guild only         |
-| Vocabulary and feed updates | Configured guild/channel      |
-| GitHub PR review threads    | Configured repository/channel |
+| Channel access and commands | Configured guild only               |
+| Vocabulary and feed updates | Configured guild/channel            |
+| GitHub PR review threads    | Configured repository/channel       |
 
 Other servers receive only the universal Instagram replies and owner chatbot;
 deployment-specific roles, commands, and scheduled updates stay in their
@@ -41,10 +41,10 @@ The Mac accepts no inbound public connection.
 
 ## Commands
 
-| Commands                                                     | Action                    |
-| ------------------------------------------------------------ | ------------------------- |
-| `/join-wordle-channel`, `/leave-wordle-channel`              | Toggle Wordle access      |
-| `/join-brawlstars-channel`, `/leave-brawlstars-channel`      | Toggle Brawl Stars access |
+| Commands                                                | Action                    |
+| ------------------------------------------------------- | ------------------------- |
+| `/join-wordle-channel`, `/leave-wordle-channel`         | Toggle Wordle access      |
+| `/join-brawlstars-channel`, `/leave-brawlstars-channel` | Toggle Brawl Stars access |
 
 These commands and the equivalent channel-access panel work only in the
 configured guild.
