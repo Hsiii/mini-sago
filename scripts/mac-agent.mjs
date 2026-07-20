@@ -1,0 +1,248 @@
+import { randomBytes } from "node:crypto";
+import {
+  access,
+  chmod,
+  lstat,
+  mkdir,
+  readlink,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const action = process.argv[2];
+const supportedActions = new Set(["install", "status", "uninstall"]);
+
+if (!supportedActions.has(action)) {
+  console.error("Usage: bun scripts/mac-agent.mjs <install|status|uninstall>");
+  process.exit(1);
+}
+
+if (process.platform !== "darwin") {
+  console.error("The MiniSago Mac helper can only be installed on macOS.");
+  process.exit(1);
+}
+
+const label = "dev.hsichen.minisago-mac-agent";
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const macAgentRoot = join(repositoryRoot, "mac-agent");
+const userHome = homedir();
+const applicationSupport = join(
+  userHome,
+  "Library",
+  "Application Support",
+  "MiniSago",
+);
+const binDirectory = join(applicationSupport, "bin");
+const logsDirectory = join(applicationSupport, "logs");
+const codexHome = join(applicationSupport, "codex-home");
+const environmentFile = join(applicationSupport, "agent.env");
+const sessionMonitor = join(binDirectory, "session-monitor");
+const launchAgentFile = join(
+  userHome,
+  "Library",
+  "LaunchAgents",
+  `${label}.plist`,
+);
+const serviceTarget = `gui/${process.getuid()}/${label}`;
+
+function run(command, args, options = {}) {
+  const result = Bun.spawnSync([command, ...args], {
+    cwd: options.cwd,
+    stdout: options.quiet ? "ignore" : "inherit",
+    stderr: options.quiet ? "ignore" : "inherit",
+  });
+
+  if (!options.allowFailure && result.exitCode !== 0) {
+    throw new Error(`${command} exited with status ${result.exitCode}`);
+  }
+
+  return result;
+}
+
+function escapeXml(value) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&apos;",
+    };
+    return entities[character];
+  });
+}
+
+function envLine(name, value) {
+  return `${name}=${JSON.stringify(value)}`;
+}
+
+async function ensureAuthLink() {
+  const source = join(userHome, ".codex", "auth.json");
+  const destination = join(codexHome, "auth.json");
+  try {
+    await access(source);
+  } catch {
+    throw new Error(
+      "Local Codex auth.json was not found. Sign in with Codex CLI first.",
+    );
+  }
+
+  await mkdir(codexHome, { recursive: true, mode: 0o700 });
+  await chmod(codexHome, 0o700);
+
+  let existing;
+  try {
+    existing = await lstat(destination);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  if (existing) {
+    if (existing.isSymbolicLink() && (await readlink(destination)) === source) {
+      return;
+    }
+
+    throw new Error(
+      `${destination} already exists and was not created by this installer.`,
+    );
+  }
+
+  await symlink(source, destination);
+}
+
+async function install() {
+  const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
+  if (!bridgeSecret) {
+    console.error(
+      "Set MINISAGO_MAC_BRIDGE_SECRET in .env.local before installing.",
+    );
+    console.error(`Suggested value: ${randomBytes(32).toString("hex")}`);
+    process.exit(1);
+  }
+
+  await mkdir(binDirectory, { recursive: true, mode: 0o700 });
+  await mkdir(logsDirectory, { recursive: true, mode: 0o700 });
+  await mkdir(dirname(launchAgentFile), { recursive: true });
+  await ensureAuthLink();
+
+  run(Bun.which("bun") || process.execPath, ["install", "--frozen-lockfile"], {
+    cwd: macAgentRoot,
+  });
+  run("/usr/bin/swiftc", [
+    join(macAgentRoot, "session-monitor.swift"),
+    "-o",
+    sessionMonitor,
+    "-framework",
+    "AppKit",
+    "-framework",
+    "CoreGraphics",
+  ]);
+  await chmod(sessionMonitor, 0o700);
+
+  const environment = [
+    envLine(
+      "MINISAGO_BRIDGE_URL",
+      process.env.MINISAGO_BRIDGE_URL?.trim() ||
+        "wss://bot.hsichen.dev/api/mac-agent/ws",
+    ),
+    envLine("MINISAGO_MAC_BRIDGE_SECRET", bridgeSecret),
+    envLine("MINISAGO_CODEX_HOME", codexHome),
+    envLine(
+      "MINISAGO_CODEX_PATH",
+      process.env.MINISAGO_CODEX_PATH?.trim() ||
+        "/Applications/ChatGPT.app/Contents/Resources/codex",
+    ),
+    envLine("MINISAGO_SESSION_MONITOR_PATH", sessionMonitor),
+  ].join("\n");
+  await writeFile(environmentFile, `${environment}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  await chmod(environmentFile, 0o600);
+
+  const bunPath = Bun.which("bun") || process.execPath;
+  const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${escapeXml(bunPath)}</string>
+    <string>--env-file=${escapeXml(environmentFile)}</string>
+    <string>${escapeXml(join(macAgentRoot, "src", "index.ts"))}</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${escapeXml(repositoryRoot)}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>${escapeXml(join(logsDirectory, "helper.log"))}</string>
+  <key>StandardErrorPath</key>
+  <string>${escapeXml(join(logsDirectory, "helper-error.log"))}</string>
+</dict>
+</plist>
+`;
+
+  await writeFile(launchAgentFile, plist, { encoding: "utf8", mode: 0o600 });
+  await chmod(launchAgentFile, 0o600);
+  run("/bin/launchctl", ["bootout", serviceTarget], {
+    allowFailure: true,
+    quiet: true,
+  });
+  run("/bin/launchctl", [
+    "bootstrap",
+    `gui/${process.getuid()}`,
+    launchAgentFile,
+  ]);
+  run("/bin/launchctl", ["kickstart", "-k", serviceTarget]);
+
+  console.log("MiniSago Mac helper installed and started.");
+  console.log(`Status: bun run mac-agent:status`);
+}
+
+function status() {
+  const probe = run("/bin/launchctl", ["print", serviceTarget], {
+    allowFailure: true,
+    quiet: true,
+  });
+
+  if (probe.exitCode !== 0) {
+    console.error("MiniSago Mac helper is not loaded.");
+    process.exit(1);
+  }
+
+  run("/bin/launchctl", ["print", serviceTarget]);
+}
+
+async function uninstall() {
+  run("/bin/launchctl", ["bootout", serviceTarget], {
+    allowFailure: true,
+    quiet: true,
+  });
+  await rm(launchAgentFile, { force: true });
+  await rm(applicationSupport, { recursive: true, force: true });
+  console.log("MiniSago Mac helper was stopped and removed.");
+  console.log("Your normal ~/.codex authentication was not changed.");
+}
+
+if (action === "install") {
+  await install();
+} else if (action === "status") {
+  status();
+} else {
+  await uninstall();
+}

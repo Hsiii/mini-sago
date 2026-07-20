@@ -15,7 +15,10 @@
     "fetch:vocab": "bun scripts/fetch-wiktionary-vocab.mjs",
     "publish:panel": "bun --env-file=.env.local scripts/publish-channel-panel.mjs",
     "register:commands": "bun --env-file=.env.local scripts/register-commands.mjs",
-    "sync:install": "bun --env-file=.env.local scripts/sync-install-settings.mjs"
+    "sync:install": "bun --env-file=.env.local scripts/sync-install-settings.mjs",
+    "mac-agent:install": "bun --env-file=.env.local scripts/mac-agent.mjs install",
+    "mac-agent:status": "bun scripts/mac-agent.mjs status",
+    "mac-agent:uninstall": "bun scripts/mac-agent.mjs uninstall"
   },
   "dependencies": {
     "tweetnacl": "1.0.3"
