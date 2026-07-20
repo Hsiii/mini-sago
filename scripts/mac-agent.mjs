@@ -118,9 +118,9 @@ async function ensureAuthLink() {
 
 async function install() {
   const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
-  if (!bridgeSecret) {
+  if (!bridgeSecret || Buffer.byteLength(bridgeSecret) < 32) {
     console.error(
-      "Set MINISAGO_MAC_BRIDGE_SECRET in .env.local before installing.",
+      "Set a 32-byte-or-longer MINISAGO_MAC_BRIDGE_SECRET in .env.local before installing.",
     );
     console.error(`Suggested value: ${randomBytes(32).toString("hex")}`);
     process.exit(1);

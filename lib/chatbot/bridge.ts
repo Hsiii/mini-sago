@@ -63,7 +63,7 @@ export class MacAgentBridge {
   private pendingJob: PendingJob | null = null;
 
   isConfigured() {
-    return Boolean(process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim());
+    return this.configuredSecret() !== null;
   }
 
   getStatus() {
@@ -182,7 +182,7 @@ export class MacAgentBridge {
   }
 
   private authenticate(socket: Socket, message: MacAgentClientMessage) {
-    const expectedSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim() ?? "";
+    const expectedSecret = this.configuredSecret();
 
     if (
       message.type !== "authenticate" ||
@@ -260,6 +260,11 @@ export class MacAgentBridge {
       clearTimeout(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
+  }
+
+  private configuredSecret() {
+    const secret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
+    return secret && Buffer.byteLength(secret) >= 32 ? secret : null;
   }
 }
 

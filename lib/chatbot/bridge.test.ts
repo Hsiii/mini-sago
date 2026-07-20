@@ -5,6 +5,7 @@ import { MacAgentBridge, type MacAgentSocketData } from "./bridge";
 import { CHATBOT_PROTOCOL_VERSION, type ChatbotJob } from "./protocol";
 
 const originalSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET;
+const bridgeSecret = "bridge-secret-that-is-at-least-32-bytes";
 
 afterEach(() => {
   if (originalSecret === undefined) {
@@ -33,7 +34,7 @@ function fakeSocket() {
 
 describe("Mac agent bridge", () => {
   test("stays offline until an authenticated helper reports availability", () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = "bridge-secret";
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
     const bridge = new MacAgentBridge();
     const { socket, sent } = fakeSocket();
 
@@ -43,7 +44,7 @@ describe("Mac agent bridge", () => {
       JSON.stringify({
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: "bridge-secret",
+        secret: bridgeSecret,
       }),
     );
 
@@ -60,7 +61,7 @@ describe("Mac agent bridge", () => {
   });
 
   test("runs one job at a time and resolves its matching result", async () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = "bridge-secret";
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
     const bridge = new MacAgentBridge();
     const { socket, sent } = fakeSocket();
     const job: ChatbotJob = {
@@ -77,7 +78,7 @@ describe("Mac agent bridge", () => {
       JSON.stringify({
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
-        secret: "bridge-secret",
+        secret: bridgeSecret,
       }),
     );
     bridge.message(

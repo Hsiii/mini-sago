@@ -32,6 +32,7 @@ function buildHealthResponse() {
         botToken: summary.hasBotToken,
         guildId: summary.hasGuildId,
         githubWebhook: isGithubWebhookConfigured(),
+        macBridge: macAgentBridge.isConfigured(),
       },
       roleCount: summary.roleCount,
     });

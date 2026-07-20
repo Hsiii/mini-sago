@@ -58,8 +58,10 @@ function validateBridgeUrl(value: string) {
 export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
   const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
 
-  if (!bridgeSecret) {
-    throw new Error("MINISAGO_MAC_BRIDGE_SECRET is required.");
+  if (!bridgeSecret || Buffer.byteLength(bridgeSecret) < 32) {
+    throw new Error(
+      "MINISAGO_MAC_BRIDGE_SECRET must contain at least 32 bytes.",
+    );
   }
 
   return {
