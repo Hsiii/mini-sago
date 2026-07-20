@@ -81,7 +81,10 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("short conversational lines");
     expect(prompt).toContain("English tech or meme terms untranslated");
     expect(prompt).toContain("use line breaks for rhythm");
-    expect(prompt).toContain("keep punctuation light");
+    expect(prompt).toContain(
+      "omit punctuation whenever the meaning stays clear",
+    );
+    expect(prompt).toContain("preserve technical syntax");
     expect(prompt).toContain("one understated, dry punchline");
     expect(prompt).toContain("knowledgeable friend in chat");
     expect(prompt).toContain(
