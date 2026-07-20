@@ -12,6 +12,9 @@ in [README.md](../README.md).
   TOEFL posts, Gamer forum alerts, and X alerts are restricted to
   `DISCORD_GUILD_ID`. The current deployment uses the WM31 guild
   `1282936453134815275`.
+- **Configured repository/channel:** the GitHub webhook bridge accepts only
+  `Hsiii/health-check-system` pull request events and posts only to
+  `GITHUB_PR_THREAD_CHANNEL_ID`.
 
 Installing MiniSago in another server does not expose or activate the WM31 role
 controls or scheduled feeds there.
@@ -30,7 +33,8 @@ controls or scheduled feeds there.
    `4014` and Instagram messages cannot be read.
 5. Sync the Discord application install settings so the bot profile
    `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
-   `View Channels`, `Send Messages`, `Read Message History`, and `Manage Roles`.
+   `View Channels`, `Send Messages`, `Read Message History`, `Manage Roles`,
+   `Create Public Threads`, `Send Messages in Threads`, and `Manage Threads`.
 6. Publish the slash commands.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
@@ -39,8 +43,11 @@ controls or scheduled feeds there.
    `GAMER_FORUM_CHANNEL_ID` only if it should post elsewhere.
    The X post monitor defaults to `@thsottiaux` and channel
    `1527893157168283668`.
-9. Run locally or deploy, then point the Discord Interactions Endpoint URL at
-   `/api/interactions`.
+9. To enable PR review threads, set `GITHUB_WEBHOOK_SECRET`, install MiniSago in
+   the server containing `GITHUB_PR_THREAD_CHANNEL_ID`, and configure the
+   repository webhook described below.
+10. Run locally or deploy, then point the Discord Interactions Endpoint URL at
+    `/api/interactions`.
 
 If production already uses the same bot token, set
 `DISCORD_GATEWAY_DISABLED=true` locally before running the development server.
@@ -83,6 +90,22 @@ slash commands and channel access components.
 - `GET /api/health` returns configuration health.
 - `POST /api/interactions` handles Discord slash commands and panel
   components.
+- `POST /api/github/webhook` verifies and handles GitHub pull request events.
+
+## GitHub pull request webhook
+
+In `Hsiii/health-check-system` under Settings -> Webhooks, add a repository
+webhook with:
+
+- Payload URL: `https://YOUR_DOMAIN/api/github/webhook`
+- Content type: `application/json`
+- Secret: the same random value as `GITHUB_WEBHOOK_SECRET`
+- Events: select only **Pull requests**
+
+The `ready_for_review` action creates a public thread named after the PR and
+posts the review request. Repeated deliveries reuse the saved thread instead of
+creating duplicates. A `closed` action archives the thread only when GitHub
+marks the PR as merged.
 
 ## Admin and maintenance utilities
 
@@ -116,12 +139,15 @@ settings through the Discord API. In the Developer Portal, keep
 Installation -> Install Link set to `Discord Provided Link` so the profile
 button uses these defaults.
 
-The synced permission bitfield is `268504064`, which includes:
+The synced permission bitfield is `326686018560`, which includes:
 
 - `View Channels`
 - `Send Messages`
 - `Read Message History`
 - `Manage Roles`
+- `Manage Threads`
+- `Create Public Threads`
+- `Send Messages in Threads`
 
 The integer is used by Discord's API and generated install URL; Server Settings
 does not provide an integer field. For an existing installation, open Server
@@ -131,9 +157,10 @@ retroactively rewrite an existing server role.
 
 The first three permissions support universal Instagram replies. `Manage Roles`
 is needed only for the configured-guild channel access commands and panel.
-MiniSago does not request Manage Messages or Manage Webhooks. Channel-specific
-overrides must still allow View Channel, Send Messages, and Read Message History
-where Instagram replies should work.
+The thread permissions let the GitHub bridge create public threads, add team
+members, post review requests, and archive threads after merge. MiniSago does
+not request Manage Messages or Manage Webhooks. Channel-specific overrides must
+still allow the relevant permissions in each target channel.
 
 Servers that only use universal Instagram replies may disable Manage Roles for
 MiniSago. That does not affect link replies; it only prevents the configured
@@ -169,6 +196,7 @@ curl https://YOUR_DOMAIN/api/health
 
 ```text
 https://YOUR_DOMAIN/api/interactions
+https://YOUR_DOMAIN/api/github/webhook
 ```
 
 The platform caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
@@ -180,3 +208,5 @@ stored in the external `platform_bot-core-state` volume:
   of `/app/state/gamer-forum-state.json`.
 - X post state when `X_POST_STATE_FILE` is set to
   `/app/state/x-post-state.json`.
+- GitHub PR thread state when `GITHUB_PR_THREAD_STATE_FILE` is set to
+  `/app/state/github-pr-threads.json`.

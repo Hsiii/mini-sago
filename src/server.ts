@@ -1,6 +1,10 @@
 import { getPublicDiscordSummary } from "../lib/discord/env";
 import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
+import {
+  handleGithubWebhookRequest,
+  isGithubWebhookConfigured,
+} from "../lib/discord/github-pr-webhook";
 import { handleDiscordInteractionRequest } from "../lib/discord/interactions";
 import { startToeflVocabScheduler } from "../lib/discord/toefl-vocab";
 import { startXPostMonitor } from "../lib/discord/x-post-monitor";
@@ -20,6 +24,7 @@ function buildHealthResponse() {
         publicKey: summary.hasPublicKey,
         botToken: summary.hasBotToken,
         guildId: summary.hasGuildId,
+        githubWebhook: isGithubWebhookConfigured(),
       },
       roleCount: summary.roleCount,
     });
@@ -43,6 +48,10 @@ function handleRequest(request: Request) {
 
   if (request.method === "POST" && pathname === "/api/interactions") {
     return handleDiscordInteractionRequest(request);
+  }
+
+  if (request.method === "POST" && pathname === "/api/github/webhook") {
+    return handleGithubWebhookRequest(request);
   }
 
   return new Response("Not found", { status: 404 });

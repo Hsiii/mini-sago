@@ -11,13 +11,14 @@ access, improves Instagram embeds, and delivers selected community updates.
 
 MiniSago is portable, but not every feature is intended for every server:
 
-| Feature                         | Scope                        | Intent                                                                                                                         |
-| ------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Instagram link replies          | Universal                    | Works in every installed server and visible channel. Leaves the original message and replies with only `kkinstagram.com` URLs. |
-| Channel access panel            | Configured guild only        | Manages deployment-specific opt-in roles. The current defaults are the WM31 Wordle and Brawl Stars channel roles.              |
-| Wordle/Brawl Stars commands     | WM31 configured guild only   | Convenience commands for that server's existing channels; they are not a general cross-server feature.                         |
-| TOEFL vocabulary                | Configured guild and channel | Posts one daily item only when a target channel is configured.                                                                 |
-| Gamer forum and X post monitors | Configured guild and channel | Delivers this deployment's selected feeds without replaying old posts.                                                         |
+| Feature                         | Scope                         | Intent                                                                                                                         |
+| ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Instagram link replies          | Universal                     | Works in every installed server and visible channel. Leaves the original message and replies with only `kkinstagram.com` URLs. |
+| Channel access panel            | Configured guild only         | Manages deployment-specific opt-in roles. The current defaults are the WM31 Wordle and Brawl Stars channel roles.              |
+| Wordle/Brawl Stars commands     | WM31 configured guild only    | Convenience commands for that server's existing channels; they are not a general cross-server feature.                         |
+| TOEFL vocabulary                | Configured guild and channel  | Posts one daily item only when a target channel is configured.                                                                 |
+| Gamer forum and X post monitors | Configured guild and channel  | Delivers this deployment's selected feeds without replaying old posts.                                                         |
+| GitHub PR review threads        | Configured repository/channel | Opens review threads for ready PRs and archives them after merge.                                                              |
 
 Other servers use MiniSago's universal Instagram behavior; they do not receive
 the WM31 role controls, commands, or scheduled feeds.
@@ -44,6 +45,9 @@ permissions are:
 - Send Messages
 - Read Message History
 - Manage Roles
+- Create Public Threads
+- Send Messages in Threads
+- Manage Threads
 
 Place MiniSago's role above every role it should assign. Enable Discord's Message
 Content privileged intent to use Instagram link replies. MiniSago does not need

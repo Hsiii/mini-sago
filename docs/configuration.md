@@ -34,6 +34,19 @@ Only one Gateway-enabled instance should use a bot token at a time. When
 production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
 environments unless that instance is intentionally replacing production.
 
+## GitHub pull request review threads
+
+| Name                          | Required | Description                                                                                                                              |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITHUB_WEBHOOK_SECRET`       | Yes      | Shared secret used to verify GitHub's `X-Hub-Signature-256`. Leaving it blank disables the endpoint                                      |
+| `GITHUB_PR_THREAD_CHANNEL_ID` | No       | Text channel where public review threads are created. Defaults to `1521506395034226830`                                                  |
+| `GITHUB_PR_THREAD_STATE_FILE` | No       | PR-to-thread mapping used for idempotency and merge archival. Defaults to `.data/github-pr-threads.json`; use `/app/state/...` in Docker |
+
+The bridge accepts only `pull_request` events for
+`Hsiii/health-check-system`. When `Hsiii` marks a draft ready, Daniel and
+Jasmine are mentioned. PRs by Daniel, Jasmine, or another author mention Hsi.
+Known team authors are also explicitly added to the public thread.
+
 ## Configured-guild role access (WM31 by default)
 
 | Name                                | Required | Description                                                                                                                      |

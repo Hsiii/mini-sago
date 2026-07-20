@@ -1,0 +1,229 @@
+import { createHmac } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, expect, test } from "bun:test";
+
+import {
+  buildReviewRequest,
+  formatThreadName,
+  handleGithubWebhookRequest,
+  verifyGithubWebhookSignature,
+} from "./github-pr-webhook";
+
+const HSI_ID = "917446775873343600";
+const DANIEL_ID = "927940363644194847";
+const JASMINE_ID = "881904247879368715";
+
+function sign(body: string, secret: string) {
+  return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+}
+
+function webhookRequest(payload: unknown, secret: string) {
+  const body = JSON.stringify(payload);
+
+  return new Request("https://minisago.example/api/github/webhook", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-GitHub-Event": "pull_request",
+      "X-Hub-Signature-256": sign(body, secret),
+    },
+    body,
+  });
+}
+
+function pullRequestPayload(action: string, merged = false) {
+  return {
+    action,
+    repository: { full_name: "Hsiii/health-check-system" },
+    pull_request: {
+      number: 42,
+      title: "Make health checks clearer",
+      html_url: "https://github.com/Hsiii/health-check-system/pull/42",
+      draft: false,
+      merged,
+      user: { login: "Hsiii" },
+    },
+  };
+}
+
+function restoreEnvironmentVariable(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
+
+describe("GitHub PR webhook", () => {
+  test("validates GitHub's HMAC-SHA256 signature", () => {
+    const body = '{"zen":"Keep it logically awesome."}';
+    const secret = "test-secret";
+
+    expect(verifyGithubWebhookSignature(body, sign(body, secret), secret)).toBe(
+      true,
+    );
+    expect(
+      verifyGithubWebhookSignature(body, "sha256=not-the-signature", secret),
+    ).toBe(false);
+    expect(verifyGithubWebhookSignature(body, null, secret)).toBe(false);
+  });
+
+  test("mentions Daniel and Jasmine for Hsi's PR", () => {
+    expect(
+      buildReviewRequest({
+        authorLogin: "Hsiii",
+        title: "Improve checks",
+        url: "https://github.com/Hsiii/health-check-system/pull/1",
+      }),
+    ).toEqual({
+      authorDiscordId: HSI_ID,
+      reviewerDiscordIds: [DANIEL_ID, JASMINE_ID],
+      message: {
+        content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Improve checks](<https://github.com/Hsiii/health-check-system/pull/1>)`,
+        allowed_mentions: {
+          parse: [],
+          users: [DANIEL_ID, JASMINE_ID],
+        },
+      },
+    });
+  });
+
+  test("mentions Hsi for Daniel's and Jasmine's PRs", () => {
+    for (const [authorLogin, authorDiscordId] of [
+      ["Danielllllllllllllll", DANIEL_ID],
+      ["Jasmine0108", JASMINE_ID],
+    ]) {
+      const request = buildReviewRequest({
+        authorLogin,
+        title: "Improve checks",
+        url: "https://github.com/Hsiii/health-check-system/pull/2",
+      });
+
+      expect(request.authorDiscordId).toBe(authorDiscordId);
+      expect(request.reviewerDiscordIds).toEqual([HSI_ID]);
+    }
+  });
+
+  test("keeps public thread names within Discord's 100-character limit", () => {
+    expect(formatThreadName(`  ${"a".repeat(120)}  `)).toHaveLength(100);
+    expect(formatThreadName("   ")).toBe("Pull request");
+  });
+
+  test.serial(
+    "creates one public thread, adds participants, and archives it on merge",
+    async () => {
+      const secret = "integration-test-secret";
+      const stateDirectory = await mkdtemp(join(tmpdir(), "minisago-pr-test-"));
+      const stateFile = join(stateDirectory, "state.json");
+      const originalFetch = globalThis.fetch;
+      const originalSecret = process.env.GITHUB_WEBHOOK_SECRET;
+      const originalToken = process.env.DISCORD_BOT_TOKEN;
+      const originalStateFile = process.env.GITHUB_PR_THREAD_STATE_FILE;
+      const originalChannelId = process.env.GITHUB_PR_THREAD_CHANNEL_ID;
+      const calls: Array<{ url: string; method: string; body?: unknown }> = [];
+
+      process.env.GITHUB_WEBHOOK_SECRET = secret;
+      process.env.DISCORD_BOT_TOKEN = "test-bot-token";
+      process.env.GITHUB_PR_THREAD_STATE_FILE = stateFile;
+      process.env.GITHUB_PR_THREAD_CHANNEL_ID = "1521506395034226830";
+
+      globalThis.fetch = (async (input, init) => {
+        const url = String(input);
+        calls.push({
+          url,
+          method: init?.method ?? "GET",
+          body:
+            typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        });
+
+        if (url.endsWith("/channels/1521506395034226830/threads")) {
+          return Response.json({ id: "thread-42" });
+        }
+
+        return new Response(null, { status: 204 });
+      }) as typeof fetch;
+
+      try {
+        const readyResponse = await handleGithubWebhookRequest(
+          webhookRequest(pullRequestPayload("ready_for_review"), secret),
+        );
+        expect(readyResponse.status).toBe(200);
+        expect(await readyResponse.json()).toEqual({
+          ok: true,
+          result: "created",
+        });
+
+        const duplicateResponse = await handleGithubWebhookRequest(
+          webhookRequest(pullRequestPayload("ready_for_review"), secret),
+        );
+        expect(await duplicateResponse.json()).toEqual({
+          ok: true,
+          result: "already-created",
+        });
+
+        const mergedResponse = await handleGithubWebhookRequest(
+          webhookRequest(pullRequestPayload("closed", true), secret),
+        );
+        expect(await mergedResponse.json()).toEqual({
+          ok: true,
+          result: "archived",
+        });
+
+        expect(calls).toEqual([
+          {
+            url: "https://discord.com/api/v10/channels/1521506395034226830/threads",
+            method: "POST",
+            body: {
+              name: "Make health checks clearer",
+              auto_archive_duration: 1440,
+              type: 11,
+            },
+          },
+          ...[DANIEL_ID, JASMINE_ID, HSI_ID].map((userId) => ({
+            url: `https://discord.com/api/v10/channels/thread-42/thread-members/${userId}`,
+            method: "PUT",
+            body: undefined,
+          })),
+          {
+            url: "https://discord.com/api/v10/channels/thread-42/messages",
+            method: "POST",
+            body: {
+              content: `<@${DANIEL_ID}> <@${JASMINE_ID}> please review [Make health checks clearer](<https://github.com/Hsiii/health-check-system/pull/42>)`,
+              allowed_mentions: {
+                parse: [],
+                users: [DANIEL_ID, JASMINE_ID],
+              },
+            },
+          },
+          {
+            url: "https://discord.com/api/v10/channels/thread-42",
+            method: "PATCH",
+            body: { archived: true },
+          },
+        ]);
+
+        const state = JSON.parse(await readFile(stateFile, "utf8"));
+        expect(state.threads["hsiii/health-check-system#42"].archived).toBe(
+          true,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        restoreEnvironmentVariable("GITHUB_WEBHOOK_SECRET", originalSecret);
+        restoreEnvironmentVariable("DISCORD_BOT_TOKEN", originalToken);
+        restoreEnvironmentVariable(
+          "GITHUB_PR_THREAD_STATE_FILE",
+          originalStateFile,
+        );
+        restoreEnvironmentVariable(
+          "GITHUB_PR_THREAD_CHANNEL_ID",
+          originalChannelId,
+        );
+        await rm(stateDirectory, { recursive: true });
+      }
+    },
+  );
+});
