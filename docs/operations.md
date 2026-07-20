@@ -93,31 +93,86 @@ slash commands and channel access components.
 
 ## Codex chatbot
 
+### Runtime architecture
+
+```mermaid
+sequenceDiagram
+    participant U as Discord user
+    participant D as Discord Gateway and REST API
+    participant H as Hosted MiniSago context broker
+    participant W as Reserved WebSocket workflow
+    participant M as Unlocked Mac helper
+    participant C as Codex Luna high
+
+    U->>D: Mention MiniSago
+    D->>H: MESSAGE_CREATE
+    H->>H: Authorize guild or owner
+    H->>W: Acquire workflow reservation
+    H->>D: Fetch 20 nearby messages
+    D-->>H: Humans + MiniSago replies + reactions
+    H->>W: Context planning job
+    W->>M: Authenticated job
+    M->>C: Schema constrained planning prompt
+    C-->>M: local 20 / medium 50 / extended 100 + up to 4 searches
+    M-->>W: Validated plan
+    W-->>H: Plan result
+
+    opt Plan requests more context
+        par Same channel history
+            H->>D: Fetch 50 or 100 messages
+            D-->>H: Compact message context
+        and Guild search
+            H->>D: Fetch requester roles and channel overwrites
+            D-->>H: Permission data
+            H->>H: Keep requester visible channels only
+            H->>D: Search allowed channel IDs
+            D-->>H: Up to 25 deduplicated matches
+        end
+    end
+
+    H->>W: Answer job within same reservation
+    W->>M: Context + search results + attachment metadata
+    M->>M: Download allowed Discord CDN files with cancellation and budgets
+    M->>C: Ephemeral answer prompt + supported files
+    C-->>M: Discord reply
+    M-->>W: Result
+    W-->>H: Result
+    H->>D: Reply with only the requester ping allowed
+    H->>W: Release reservation
+
+    Note over W,M: Timeout disconnect or Mac lock cancels the active job
+```
+
 The hosted process receives `@MiniSago` messages from any member of the two
 chatbot guilds through the existing Discord Gateway. Hsi retains access in
 other visible servers and direct messages. In a guild, it first fetches up to 20
-human messages around the mention and sends a transient context-planning job
-through the authenticated WebSocket at `/api/mac-agent/ws`. There is no
-polling, public Mac endpoint, or durable queue.
+nearby human messages plus MiniSago's own prior replies and sends a transient
+context-planning job through the authenticated WebSocket at
+`/api/mac-agent/ws`. Message context includes compact reaction emoji and counts,
+but not the list of members who reacted. There is no polling, public Mac
+endpoint, or durable queue.
 
 Natural requests to find an older message use Discord's official guild message
 search endpoint. Codex returns a JSON Schema-constrained plan that chooses the
-nearby window or up to 100 same-channel messages and may add up to four guild
+nearby window or 50/100 same-channel messages and may add up to four guild
 searches using bounded text, sender, link, file, media, embed, hostname, and
 attachment-type filters. MiniSago validates the plan, performs same-channel and
 guild reads in parallel, resolves a named sender—or the requester from “I” and
-“我”—excludes the triggering message, and deduplicates results. The answer run
-receives compact message records plus up to 25 guild matches with channel names
-and original Discord jump links. A jump link acts as the safe repost path
-without copying or re-uploading someone else's attachment. Discord requires
-View Channel, Read Message History, and the Message Content privileged intent
-for these reads.
+“我”—excludes the triggering message, and deduplicates results. Guild search is
+restricted to channels where the requester has View Channel and Read Message
+History; if role data is unavailable, it falls back to the current channel. The
+answer run receives compact message records plus up to 25 guild matches with
+channel names and original Discord jump links. A jump link acts as the safe
+repost path without copying or re-uploading someone else's attachment. Discord
+requires View Channel, Read Message History, and the Message Content privileged
+intent for these reads.
 
 The Mac helper runs `gpt-5.6-luna` with high reasoning and live public web
 search. Each run is ephemeral. Codex receives only the current transcript and
-up to 10 relevant supported attachments of at most 20 MB each. Images, PDFs,
-DOCX, and common text formats are supported. Temporary files are removed after
-the run, and output is shortened to one Discord message.
+up to 10 relevant supported attachments of at most 20 MB each and 40 MB total.
+Images, PDFs, DOCX, and common text formats are supported. Downloads accept
+only Discord's HTTPS CDN hosts and stop when the request is cancelled. Temporary
+files are removed after the run, and output is shortened to one Discord message.
 
 The local process uses an isolated workspace and Codex home, a restrictive
 permission profile, and a macOS process sandbox that prevents Codex from

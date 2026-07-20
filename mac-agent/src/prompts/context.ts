@@ -1,4 +1,4 @@
-import type { ChatbotJob } from "../../../lib/chatbot/protocol";
+import type { ChatbotJob, ChatbotMessage } from "../../../lib/chatbot/protocol";
 
 function block(name: string, value: unknown) {
   const content = typeof value === "string" ? value : JSON.stringify(value);
@@ -17,12 +17,14 @@ function promptAttachment({
 
 function promptMessage(message: ChatbotMessage): Record<string, unknown> {
   return {
+    ...(message.role ? { role: message.role } : {}),
     author: message.author,
     timestamp: message.timestamp,
     content: message.content,
     ...(message.attachments.length > 0
       ? { attachments: message.attachments.map(promptAttachment) }
       : {}),
+    ...(message.reactions?.length ? { reactions: message.reactions } : {}),
     ...(message.channelName ? { channelName: message.channelName } : {}),
     ...(message.jumpUrl ? { jumpUrl: message.jumpUrl } : {}),
     ...(message.referencedMessage
@@ -33,7 +35,12 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
 
 function requestMessageContext(job: ChatbotJob) {
   const message = job.requestMessage;
-  if (!message || (!message.attachments.length && !message.referencedMessage)) {
+  if (
+    !message ||
+    (!message.attachments.length &&
+      !message.reactions?.length &&
+      !message.referencedMessage)
+  ) {
     return undefined;
   }
 
@@ -43,6 +50,7 @@ function requestMessageContext(job: ChatbotJob) {
     ...(message.attachments.length > 0
       ? { attachments: message.attachments.map(promptAttachment) }
       : {}),
+    ...(message.reactions?.length ? { reactions: message.reactions } : {}),
     ...(message.referencedMessage
       ? { referencedMessage: promptMessage(message.referencedMessage) }
       : {}),

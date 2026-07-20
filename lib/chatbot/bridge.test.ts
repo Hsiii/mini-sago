@@ -111,4 +111,73 @@ describe("Mac agent bridge", () => {
     });
     expect(bridge.getStatus()).toBe("available");
   });
+
+  test("reserves the bridge across planning and answering jobs", async () => {
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    const bridge = new MacAgentBridge();
+    const { socket } = fakeSocket();
+    const job: ChatbotJob = {
+      id: "planner-1",
+      purpose: "context_plan",
+      channelId: "channel-1",
+      requestMessageId: "message-1",
+      request: "What did we decide?",
+      messages: [],
+    };
+
+    bridge.open(socket);
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "authenticate",
+        protocolVersion: CHATBOT_PROTOCOL_VERSION,
+        secret: bridgeSecret,
+      }),
+    );
+    bridge.message(
+      socket,
+      JSON.stringify({ type: "availability", available: true }),
+    );
+
+    const acquired = bridge.acquireWorkflow();
+    expect(acquired.status).toBe("accepted");
+    expect(bridge.getStatus()).toBe("busy");
+    expect(bridge.acquireWorkflow().status).toBe("busy");
+    if (acquired.status !== "accepted") throw new Error("Expected workflow");
+
+    const planning = acquired.workflow.dispatch(job);
+    expect(planning.status).toBe("accepted");
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "result",
+        jobId: job.id,
+        ok: true,
+        content: '{"history":"local","queries":[]}',
+      }),
+    );
+    if (planning.status !== "accepted") throw new Error("Expected planning");
+    await planning.result;
+
+    const answer = acquired.workflow.dispatch({
+      ...job,
+      id: "answer-1",
+      purpose: "answer",
+    });
+    expect(answer.status).toBe("accepted");
+    acquired.workflow.release();
+    expect(bridge.getStatus()).toBe("busy");
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "answer-1",
+        ok: true,
+        content: "Friday",
+      }),
+    );
+    if (answer.status !== "accepted") throw new Error("Expected answer");
+    await answer.result;
+    expect(bridge.getStatus()).toBe("available");
+  });
 });

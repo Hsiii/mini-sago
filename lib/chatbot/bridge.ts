@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { Server, ServerWebSocket } from "bun";
 
 import {
@@ -19,7 +19,7 @@ type PendingJob = {
   timer: ReturnType<typeof setTimeout>;
 };
 
-type MacAgentJobResult =
+export type MacAgentJobResult =
   | { ok: true; content: string }
   | { ok: false; error: string };
 
@@ -27,6 +27,16 @@ export type DispatchResult =
   | { status: "offline" }
   | { status: "busy" }
   | { status: "accepted"; result: Promise<MacAgentJobResult> };
+
+export type WorkflowLease = {
+  dispatch: (job: ChatbotJob) => DispatchResult;
+  release: () => void;
+};
+
+export type AcquireWorkflowResult =
+  | { status: "offline" }
+  | { status: "busy" }
+  | { status: "accepted"; workflow: WorkflowLease };
 
 type Socket = ServerWebSocket<MacAgentSocketData>;
 
@@ -61,6 +71,7 @@ export class MacAgentBridge {
   >();
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingJob: PendingJob | null = null;
+  private workflowId: string | null = null;
 
   isConfigured() {
     return this.configuredSecret() !== null;
@@ -71,7 +82,9 @@ export class MacAgentBridge {
       return "offline" as const;
     }
 
-    return this.pendingJob ? ("busy" as const) : ("available" as const);
+    return this.pendingJob || this.workflowId
+      ? ("busy" as const)
+      : ("available" as const);
   }
 
   handleUpgrade(request: Request, server: Server<MacAgentSocketData>) {
@@ -89,11 +102,41 @@ export class MacAgentBridge {
   }
 
   dispatch(job: ChatbotJob): DispatchResult {
-    if (this.getStatus() === "offline") {
+    return this.dispatchJob(job);
+  }
+
+  acquireWorkflow(): AcquireWorkflowResult {
+    if (!this.activeSocket || !this.available) {
       return { status: "offline" };
     }
 
-    if (this.getStatus() === "busy") {
+    if (this.pendingJob || this.workflowId) {
+      return { status: "busy" };
+    }
+
+    const workflowId = randomUUID();
+    this.workflowId = workflowId;
+
+    return {
+      status: "accepted",
+      workflow: {
+        dispatch: (job) => this.dispatchJob(job, workflowId),
+        release: () => {
+          if (this.workflowId === workflowId) this.workflowId = null;
+        },
+      },
+    };
+  }
+
+  private dispatchJob(job: ChatbotJob, workflowId?: string): DispatchResult {
+    if (!this.activeSocket || !this.available) {
+      return { status: "offline" };
+    }
+
+    if (
+      this.pendingJob ||
+      (this.workflowId && this.workflowId !== workflowId)
+    ) {
       return { status: "busy" };
     }
 
@@ -177,6 +220,7 @@ export class MacAgentBridge {
 
     this.activeSocket = null;
     this.available = false;
+    this.workflowId = null;
     this.clearHeartbeatTimeout();
     this.failPendingJob("The Mac disconnected while answering.");
   }

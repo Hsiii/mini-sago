@@ -10,7 +10,13 @@ import type { ChatbotAttachment, ChatbotJob } from "../../lib/chatbot/protocol";
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 const MAX_EXTRACTED_CHARACTERS = 100_000;
+const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024;
+const MAX_TOTAL_EXTRACTED_CHARACTERS = 200_000;
 const DOWNLOAD_TIMEOUT_MS = 20_000;
+const ALLOWED_ATTACHMENT_HOSTS = new Set([
+  "cdn.discordapp.com",
+  "media.discordapp.net",
+]);
 
 const textContentTypes = new Set([
   "application/json",
@@ -108,10 +114,25 @@ function rankCandidates(job: ChatbotJob) {
     .slice(0, MAX_ATTACHMENTS);
 }
 
-async function download(url: string) {
+function validateAttachmentUrl(value: string) {
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    !ALLOWED_ATTACHMENT_HOSTS.has(url.hostname)
+  ) {
+    throw new Error("attachment URL is not an allowed Discord CDN URL");
+  }
+}
+
+async function download(url: string, signal?: AbortSignal) {
+  validateAttachmentUrl(url);
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)])
+      : AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
   });
+
+  if (response.url) validateAttachmentUrl(response.url);
 
   if (!response.ok) {
     throw new Error(`download returned ${response.status}`);
@@ -155,11 +176,11 @@ async function download(url: string) {
   return bytes;
 }
 
-function truncate(value: string) {
-  return value.slice(0, MAX_EXTRACTED_CHARACTERS);
+function truncate(value: string, maximum = MAX_EXTRACTED_CHARACTERS) {
+  return value.slice(0, maximum);
 }
 
-async function extractPdf(bytes: Uint8Array) {
+async function extractPdf(bytes: Uint8Array, maximum: number) {
   const document = await getDocument({
     data: bytes,
     useWorkerFetch: false,
@@ -176,20 +197,27 @@ async function extractPdf(bytes: Uint8Array) {
 
     pages.push(`[Page ${pageNumber}] ${text}`);
     characterCount += text.length;
-    if (characterCount >= MAX_EXTRACTED_CHARACTERS) {
+    if (characterCount >= maximum) {
       break;
     }
   }
 
-  return truncate(pages.join("\n"));
+  return truncate(pages.join("\n"), maximum);
 }
 
-async function extractText(attachment: ChatbotAttachment, bytes: Uint8Array) {
+async function extractText(
+  attachment: ChatbotAttachment,
+  bytes: Uint8Array,
+  maximum: number,
+) {
   const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
   const extension = extname(attachment.filename).toLocaleLowerCase();
 
   if (contentType === "application/pdf" || extension === ".pdf") {
-    return extractPdf(bytes);
+    if (!new TextDecoder().decode(bytes.slice(0, 5)).startsWith("%PDF-")) {
+      throw new Error("file does not contain PDF data");
+    }
+    return extractPdf(bytes, maximum);
   }
 
   if (
@@ -197,13 +225,16 @@ async function extractText(attachment: ChatbotAttachment, bytes: Uint8Array) {
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     extension === ".docx"
   ) {
+    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+      throw new Error("file does not contain DOCX data");
+    }
     const result = await mammoth.extractRawText({
       buffer: Buffer.from(bytes),
     });
-    return truncate(result.value);
+    return truncate(result.value, maximum);
   }
 
-  return truncate(new TextDecoder().decode(bytes));
+  return truncate(new TextDecoder().decode(bytes), maximum);
 }
 
 function safeFilename(index: number, filename: string) {
@@ -213,39 +244,76 @@ function safeFilename(index: number, filename: string) {
 
 export async function prepareAttachments(
   job: ChatbotJob,
+  signal?: AbortSignal,
 ): Promise<PreparedAttachments> {
   const directory = await mkdtemp(join(tmpdir(), "minisago-chatbot-"));
   const imagePaths: string[] = [];
   const textBlocks: string[] = [];
   const ignored: string[] = [];
   const candidates = rankCandidates(job);
+  let downloadedBytes = 0;
+  let extractedCharacters = 0;
 
-  for (const [index, candidate] of candidates.entries()) {
-    const { attachment } = candidate;
+  try {
+    for (const [index, candidate] of candidates.entries()) {
+      signal?.throwIfAborted();
+      const { attachment } = candidate;
 
-    if (attachment.size > MAX_ATTACHMENT_BYTES) {
-      ignored.push(`${attachment.filename}: exceeds 20 MB`);
-      continue;
-    }
-
-    try {
-      const bytes = await download(attachment.url);
-      const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
-
-      if (imageContentTypes.has(contentType)) {
-        const path = join(directory, safeFilename(index, attachment.filename));
-        await Bun.write(path, bytes);
-        imagePaths.push(path);
+      if (attachment.size > MAX_ATTACHMENT_BYTES) {
+        ignored.push(`${attachment.filename}: exceeds 20 MB`);
+        continue;
+      }
+      if (downloadedBytes + attachment.size > MAX_TOTAL_ATTACHMENT_BYTES) {
+        ignored.push(
+          `${attachment.filename}: exceeds the 40 MB request budget`,
+        );
         continue;
       }
 
-      const text = await extractText(attachment, bytes);
-      textBlocks.push(`Attachment: ${attachment.filename}\n${text}`);
-    } catch (error) {
-      ignored.push(
-        `${attachment.filename}: ${error instanceof Error ? error.message : "could not analyze"}`,
-      );
+      try {
+        const bytes = await download(attachment.url, signal);
+        if (downloadedBytes + bytes.byteLength > MAX_TOTAL_ATTACHMENT_BYTES) {
+          ignored.push(
+            `${attachment.filename}: exceeds the 40 MB request budget`,
+          );
+          continue;
+        }
+        downloadedBytes += bytes.byteLength;
+        const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
+
+        if (imageContentTypes.has(contentType)) {
+          const path = join(
+            directory,
+            safeFilename(index, attachment.filename),
+          );
+          await Bun.write(path, bytes);
+          imagePaths.push(path);
+          continue;
+        }
+
+        const remaining = Math.min(
+          MAX_EXTRACTED_CHARACTERS,
+          MAX_TOTAL_EXTRACTED_CHARACTERS - extractedCharacters,
+        );
+        if (remaining <= 0) {
+          ignored.push(
+            `${attachment.filename}: exceeds the text extraction budget`,
+          );
+          continue;
+        }
+        const text = await extractText(attachment, bytes, remaining);
+        extractedCharacters += text.length;
+        textBlocks.push(`Attachment: ${attachment.filename}\n${text}`);
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        ignored.push(
+          `${attachment.filename}: ${error instanceof Error ? error.message : "could not analyze"}`,
+        );
+      }
     }
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true });
+    throw error;
   }
 
   return {
@@ -260,4 +328,7 @@ export async function prepareAttachments(
 export const attachmentLimits = {
   count: MAX_ATTACHMENTS,
   bytes: MAX_ATTACHMENT_BYTES,
+  totalBytes: MAX_TOTAL_ATTACHMENT_BYTES,
+  extractedCharacters: MAX_EXTRACTED_CHARACTERS,
+  totalExtractedCharacters: MAX_TOTAL_EXTRACTED_CHARACTERS,
 };

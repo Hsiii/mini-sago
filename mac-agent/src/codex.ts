@@ -114,22 +114,25 @@ export async function checkCodexAuthentication({
 }
 
 export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
-  const prepared = await prepareAttachments(
-    job.purpose === "context_plan"
-      ? {
-          ...job,
-          requestMessage: undefined,
-          messages: [],
-          searchResults: [],
-        }
-      : job,
-  );
   const timeoutController = new AbortController();
   const timeout = setTimeout(() => timeoutController.abort(), LOCAL_TIMEOUT_MS);
   const abort = () => timeoutController.abort();
   options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) timeoutController.abort();
+  let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
 
   try {
+    prepared = await prepareAttachments(
+      job.purpose === "context_plan"
+        ? {
+            ...job,
+            requestMessage: undefined,
+            messages: [],
+            searchResults: [],
+          }
+        : job,
+      timeoutController.signal,
+    );
     const prompt = buildCodexPrompt(job, prepared.textBlocks, prepared.ignored);
     const outputSchema = outputSchemaForJob(job);
     const codexArguments = [
@@ -216,6 +219,6 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", abort);
-    await prepared.cleanup();
+    await prepared?.cleanup();
   }
 }

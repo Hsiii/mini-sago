@@ -10,6 +10,9 @@ describe("chatbot attachment limits", () => {
     expect(attachmentLimits).toEqual({
       count: 10,
       bytes: 20 * 1024 * 1024,
+      totalBytes: 40 * 1024 * 1024,
+      extractedCharacters: 100_000,
+      totalExtractedCharacters: 200_000,
     });
   });
 
@@ -120,4 +123,52 @@ describe("chatbot attachment limits", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  test.serial(
+    "stops before downloading when the request is cancelled",
+    async () => {
+      const originalFetch = globalThis.fetch;
+      let fetched = false;
+      globalThis.fetch = (async () => {
+        fetched = true;
+        return new Response("unused");
+      }) as unknown as typeof fetch;
+      const controller = new AbortController();
+      controller.abort();
+
+      try {
+        await expect(
+          prepareAttachments(
+            {
+              id: "job-cancelled",
+              channelId: "channel-1",
+              requestMessageId: "message-1",
+              request: "read this",
+              messages: [
+                {
+                  id: "message-1",
+                  author: "Hsi",
+                  timestamp: "2026-07-20T10:00:00.000Z",
+                  content: "notes",
+                  attachments: [
+                    {
+                      id: "attachment-1",
+                      filename: "notes.txt",
+                      contentType: "text/plain",
+                      size: 5,
+                      url: "https://cdn.discordapp.com/notes.txt",
+                    },
+                  ],
+                },
+              ],
+            },
+            controller.signal,
+          ),
+        ).rejects.toThrow();
+        expect(fetched).toBe(false);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 });

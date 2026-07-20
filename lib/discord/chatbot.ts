@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { macAgentBridge } from "../chatbot/bridge";
+import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import type {
   ChatbotAttachment,
   ChatbotJob,
@@ -15,6 +15,7 @@ const AUTHORIZED_GUILD_IDS = new Set([
 ]);
 const LOCAL_CONTEXT_LIMIT = 20;
 const LOCAL_CONTEXT_FETCH_LIMIT = 25;
+const MEDIUM_CONTEXT_LIMIT = 50;
 const MESSAGE_LIMIT = 100;
 const MESSAGE_PAGE_LIMIT = 100;
 const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -44,6 +45,9 @@ type DiscordMessage = {
     global_name?: string | null;
     bot?: boolean;
   };
+  member?: {
+    roles?: string[];
+  };
   attachments?: DiscordAttachment[];
   embeds?: Array<{
     title?: string;
@@ -51,6 +55,15 @@ type DiscordMessage = {
     url?: string;
   }>;
   sticker_items?: Array<{ name?: string }>;
+  reactions?: Array<{
+    count: number;
+    me?: boolean;
+    emoji: {
+      id?: string | null;
+      name?: string | null;
+      animated?: boolean;
+    };
+  }>;
   referenced_message?: DiscordMessage | null;
 };
 
@@ -66,6 +79,18 @@ type DiscordGuildMember = {
 type DiscordChannel = {
   id: string;
   name?: string;
+  type?: number;
+  permission_overwrites?: Array<{
+    id: string;
+    type: number;
+    allow: string;
+    deny: string;
+  }>;
+};
+
+type DiscordRole = {
+  id: string;
+  permissions: string;
 };
 
 type DiscordMessageSearchResponse = {
@@ -108,7 +133,7 @@ export type DiscordSearchQuery = {
 };
 
 export type DiscordContextPlan = {
-  history: "local" | "extended";
+  history: "local" | "medium" | "extended";
   queries: DiscordSearchQuery[];
 };
 
@@ -156,25 +181,62 @@ function messageContent(message: DiscordMessage) {
   return parts.filter(Boolean).join("\n");
 }
 
+function messageReactions(message: DiscordMessage) {
+  return (message.reactions ?? []).flatMap((reaction) => {
+    const name = reaction.emoji.name;
+    if (!name) return [];
+
+    return [
+      {
+        emoji: reaction.emoji.id
+          ? `<${reaction.emoji.animated ? "a" : ""}:${name}:${reaction.emoji.id}>`
+          : name,
+        count: reaction.count,
+        ...(reaction.me ? { me: true } : {}),
+      },
+    ];
+  });
+}
+
 function contextMessage(
   message: DiscordMessage,
+  botUserId?: string,
 ): Omit<ChatbotMessage, "referencedMessage"> {
   return {
     id: message.id,
+    role: message.author?.id === botUserId ? "assistant" : "user",
     author: authorName(message),
     timestamp: message.timestamp,
     content: messageContent(message),
     attachments: (message.attachments ?? []).map(attachment),
+    ...(message.reactions?.length
+      ? { reactions: messageReactions(message) }
+      : {}),
   };
 }
 
-export function toChatbotMessage(message: DiscordMessage): ChatbotMessage {
+export function toChatbotMessage(
+  message: DiscordMessage,
+  botUserId?: string,
+): ChatbotMessage {
   return {
-    ...contextMessage(message),
+    ...contextMessage(message, botUserId),
     referencedMessage: message.referenced_message
-      ? contextMessage(message.referenced_message)
+      ? contextMessage(message.referenced_message, botUserId)
       : undefined,
   };
+}
+
+export function isConversationContextMessage(
+  message: DiscordMessage,
+  requestMessageId: string,
+  botUserId: string,
+) {
+  return (
+    message.id !== requestMessageId &&
+    !message.webhook_id &&
+    (!message.author?.bot || message.author?.id === botUserId)
+  );
 }
 
 export function isHumanContextMessage(
@@ -233,7 +295,9 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
       history?: unknown;
       queries?: unknown;
     };
-    const history = payload.history === "extended" ? "extended" : "local";
+    const history = ["medium", "extended"].includes(payload.history as string)
+      ? (payload.history as "medium" | "extended")
+      : "local";
     if (!Array.isArray(payload.queries)) return { history, queries: [] };
 
     const queries = payload.queries.slice(0, 4).flatMap((value) => {
@@ -354,6 +418,110 @@ async function resolveGuildMemberId({
   return match?.user?.id;
 }
 
+const ADMINISTRATOR = 1n << 3n;
+const VIEW_CHANNEL = 1n << 10n;
+const READ_MESSAGE_HISTORY = 1n << 16n;
+const SEARCHABLE_CHANNEL_TYPES = new Set([0, 5, 15, 16]);
+
+export function canMemberSearchChannel({
+  guildId,
+  userId,
+  roleIds,
+  roles,
+  channel,
+}: {
+  guildId: string;
+  userId: string;
+  roleIds: string[];
+  roles: DiscordRole[];
+  channel: DiscordChannel;
+}) {
+  const memberRoleIds = new Set([guildId, ...roleIds]);
+  let permissions = roles.reduce(
+    (value, role) =>
+      memberRoleIds.has(role.id) ? value | BigInt(role.permissions) : value,
+    0n,
+  );
+
+  if ((permissions & ADMINISTRATOR) === ADMINISTRATOR) return true;
+
+  const overwrites = channel.permission_overwrites ?? [];
+  const applyOverwrite = (deny: bigint, allow: bigint) => {
+    permissions = (permissions & ~deny) | allow;
+  };
+  const everyone = overwrites.find(
+    (overwrite) => overwrite.type === 0 && overwrite.id === guildId,
+  );
+  if (everyone) applyOverwrite(BigInt(everyone.deny), BigInt(everyone.allow));
+
+  let roleDeny = 0n;
+  let roleAllow = 0n;
+  for (const overwrite of overwrites) {
+    if (overwrite.type === 0 && roleIds.includes(overwrite.id)) {
+      roleDeny |= BigInt(overwrite.deny);
+      roleAllow |= BigInt(overwrite.allow);
+    }
+  }
+  applyOverwrite(roleDeny, roleAllow);
+
+  const member = overwrites.find(
+    (overwrite) => overwrite.type === 1 && overwrite.id === userId,
+  );
+  if (member) applyOverwrite(BigInt(member.deny), BigInt(member.allow));
+
+  return (
+    (permissions & VIEW_CHANNEL) === VIEW_CHANNEL &&
+    (permissions & READ_MESSAGE_HISTORY) === READ_MESSAGE_HISTORY
+  );
+}
+
+async function requesterSearchChannels({
+  guildId,
+  requesterUserId,
+  requesterRoleIds,
+  currentChannelId,
+  discordRequest,
+}: {
+  guildId: string;
+  requesterUserId: string;
+  requesterRoleIds?: string[];
+  currentChannelId: string;
+  discordRequest: DiscordRequest;
+}) {
+  if (!requesterRoleIds) {
+    return { ids: [currentChannelId], names: new Map<string, string>() };
+  }
+
+  try {
+    const [roles, channels] = await Promise.all([
+      discordRequest<DiscordRole[]>(`/guilds/${guildId}/roles`),
+      discordRequest<DiscordChannel[]>(`/guilds/${guildId}/channels`),
+    ]);
+    const visible = channels.filter(
+      (channel) =>
+        SEARCHABLE_CHANNEL_TYPES.has(channel.type ?? -1) &&
+        canMemberSearchChannel({
+          guildId,
+          userId: requesterUserId,
+          roleIds: requesterRoleIds,
+          roles,
+          channel,
+        }),
+    );
+    const ids = [currentChannelId, ...visible.map((channel) => channel.id)]
+      .filter((id, index, values) => values.indexOf(id) === index)
+      .slice(0, 500);
+    const names = new Map(
+      visible.flatMap((channel) =>
+        channel.name ? [[channel.id, channel.name] as const] : [],
+      ),
+    );
+    return { ids, names };
+  } catch {
+    return { ids: [currentChannelId], names: new Map<string, string>() };
+  }
+}
+
 function toSearchResult(
   message: DiscordMessage,
   guildId: string,
@@ -370,16 +538,27 @@ function toSearchResult(
 export async function searchGuildMessages({
   guildId,
   requesterUserId,
+  requesterRoleIds,
+  currentChannelId,
   requestMessageId,
   queries,
   discordRequest,
 }: {
   guildId: string;
   requesterUserId: string;
+  requesterRoleIds?: string[];
+  currentChannelId: string;
   requestMessageId: string;
   queries: DiscordSearchQuery[];
   discordRequest: DiscordRequest;
 }) {
+  const searchableChannels = await requesterSearchChannels({
+    guildId,
+    requesterUserId,
+    requesterRoleIds,
+    currentChannelId,
+    discordRequest,
+  });
   const memberIds = new Map<string, string | undefined>();
   const matches: DiscordMessage[] = [];
   const seenMessages = new Set<string>();
@@ -415,6 +594,9 @@ export async function searchGuildMessages({
     if (search.linkHostname) query.append("link_hostname", search.linkHostname);
     if (search.attachmentExtension)
       query.append("attachment_extension", search.attachmentExtension);
+    for (const channelId of searchableChannels.ids) {
+      query.append("channel_id", channelId);
+    }
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const response = await discordRequest<DiscordMessageSearchResponse>(
@@ -447,27 +629,20 @@ export async function searchGuildMessages({
 
   if (matches.length === 0) return [];
 
-  const channels = await discordRequest<DiscordChannel[]>(
-    `/guilds/${guildId}/channels`,
-  );
-  const channelNames = new Map(
-    channels.flatMap((channel) =>
-      channel.name ? [[channel.id, channel.name] as const] : [],
-    ),
-  );
-
   return matches.map((message) =>
-    toSearchResult(message, guildId, channelNames),
+    toSearchResult(message, guildId, searchableChannels.names),
   );
 }
 
 export async function getNearbyHumanMessages({
   channelId,
   requestMessageId,
+  botUserId,
   discordRequest,
 }: {
   channelId: string;
   requestMessageId: string;
+  botUserId: string;
   discordRequest: DiscordRequest;
 }) {
   const query = new URLSearchParams({
@@ -479,21 +654,27 @@ export async function getNearbyHumanMessages({
   );
 
   return messages
-    .filter((message) => isHumanContextMessage(message, requestMessageId))
+    .filter((message) =>
+      isConversationContextMessage(message, requestMessageId, botUserId),
+    )
     .slice(0, LOCAL_CONTEXT_LIMIT)
-    .map(toChatbotMessage)
+    .map((message) => toChatbotMessage(message, botUserId))
     .reverse();
 }
 
 export async function getRecentHumanMessages({
   channelId,
   requestMessageId,
+  botUserId,
   discordRequest,
+  messageLimit = MESSAGE_LIMIT,
   now = new Date(),
 }: {
   channelId: string;
   requestMessageId: string;
+  botUserId: string;
   discordRequest: DiscordRequest;
+  messageLimit?: number;
   now?: Date;
 }) {
   const cutoff = new Date(now.getTime() - HISTORY_WINDOW_MS);
@@ -512,17 +693,17 @@ export async function getRecentHumanMessages({
 
     for (const message of page) {
       const withinHistoryWindow = new Date(message.timestamp) >= cutoff;
-      const needsBackfill = messages.length < MESSAGE_LIMIT;
+      const needsBackfill = messages.length < messageLimit;
 
       if (
-        isHumanContextMessage(message, requestMessageId) &&
+        isConversationContextMessage(message, requestMessageId, botUserId) &&
         (withinHistoryWindow || needsBackfill)
       ) {
-        messages.push(toChatbotMessage(message));
+        messages.push(toChatbotMessage(message, botUserId));
       }
 
-      if (messages.length >= MESSAGE_LIMIT) {
-        return messages.slice(0, MESSAGE_LIMIT).reverse();
+      if (messages.length >= messageLimit) {
+        return messages.slice(0, messageLimit).reverse();
       }
     }
 
@@ -558,7 +739,9 @@ async function withTyping<T>(
   discordRequest: DiscordRequest,
   task: () => Promise<T>,
 ) {
-  await discordRequest(`/channels/${channelId}/typing`, { method: "POST" });
+  await discordRequest(`/channels/${channelId}/typing`, {
+    method: "POST",
+  }).catch(() => undefined);
   const timer = setInterval(() => {
     void discordRequest(`/channels/${channelId}/typing`, {
       method: "POST",
@@ -606,9 +789,9 @@ export async function handleChatbotMention({
     return true;
   }
 
-  const bridgeStatus = macAgentBridge.getStatus();
+  const acquired = macAgentBridge.acquireWorkflow();
 
-  if (bridgeStatus === "offline") {
+  if (acquired.status === "offline") {
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
       body: replyBody(message, "My Mac is offline right now."),
@@ -616,7 +799,7 @@ export async function handleChatbotMention({
     return true;
   }
 
-  if (bridgeStatus === "busy") {
+  if (acquired.status === "busy") {
     await discordRequest(`/channels/${message.channel_id}/messages`, {
       method: "POST",
       body: replyBody(message, "I’m busy with another request right now."),
@@ -624,20 +807,22 @@ export async function handleChatbotMention({
     return true;
   }
 
-  const result = await withTyping(
-    message.channel_id,
-    discordRequest,
-    async () => {
-      const requestMessage = toChatbotMessage(message);
+  const { workflow } = acquired;
+  let result: MacAgentJobResult;
+  try {
+    result = await withTyping(message.channel_id, discordRequest, async () => {
+      const requestMessage = toChatbotMessage(message, botUserId);
       let messages = message.guild_id
         ? await getNearbyHumanMessages({
             channelId: message.channel_id,
             requestMessageId: message.id,
+            botUserId,
             discordRequest,
           })
         : await getRecentHumanMessages({
             channelId: message.channel_id,
             requestMessageId: message.id,
+            botUserId,
             discordRequest,
           });
       let search: {
@@ -660,7 +845,7 @@ export async function handleChatbotMention({
           requestMessage,
           messages,
         };
-        const plannerDispatch = macAgentBridge.dispatch(plannerJob);
+        const plannerDispatch = workflow.dispatch(plannerJob);
 
         if (plannerDispatch.status === "accepted") {
           const plannerResult = await plannerDispatch.result;
@@ -678,12 +863,20 @@ export async function handleChatbotMention({
           console.warn("Discord context planning unavailable.");
         }
 
-        const historyPromise =
+        const historyLimit =
           plan.history === "extended"
+            ? MESSAGE_LIMIT
+            : plan.history === "medium"
+              ? MEDIUM_CONTEXT_LIMIT
+              : LOCAL_CONTEXT_LIMIT;
+        const historyPromise =
+          plan.history !== "local"
             ? getRecentHumanMessages({
                 channelId: message.channel_id,
                 requestMessageId: message.id,
+                botUserId,
                 discordRequest,
+                messageLimit: historyLimit,
               })
             : Promise.resolve(messages);
         const searchPromise =
@@ -691,6 +884,8 @@ export async function handleChatbotMention({
             ? searchGuildMessages({
                 guildId: message.guild_id,
                 requesterUserId,
+                requesterRoleIds: message.member?.roles,
+                currentChannelId: message.channel_id,
                 requestMessageId: message.id,
                 queries: plan.queries,
                 discordRequest,
@@ -722,7 +917,7 @@ export async function handleChatbotMention({
         searchStatus: search.status,
         searchResults: search.results,
       };
-      const dispatch = macAgentBridge.dispatch(job);
+      const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
         return { ok: false as const, error: "The Mac disconnected." };
@@ -733,8 +928,10 @@ export async function handleChatbotMention({
       }
 
       return dispatch.result;
-    },
-  );
+    });
+  } finally {
+    workflow.release();
+  }
   const content = result.ok
     ? formatDiscordAnswer(result.content)
     : "I couldn’t finish that request. Please try again.";

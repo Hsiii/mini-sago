@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  canMemberSearchChannel,
   extractMentionRequest,
   fallbackGuildSearchQueries,
   formatDiscordAnswer,
   getNearbyHumanMessages,
   getRecentHumanMessages,
+  isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
   parseDiscordContextPlan,
@@ -76,6 +78,7 @@ describe("Discord chatbot", () => {
     const messages = await getRecentHumanMessages({
       channelId: "channel-1",
       requestMessageId: "request",
+      botUserId: BOT_ID,
       now: new Date("2026-07-20T12:00:00.000Z"),
       discordRequest: async (path) => {
         requestedPaths.push(path);
@@ -106,6 +109,7 @@ describe("Discord chatbot", () => {
     const messages = await getNearbyHumanMessages({
       channelId: "channel-1",
       requestMessageId: "request",
+      botUserId: BOT_ID,
       discordRequest: async (path) => {
         requestedPaths.push(path);
         return nearby as never;
@@ -120,6 +124,26 @@ describe("Discord chatbot", () => {
     expect(messages.at(-1)?.id).toBe("message-0");
     expect(messages.some((message) => message.id === "request")).toBe(false);
     expect(messages.some((message) => message.id === "message-3")).toBe(false);
+  });
+
+  test("keeps MiniSago replies as assistant context but excludes other bots", () => {
+    const base = {
+      id: "message-1",
+      channel_id: "channel-1",
+      content: "earlier answer",
+      timestamp: "2026-07-20T11:00:00.000Z",
+      author: { id: BOT_ID, username: "MiniSago", bot: true },
+    };
+
+    expect(isConversationContextMessage(base, "request", BOT_ID)).toBe(true);
+    expect(
+      isConversationContextMessage(
+        { ...base, author: { ...base.author, id: "other-bot" } },
+        "request",
+        BOT_ID,
+      ),
+    ).toBe(false);
+    expect(toChatbotMessage(base, BOT_ID).role).toBe("assistant");
   });
 
   test("validates and limits Codex Discord context plans", () => {
@@ -161,6 +185,8 @@ describe("Discord chatbot", () => {
     const results = await searchGuildMessages({
       guildId: "guild-1",
       requesterUserId: "owner-1",
+      requesterRoleIds: ["role-1"],
+      currentChannelId: "channel-1",
       requestMessageId: "request-1",
       queries: [{ author: "Daniel", has: ["image"] }],
       discordRequest: async (path) => {
@@ -173,8 +199,24 @@ describe("Discord chatbot", () => {
             },
           ] as never;
         }
+        if (path === "/guilds/guild-1/roles") {
+          return [
+            { id: "guild-1", permissions: "0" },
+            { id: "role-1", permissions: "66560" },
+          ] as never;
+        }
         if (path === "/guilds/guild-1/channels") {
-          return [{ id: "channel-1", name: "memes" }] as never;
+          return [
+            { id: "channel-1", name: "memes", type: 0 },
+            {
+              id: "hidden-1",
+              name: "staff",
+              type: 0,
+              permission_overwrites: [
+                { id: "guild-1", type: 0, allow: "0", deny: "1024" },
+              ],
+            },
+          ] as never;
         }
 
         return {
@@ -203,10 +245,11 @@ describe("Discord chatbot", () => {
       },
     });
 
-    expect(requestedPaths).toHaveLength(3);
-    expect(requestedPaths[1]).not.toContain("channel_id=");
-    expect(requestedPaths[1]).toContain("author_id=user-1");
-    expect(requestedPaths[1]).toContain("has=image");
+    expect(requestedPaths).toHaveLength(4);
+    expect(requestedPaths[3]).toContain("channel_id=channel-1");
+    expect(requestedPaths[3]).not.toContain("hidden-1");
+    expect(requestedPaths[3]).toContain("author_id=user-1");
+    expect(requestedPaths[3]).toContain("has=image");
     expect(results).toHaveLength(1);
     expect(results[0]?.channelName).toBe("memes");
     expect(results[0]?.jumpUrl).toBe(
@@ -221,6 +264,8 @@ describe("Discord chatbot", () => {
     const results = await searchGuildMessages({
       guildId: "guild-1",
       requesterUserId: "owner-1",
+      requesterRoleIds: ["role-1"],
+      currentChannelId: "channel-2",
       requestMessageId: "request-1",
       queries: [
         { author: "self", content: "新 app" },
@@ -228,8 +273,14 @@ describe("Discord chatbot", () => {
       ],
       discordRequest: async (path) => {
         requestedPaths.push(path);
+        if (path === "/guilds/guild-1/roles") {
+          return [
+            { id: "guild-1", permissions: "0" },
+            { id: "role-1", permissions: "66560" },
+          ] as never;
+        }
         if (path === "/guilds/guild-1/channels") {
-          return [{ id: "channel-2", name: "projects" }] as never;
+          return [{ id: "channel-2", name: "projects", type: 0 }] as never;
         }
 
         searchRequestCount += 1;
@@ -251,12 +302,12 @@ describe("Discord chatbot", () => {
       },
     });
 
-    expect(requestedPaths).toHaveLength(3);
-    expect(requestedPaths[0]).not.toContain("/members/search");
-    expect(requestedPaths[0]).toContain("author_id=owner-1");
-    expect(requestedPaths[0]).toContain("content=%E6%96%B0+app");
-    expect(requestedPaths[1]).toContain("content=app");
-    expect(requestedPaths[1]).toContain("has=link");
+    expect(requestedPaths).toHaveLength(4);
+    expect(requestedPaths[2]).not.toContain("/members/search");
+    expect(requestedPaths[2]).toContain("author_id=owner-1");
+    expect(requestedPaths[2]).toContain("content=%E6%96%B0+app");
+    expect(requestedPaths[3]).toContain("content=app");
+    expect(requestedPaths[3]).toContain("has=link");
     expect(results.map((result) => result.id)).toEqual(["target-1"]);
     expect(results[0]?.channelName).toBe("projects");
   });
@@ -278,6 +329,17 @@ describe("Discord chatbot", () => {
             url: "https://cdn.discordapp.com/notes.pdf",
           },
         ],
+        reactions: [
+          {
+            count: 3,
+            emoji: { id: null, name: "😂" },
+          },
+          {
+            count: 2,
+            me: true,
+            emoji: { id: "emoji-1", name: "sago", animated: true },
+          },
+        ],
         referenced_message: {
           id: "message-1",
           channel_id: "channel-1",
@@ -288,6 +350,7 @@ describe("Discord chatbot", () => {
       }),
     ).toEqual({
       id: "message-2",
+      role: "user",
       author: "Hsi",
       timestamp: "2026-07-20T11:00:00.000Z",
       content: "see this",
@@ -300,14 +363,53 @@ describe("Discord chatbot", () => {
           url: "https://cdn.discordapp.com/notes.pdf",
         },
       ],
+      reactions: [
+        { emoji: "😂", count: 3 },
+        { emoji: "<a:sago:emoji-1>", count: 2, me: true },
+      ],
       referencedMessage: {
         id: "message-1",
+        role: "user",
         author: "Daniel",
         timestamp: "2026-07-18T11:00:00.000Z",
         content: "older context",
         attachments: [],
       },
     });
+  });
+
+  test("applies role and member channel overwrites before guild search", () => {
+    const roles = [
+      { id: "guild-1", permissions: "66560" },
+      { id: "role-1", permissions: "0" },
+    ];
+    const channel = {
+      id: "private-1",
+      type: 0,
+      permission_overwrites: [
+        { id: "guild-1", type: 0, allow: "0", deny: "1024" },
+        { id: "owner-1", type: 1, allow: "1024", deny: "0" },
+      ],
+    };
+
+    expect(
+      canMemberSearchChannel({
+        guildId: "guild-1",
+        userId: "owner-1",
+        roleIds: ["role-1"],
+        roles,
+        channel,
+      }),
+    ).toBe(true);
+    expect(
+      canMemberSearchChannel({
+        guildId: "guild-1",
+        userId: "other-1",
+        roleIds: ["role-1"],
+        roles,
+        channel,
+      }),
+    ).toBe(false);
   });
 
   test("shortens answers to one Discord message", () => {

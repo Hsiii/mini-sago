@@ -9,12 +9,20 @@ export type ChatbotAttachment = {
   url: string;
 };
 
+export type ChatbotReaction = {
+  emoji: string;
+  count: number;
+  me?: boolean;
+};
+
 export type ChatbotMessage = {
   id: string;
+  role?: "user" | "assistant";
   author: string;
   timestamp: string;
   content: string;
   attachments: ChatbotAttachment[];
+  reactions?: ChatbotReaction[];
   channelId?: string;
   channelName?: string;
   jumpUrl?: string;

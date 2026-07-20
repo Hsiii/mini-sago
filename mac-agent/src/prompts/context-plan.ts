@@ -6,7 +6,7 @@ export const CONTEXT_PLAN_OUTPUT_SCHEMA = {
   additionalProperties: false,
   required: ["history", "queries"],
   properties: {
-    history: { type: "string", enum: ["local", "extended"] },
+    history: { type: "string", enum: ["local", "medium", "extended"] },
     queries: {
       type: "array",
       maxItems: 4,
@@ -66,7 +66,7 @@ export const CONTEXT_PLAN_OUTPUT_SCHEMA = {
 
 const CONTEXT_PLAN_INSTRUCTIONS = `Plan read-only Discord context gathering for MiniSago. Do not answer.
 
-Return history:"local" when the nearby messages are sufficient or the request stands alone. Return history:"extended" when more same-channel history could resolve a follow-up, reference, summary, or earlier decision.
+Return history:"local" for the nearby 20 messages. Use history:"medium" for up to 50 messages when a little more same-channel context could resolve a follow-up or reference. Use history:"extended" for up to 100 messages only for broader summaries, older decisions, or long-running discussions.
 
 Add guild searches whenever server-wide history could improve the answer: member identity or activity, prior decisions, shared links, recurring topics, or specific messages. For "誰是 6uc", query both author:"6uc" and content:"6uc".
 
