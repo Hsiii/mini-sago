@@ -97,7 +97,7 @@ slash commands and channel access components.
 In `Hsiii/health-check-system` under Settings -> Webhooks, add a repository
 webhook with:
 
-- Payload URL: `https://YOUR_DOMAIN/api/github/webhook`
+- Payload URL: `https://bot.hsichen.dev/api/github/webhook`
 - Content type: `application/json`
 - Secret: the same random value as `GITHUB_WEBHOOK_SECRET`
 - Events: select only **Pull requests**
@@ -106,6 +106,11 @@ The `ready_for_review` action creates a public thread named after the PR and
 posts the review request. Repeated deliveries reuse the saved thread instead of
 creating duplicates. A `closed` action archives the thread only when GitHub
 marks the PR as merged.
+
+The production bridge is deployed at `bot.hsichen.dev`. MiniSago's access to
+the `專案討論` text channel (`1521506395034226830`) in guild
+`1521168712579682567` has been verified for viewing, sending messages, reading
+history, creating public threads, sending in threads, and managing threads.
 
 ## Admin and maintenance utilities
 
@@ -191,12 +196,12 @@ repository. Production configuration lives in
 Confirm the public endpoints after deployment:
 
 ```bash
-curl https://YOUR_DOMAIN/api/health
+curl https://bot.hsichen.dev/api/health
 ```
 
 ```text
-https://YOUR_DOMAIN/api/interactions
-https://YOUR_DOMAIN/api/github/webhook
+https://bot.hsichen.dev/api/interactions
+https://bot.hsichen.dev/api/github/webhook
 ```
 
 The platform caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
