@@ -119,9 +119,9 @@ function buildRoleText(role, counts) {
   const title = getRoleTitle(role);
   const description = getRoleDescription(role);
   const heading = `**${role.emoji ? `${role.emoji} ` : ""}${title}**`;
-  const summary = description ? `${heading}：${description}` : heading;
+  const summary = description ? `${heading} ${description}` : heading;
 
-  return `${summary}\n目前成員：${formatCount(counts[role.id])}`;
+  return `${summary}\n目前成員 ${formatCount(counts[role.id])}`;
 }
 
 function buildButtonRow(role) {
@@ -200,7 +200,7 @@ function buildPanelPayload(roles, counts) {
       : [
           {
             type: 10,
-            content: "目前還沒有設定可自助加入的頻道。",
+            content: "目前還沒有設定可自助加入的頻道",
           },
         ];
 

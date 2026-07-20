@@ -7,6 +7,7 @@ import {
   formatDiscordAnswer,
   getNearbyHumanMessages,
   getRecentHumanMessages,
+  handleChatbotMention,
   isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
@@ -33,6 +34,40 @@ describe("Discord chatbot", () => {
     expect(isChatbotAuthorized("member-3")).toBe(false);
     expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);
     expect(isChatbotAuthorized("917446775873343600")).toBe(true);
+  });
+
+  test("gives unauthorized guild members a safe Chinese reply", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "message-unauthorized",
+        channel_id: "channel-1",
+        guild_id: "other-guild",
+        content: `<@${BOT_ID}> help`,
+        timestamp: "2026-07-20T11:00:00.000Z",
+        author: { id: "other-user", username: "Other" },
+      },
+      botUserId: BOT_ID,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        return undefined as never;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(requests).toEqual([
+      {
+        path: "/channels/channel-1/messages",
+        body: {
+          content: "在這個伺服器裡我暫時只聽 <@917446775873343600> 的 抱歉啦",
+          message_reference: {
+            message_id: "message-unauthorized",
+            fail_if_not_exists: false,
+          },
+          allowed_mentions: { parse: [], replied_user: true },
+        },
+      },
+    ]);
   });
 
   test("accepts only human context messages other than the request", () => {
@@ -414,6 +449,7 @@ describe("Discord chatbot", () => {
 
   test("shortens answers to one Discord message", () => {
     expect(formatDiscordAnswer(" short answer ")).toBe("short answer");
+    expect(formatDiscordAnswer("   ")).toBe("我剛剛腦袋一片空白 再問我一次");
     const longAnswer = "a".repeat(2_100);
     expect(formatDiscordAnswer(longAnswer)).toHaveLength(2_000);
     expect(formatDiscordAnswer(longAnswer).endsWith("…")).toBe(true);

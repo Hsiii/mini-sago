@@ -16,6 +16,37 @@ describe("chatbot attachment limits", () => {
     });
   });
 
+  test("explains oversized attachments with the selected Chinese copy", async () => {
+    const prepared = await prepareAttachments({
+      id: "job-large-file",
+      channelId: "channel-1",
+      requestMessageId: "message-1",
+      request: "read this",
+      messages: [
+        {
+          id: "message-1",
+          author: "Hsi",
+          timestamp: "2026-07-20T10:00:00.000Z",
+          content: "notes",
+          attachments: [
+            {
+              id: "attachment-large",
+              filename: "huge.pdf",
+              contentType: "application/pdf",
+              size: 20 * 1024 * 1024 + 1,
+              url: "https://cdn.discordapp.com/huge.pdf",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(prepared.ignored).toEqual([
+      "附件 huge.pdf 超過 20 MB 我吃不下 換小一點的檔案吧",
+    ]);
+    await prepared.cleanup();
+  });
+
   test.serial(
     "extracts text attachments and removes temporary files",
     async () => {

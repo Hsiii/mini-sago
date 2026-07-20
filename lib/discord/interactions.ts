@@ -154,7 +154,9 @@ async function handleChannelAccessComponent({
     );
 
     if (!role) {
-      return buildEphemeralResponse("這個頻道選項已不再由機器人管理。");
+      return buildEphemeralResponse(
+        "這個頻道選項已經失效了 請使用最新的頻道選單",
+      );
     }
 
     await applyManagedRoleSelection({
@@ -166,13 +168,18 @@ async function handleChannelAccessComponent({
       managedRolesById: getManagedRolesById([role]),
     });
 
-    const counts = await getPanelRoleCounts({
-      guildId,
-      botToken: config.botToken,
-      roles: config.managedRoles,
-    });
+    try {
+      const counts = await getPanelRoleCounts({
+        guildId,
+        botToken: config.botToken,
+        roles: config.managedRoles,
+      });
 
-    return buildPanelUpdateResponse(config.managedRoles, counts);
+      return buildPanelUpdateResponse(config.managedRoles, counts);
+    } catch (error) {
+      console.error("Failed to refresh channel access counts:", error);
+      return buildEphemeralResponse(ROLE_UPDATED_WITHOUT_COUNTS_MESSAGE);
+    }
   }
 
   if (isChannelAccessSelect(customId)) {
@@ -185,13 +192,18 @@ async function handleChannelAccessComponent({
       managedRolesById: getManagedRolesById(config.managedRoles),
     });
 
-    const counts = await getPanelRoleCounts({
-      guildId,
-      botToken: config.botToken,
-      roles: config.managedRoles,
-    });
+    try {
+      const counts = await getPanelRoleCounts({
+        guildId,
+        botToken: config.botToken,
+        roles: config.managedRoles,
+      });
 
-    return buildPanelUpdateResponse(config.managedRoles, counts);
+      return buildPanelUpdateResponse(config.managedRoles, counts);
+    } catch (error) {
+      console.error("Failed to refresh channel access counts:", error);
+      return buildEphemeralResponse(ROLE_UPDATED_WITHOUT_COUNTS_MESSAGE);
+    }
   }
 
   return null;
@@ -204,6 +216,15 @@ function buildRoleCommandResponse(message: string) {
       content: message,
     },
   };
+}
+
+const ROLE_UPDATE_ERROR_MESSAGE = "我現在沒辦法更新頻道權限 晚點再試一次";
+
+const ROLE_UPDATED_WITHOUT_COUNTS_MESSAGE =
+  "頻道權限更新成功 但成員人數剛剛卡住了";
+
+function logRoleUpdateError(error: unknown) {
+  console.error("Failed to update Discord channel access:", error);
 }
 
 export async function handleDiscordInteractionRequest(request: Request) {
@@ -220,10 +241,8 @@ export async function handleDiscordInteractionRequest(request: Request) {
   try {
     config = getDiscordConfig();
   } catch (error) {
-    return new Response(
-      error instanceof Error ? error.message : "Discord 機器人設定無效",
-      { status: 500 },
-    );
+    console.error("Invalid Discord bot configuration:", error);
+    return new Response("Discord 機器人目前無法使用", { status: 500 });
   }
 
   const isValid = verifyDiscordRequest({
@@ -237,7 +256,14 @@ export async function handleDiscordInteractionRequest(request: Request) {
     return new Response("Discord 請求簽章無效", { status: 401 });
   }
 
-  const interaction = JSON.parse(rawBody) as DiscordInteraction;
+  let interaction: DiscordInteraction;
+
+  try {
+    interaction = JSON.parse(rawBody) as DiscordInteraction;
+  } catch (error) {
+    console.error("Invalid Discord interaction payload:", error);
+    return new Response("Discord 請求格式無效", { status: 400 });
+  }
   const commandName = interaction.data?.name;
   const customId = interaction.data?.custom_id;
 
@@ -250,7 +276,7 @@ export async function handleDiscordInteractionRequest(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "這個機器人只限指定伺服器使用。",
+        content: "我在這裡沒有這個功能 換到指定的伺服器找我",
       },
     });
   }
@@ -260,7 +286,7 @@ export async function handleDiscordInteractionRequest(request: Request) {
   if (interaction.type === 3) {
     if (!interaction.guild_id || !userId) {
       return jsonResponse(
-        buildEphemeralResponse("互動資料缺少伺服器成員資訊。"),
+        buildEphemeralResponse("我剛剛認不出你的伺服器身分 再試一次"),
       );
     }
 
@@ -278,13 +304,8 @@ export async function handleDiscordInteractionRequest(request: Request) {
         return jsonResponse(response);
       }
     } catch (error) {
-      return jsonResponse(
-        buildEphemeralResponse(
-          error instanceof Error
-            ? `無法更新身分組：${error.message}`
-            : "無法更新身分組。",
-        ),
-      );
+      logRoleUpdateError(error);
+      return jsonResponse(buildEphemeralResponse(ROLE_UPDATE_ERROR_MESSAGE));
     }
   }
 
@@ -322,7 +343,7 @@ export async function handleDiscordInteractionRequest(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "不支援的互動類型。",
+        content: "這個操作已經不能用了 請使用最新的選單",
       },
     });
   }
@@ -332,7 +353,7 @@ export async function handleDiscordInteractionRequest(request: Request) {
       type: 4,
       data: {
         flags: 64,
-        content: "互動資料缺少伺服器成員資訊。",
+        content: "我剛剛認不出你的伺服器身分 再試一次",
       },
     });
   }
@@ -353,24 +374,24 @@ export async function handleDiscordInteractionRequest(request: Request) {
     let message = result.message;
 
     if (roleCommand.includeMemberSummary) {
-      const summary = await buildRoleMemberSummaryMessage({
-        guildId: interaction.guild_id,
-        roleId: roleCommand.role.id,
-        roleLabel: roleCommand.role.label,
-        botToken: config.botToken,
-      });
+      try {
+        const summary = await buildRoleMemberSummaryMessage({
+          guildId: interaction.guild_id,
+          roleId: roleCommand.role.id,
+          roleLabel: roleCommand.role.label,
+          botToken: config.botToken,
+        });
 
-      message = `${message}\n\n${summary}`;
+        message = `${message}\n\n${summary}`;
+      } catch (error) {
+        console.error("Failed to load role member summary:", error);
+        message = `${message}\n\n${ROLE_UPDATED_WITHOUT_COUNTS_MESSAGE}`;
+      }
     }
 
     return jsonResponse(buildRoleCommandResponse(message));
   } catch (error) {
-    return jsonResponse(
-      buildRoleCommandResponse(
-        error instanceof Error
-          ? `無法更新身分組：${error.message}`
-          : "無法更新身分組。",
-      ),
-    );
+    logRoleUpdateError(error);
+    return jsonResponse(buildEphemeralResponse(ROLE_UPDATE_ERROR_MESSAGE));
   }
 }

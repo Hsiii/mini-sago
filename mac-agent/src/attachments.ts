@@ -260,22 +260,20 @@ export async function prepareAttachments(
       const { attachment } = candidate;
 
       if (attachment.size > MAX_ATTACHMENT_BYTES) {
-        ignored.push(`${attachment.filename}: exceeds 20 MB`);
+        ignored.push(
+          `附件 ${attachment.filename} 超過 20 MB 我吃不下 換小一點的檔案吧`,
+        );
         continue;
       }
       if (downloadedBytes + attachment.size > MAX_TOTAL_ATTACHMENT_BYTES) {
-        ignored.push(
-          `${attachment.filename}: exceeds the 40 MB request budget`,
-        );
+        ignored.push("這次的附件太多了 總共縮到 40 MB 以下再給我");
         continue;
       }
 
       try {
         const bytes = await download(attachment.url, signal);
         if (downloadedBytes + bytes.byteLength > MAX_TOTAL_ATTACHMENT_BYTES) {
-          ignored.push(
-            `${attachment.filename}: exceeds the 40 MB request budget`,
-          );
+          ignored.push("這次的附件太多了 總共縮到 40 MB 以下再給我");
           continue;
         }
         downloadedBytes += bytes.byteLength;
@@ -296,9 +294,7 @@ export async function prepareAttachments(
           MAX_TOTAL_EXTRACTED_CHARACTERS - extractedCharacters,
         );
         if (remaining <= 0) {
-          ignored.push(
-            `${attachment.filename}: exceeds the text extraction budget`,
-          );
+          ignored.push("我讀不完這麼多文字 拆成幾個檔案再給我");
           continue;
         }
         const text = await extractText(attachment, bytes, remaining);
@@ -306,9 +302,11 @@ export async function prepareAttachments(
         textBlocks.push(`Attachment: ${attachment.filename}\n${text}`);
       } catch (error) {
         if (signal?.aborted) throw error;
-        ignored.push(
-          `${attachment.filename}: ${error instanceof Error ? error.message : "could not analyze"}`,
+        console.warn(
+          `Failed to analyze attachment ${attachment.filename}:`,
+          error,
         );
+        ignored.push(`附件 ${attachment.filename} 我打不開 換一個檔案給我試試`);
       }
     }
   } catch (error) {

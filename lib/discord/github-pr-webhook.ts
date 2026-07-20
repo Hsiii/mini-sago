@@ -328,7 +328,7 @@ export async function handleGithubWebhookRequest(request: Request) {
 
   if (!config) {
     return Response.json(
-      { ok: false, error: "GitHub webhook is not configured" },
+      { ok: false, error: "GitHub 自動通知服務尚未設定" },
       { status: 503 },
     );
   }
@@ -343,7 +343,7 @@ export async function handleGithubWebhookRequest(request: Request) {
     )
   ) {
     return Response.json(
-      { ok: false, error: "Invalid webhook signature" },
+      { ok: false, error: "自動通知簽章無效" },
       { status: 401 },
     );
   }
@@ -358,7 +358,7 @@ export async function handleGithubWebhookRequest(request: Request) {
     payload = JSON.parse(body) as PullRequestPayload;
   } catch {
     return Response.json(
-      { ok: false, error: "Invalid JSON payload" },
+      { ok: false, error: "請求資料格式無效" },
       { status: 400 },
     );
   }
@@ -384,7 +384,7 @@ export async function handleGithubWebhookRequest(request: Request) {
   } catch (error) {
     console.error("Failed to process GitHub PR webhook:", error);
     return Response.json(
-      { ok: false, error: "Failed to process webhook" },
+      { ok: false, error: "無法處理自動通知" },
       { status: 502 },
     );
   }

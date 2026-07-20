@@ -102,14 +102,14 @@ export function formatRoleMemberSummary({
   usedFallbackCount: boolean;
 }) {
   if (totalCount === 0) {
-    return `目前沒有加入「${roleLabel}」的成員。`;
+    return `目前沒有加入「${roleLabel}」的成員`;
   }
 
   if (usedFallbackCount || memberIds.length === 0) {
-    return `目前「${roleLabel}」成員數：${totalCount}。`;
+    return `目前「${roleLabel}」成員數 ${totalCount}`;
   }
 
-  const lines = [`目前「${roleLabel}」成員（${totalCount}）：`];
+  const lines = [`目前「${roleLabel}」成員（${totalCount}）`];
   let visibleCount = 0;
 
   for (const memberId of memberIds) {
@@ -125,7 +125,7 @@ export function formatRoleMemberSummary({
   }
 
   if (visibleCount < totalCount) {
-    lines.push(`...還有 ${totalCount - visibleCount} 位。`);
+    lines.push(`還有 ${totalCount - visibleCount} 位`);
   }
 
   return lines.join("\n");
@@ -236,7 +236,7 @@ export async function applyManagedRoleSelection({
     ...rolesToAdd.filter((roleId) => !currentRoleIdSet.has(roleId)),
   ];
 
-  let message = "不需要變更，你的頻道權限已經是最新狀態。";
+  let message = "不需要變更 你的頻道權限已經是最新狀態";
 
   if (rolesToAdd.length > 0 || rolesToRemove.length > 0) {
     const fragments = [];
@@ -249,7 +249,7 @@ export async function applyManagedRoleSelection({
       fragments.push(`已離開 ${mentionRoles(rolesToRemove)}`);
     }
 
-    message = `${fragments.join(". ")}.`;
+    message = fragments.join(" ");
   }
 
   return {

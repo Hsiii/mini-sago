@@ -101,9 +101,9 @@ function buildRoleText(role: ManagedRole, counts: ChannelAccessRoleCounts) {
   const title = getRoleTitle(role);
   const description = getRoleDescription(role);
   const heading = `**${role.emoji ? `${role.emoji} ` : ""}${title}**`;
-  const summary = description ? `${heading}：${description}` : heading;
+  const summary = description ? `${heading} ${description}` : heading;
 
-  return `${summary}\n目前成員：${formatCount(counts[role.id])}`;
+  return `${summary}\n目前成員 ${formatCount(counts[role.id])}`;
 }
 
 function buildButtonRow(role: ManagedRole): DiscordActionRow {
@@ -188,7 +188,7 @@ export function buildChannelAccessPanel(
       : [
           {
             type: 10 as const,
-            content: "目前還沒有設定可自助加入的頻道。",
+            content: "目前還沒有設定可自助加入的頻道",
           },
         ];
 
