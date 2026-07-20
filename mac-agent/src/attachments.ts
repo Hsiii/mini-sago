@@ -76,8 +76,9 @@ function isSupported(attachment: ChatbotAttachment) {
 function rankCandidates(job: ChatbotJob) {
   const tokens = queryTokens(job.request);
   const candidates: AttachmentCandidate[] = [];
+  const contextMessages = [...job.messages, ...(job.searchResults ?? [])];
 
-  for (const [messageIndex, message] of job.messages.entries()) {
+  for (const [messageIndex, message] of contextMessages.entries()) {
     for (const item of message.attachments) {
       candidates.push({
         attachment: item,

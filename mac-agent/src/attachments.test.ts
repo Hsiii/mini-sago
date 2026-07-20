@@ -39,6 +39,25 @@ describe("chatbot attachment limits", () => {
             ],
           },
         ],
+        searchResults: [
+          {
+            id: "message-search-1",
+            author: "Daniel",
+            timestamp: "2026-06-01T10:00:00.000Z",
+            content: "Earlier search match",
+            attachments: [
+              {
+                id: "attachment-search-1",
+                filename: "meme.png",
+                contentType: "image/png",
+                size: 17,
+                url: "https://cdn.discordapp.com/meme.png",
+              },
+            ],
+            jumpUrl:
+              "https://discord.com/channels/guild-1/channel-1/message-search-1",
+          },
+        ],
       };
 
       globalThis.fetch = (async () =>
@@ -51,6 +70,7 @@ describe("chatbot attachment limits", () => {
         expect(prepared.textBlocks).toEqual([
           "Attachment: notes.txt\nShip next Friday.",
         ]);
+        expect(prepared.imagePaths).toHaveLength(1);
         expect(prepared.ignored).toEqual([]);
         await prepared.cleanup();
         expect(access(prepared.directory)).rejects.toThrow();

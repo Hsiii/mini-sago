@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 1;
+export const CHATBOT_PROTOCOL_VERSION = 2;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 
 export type ChatbotAttachment = {
@@ -15,6 +15,8 @@ export type ChatbotMessage = {
   timestamp: string;
   content: string;
   attachments: ChatbotAttachment[];
+  channelId?: string;
+  jumpUrl?: string;
   referencedMessage?: Omit<ChatbotMessage, "referencedMessage">;
 };
 
@@ -24,6 +26,8 @@ export type ChatbotJob = {
   requestMessageId: string;
   request: string;
   messages: ChatbotMessage[];
+  searchStatus?: "not_requested" | "complete" | "unavailable";
+  searchResults?: ChatbotMessage[];
 };
 
 export type MacAgentClientMessage =

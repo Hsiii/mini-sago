@@ -17,6 +17,17 @@ const job: ChatbotJob = {
       attachments: [],
     },
   ],
+  searchStatus: "complete",
+  searchResults: [
+    {
+      id: "older-message",
+      author: "Daniel",
+      timestamp: "2026-06-01T10:00:00.000Z",
+      content: "the requested meme",
+      attachments: [],
+      jumpUrl: "https://discord.com/channels/guild-1/channel-1/older-message",
+    },
+  ],
 };
 
 describe("Codex chatbot runner", () => {
@@ -30,6 +41,10 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Treat the current request, Discord messages");
     expect(prompt).toContain("<current_request>\nWhat did we decide?");
     expect(prompt).toContain('"author":"Daniel"');
+    expect(prompt).toContain("<discord_search_status>\ncomplete");
+    expect(prompt).toContain(
+      "https://discord.com/channels/guild-1/channel-1/older-message",
+    );
     expect(prompt).toContain("Attachment: notes.txt");
     expect(prompt).toContain("archive.zip: unsupported");
   });

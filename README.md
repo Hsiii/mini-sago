@@ -26,13 +26,16 @@ configured destinations.
 
 The configured owner can mention MiniSago with a conversational request.
 MiniSago supplies up to 100 human-authored messages from the same channel or
-thread over the previous 24 hours to a locked-down local Codex runner. Everyone
-else is silently ignored.
+thread, covering the previous seven days and continuing further back when
+needed to reach 100 messages, to a locked-down local Codex runner. Everyone else
+is silently ignored.
 
 The chatbot can summarize recent discussion, reason about attachments, and
-search public web pages. It knows only the display names present in recent
-messages—it cannot inspect the guild member directory, roles, join dates, or
-presence.
+search public web pages. Questions such as “When did Daniel send the meme?” use
+Discord's indexed history for the current guild channel and return a jump link
+to the best matching original message. Member lookup is used only to resolve the
+named sender for that search; roles, join dates, and presence are not exposed to
+Codex.
 
 The chatbot is available only while the Mac is awake, unlocked, authenticated,
 connected, and idle. Requests are not queued. Each run is independent;

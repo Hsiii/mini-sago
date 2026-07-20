@@ -99,6 +99,14 @@ reach 100 messages, and sends one transient job through the authenticated
 WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac endpoint, or
 durable queue.
 
+Natural requests to find an older message use Discord's official guild message
+search endpoint. MiniSago resolves the named sender, searches only the channel
+or thread where it was mentioned, and supplies up to 25 indexed matches with
+their original Discord jump links. The reply links to the best match, which
+acts as the safe repost path without copying or re-uploading someone else's
+attachment. Discord requires View Channel, Read Message History, and the Message
+Content privileged intent for these results.
+
 The Mac helper runs `gpt-5.6-terra` with high reasoning and live public web
 search. Each run is ephemeral. Codex receives only the current transcript and
 up to 10 relevant supported attachments of at most 20 MB each. Images, PDFs,

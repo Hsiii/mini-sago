@@ -5,6 +5,8 @@ import {
   formatDiscordAnswer,
   getRecentHumanMessages,
   isHumanContextMessage,
+  parseMessageSearchRequest,
+  searchGuildMessages,
   toChatbotMessage,
 } from "./chatbot";
 
@@ -73,6 +75,79 @@ describe("Discord chatbot", () => {
     expect(messages).toHaveLength(100);
     expect(messages[0]?.id).toBe("older-49");
     expect(messages.at(-1)?.id).toBe("recent-0");
+  });
+
+  test("turns a natural message lookup into Discord search filters", () => {
+    expect(parseMessageSearchRequest("When did Daniel send the meme?")).toEqual(
+      {
+        authorQuery: "Daniel",
+        has: "image",
+        content: undefined,
+      },
+    );
+    expect(
+      parseMessageSearchRequest("find the deployment message Jasmine posted"),
+    ).toEqual({
+      authorQuery: "Jasmine",
+      content: "deployment",
+      has: undefined,
+    });
+    expect(parseMessageSearchRequest("summarize the recent discussion")).toBe(
+      null,
+    );
+  });
+
+  test("searches the current guild channel and returns safe jump links", async () => {
+    const requestedPaths: string[] = [];
+    const results = await searchGuildMessages({
+      guildId: "guild-1",
+      channelId: "channel-1",
+      plan: { authorQuery: "Daniel", has: "image" },
+      discordRequest: async (path) => {
+        requestedPaths.push(path);
+        if (path.includes("/members/search?")) {
+          return [
+            {
+              nick: "Daniel",
+              user: { id: "user-1", username: "daniel" },
+            },
+          ] as never;
+        }
+
+        return {
+          total_results: 1,
+          messages: [
+            [
+              {
+                id: "message-1",
+                channel_id: "channel-1",
+                content: "",
+                timestamp: "2026-07-01T12:00:00.000Z",
+                author: { id: "user-1", global_name: "Daniel" },
+                attachments: [
+                  {
+                    id: "attachment-1",
+                    filename: "meme.png",
+                    content_type: "image/png",
+                    size: 1234,
+                    url: "https://cdn.discordapp.com/meme.png",
+                  },
+                ],
+              },
+            ],
+          ],
+        } as never;
+      },
+    });
+
+    expect(requestedPaths).toHaveLength(2);
+    expect(requestedPaths[1]).toContain("channel_id=channel-1");
+    expect(requestedPaths[1]).toContain("author_id=user-1");
+    expect(requestedPaths[1]).toContain("has=image");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.jumpUrl).toBe(
+      "https://discord.com/channels/guild-1/channel-1/message-1",
+    );
   });
 
   test("preserves attachments and an older referenced human message", () => {

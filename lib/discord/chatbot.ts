@@ -12,6 +12,7 @@ const AUTHORIZED_USER_ID = "917446775873343600";
 const MESSAGE_LIMIT = 100;
 const MESSAGE_PAGE_LIMIT = 100;
 const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
+const SEARCH_RESULT_LIMIT = 25;
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 
@@ -44,6 +45,27 @@ type DiscordMessage = {
   }>;
   sticker_items?: Array<{ name?: string }>;
   referenced_message?: DiscordMessage | null;
+};
+
+type DiscordGuildMember = {
+  nick?: string | null;
+  user?: {
+    id?: string;
+    username?: string;
+    global_name?: string | null;
+  };
+};
+
+type DiscordMessageSearchResponse = {
+  code?: number;
+  retry_after?: number;
+  messages?: DiscordMessage[][];
+};
+
+export type MessageSearchPlan = {
+  authorQuery: string;
+  content?: string;
+  has?: "file" | "image" | "link" | "sticker" | "video";
 };
 
 type DiscordRequest = <T>(
@@ -140,6 +162,151 @@ export function formatDiscordAnswer(content: string) {
   }
 
   return `${normalized.slice(0, DISCORD_MESSAGE_LIMIT - 1).trimEnd()}…`;
+}
+
+const SEARCH_PATTERNS = [
+  /\b(?:when|where)\s+did\s+(?<author>.{1,64}?)\s+(?:send|post|share|upload)\s+(?:me\s+)?(?:the\s+|an?\s+)?(?<subject>.+?)[?!.]*$/iu,
+  /\b(?:find|show me|repost|resend|link me to)\s+(?:the\s+|an?\s+)?(?<subject>.+?)\s+(?:message\s+)?(?:that\s+)?(?<author>.{1,64}?)\s+(?:sent|posted|shared|uploaded)\b/iu,
+];
+
+const SEARCH_MEDIA_TYPES: Array<{
+  pattern: RegExp;
+  has: NonNullable<MessageSearchPlan["has"]>;
+}> = [
+  { pattern: /\b(?:meme|image|photo|pic|picture|gif)\b/iu, has: "image" },
+  { pattern: /\b(?:video|clip)\b/iu, has: "video" },
+  { pattern: /\b(?:file|attachment|document)\b/iu, has: "file" },
+  { pattern: /\bsticker\b/iu, has: "sticker" },
+  { pattern: /\blink\b/iu, has: "link" },
+];
+
+const GENERIC_SEARCH_WORDS =
+  /\b(?:the|a|an|message|meme|image|photo|pic|picture|gif|video|clip|file|attachment|document|sticker|link)\b/giu;
+
+export function parseMessageSearchRequest(
+  request: string,
+): MessageSearchPlan | null {
+  const match = SEARCH_PATTERNS.map((pattern) => request.match(pattern)).find(
+    Boolean,
+  );
+  const authorQuery = match?.groups?.author?.trim();
+  const subject = match?.groups?.subject?.trim();
+
+  if (!authorQuery || !subject) return null;
+
+  const has = SEARCH_MEDIA_TYPES.find(({ pattern }) =>
+    pattern.test(subject),
+  )?.has;
+  const content = subject
+    .replace(GENERIC_SEARCH_WORDS, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    authorQuery,
+    content: content || undefined,
+    has,
+  };
+}
+
+function memberNames(member: DiscordGuildMember) {
+  return [member.nick, member.user?.global_name, member.user?.username].filter(
+    (name): name is string => Boolean(name),
+  );
+}
+
+async function resolveGuildMemberId({
+  guildId,
+  authorQuery,
+  discordRequest,
+}: {
+  guildId: string;
+  authorQuery: string;
+  discordRequest: DiscordRequest;
+}) {
+  const query = new URLSearchParams({ query: authorQuery, limit: "10" });
+  const members = await discordRequest<DiscordGuildMember[]>(
+    `/guilds/${guildId}/members/search?${query}`,
+  );
+  const normalizedQuery = authorQuery.toLocaleLowerCase();
+  const exactMatches = members.filter((member) =>
+    memberNames(member).some(
+      (name) => name.toLocaleLowerCase() === normalizedQuery,
+    ),
+  );
+  const match =
+    exactMatches.length === 1
+      ? exactMatches[0]
+      : members.length === 1
+        ? members[0]
+        : undefined;
+
+  return match?.user?.id;
+}
+
+function toSearchResult(
+  message: DiscordMessage,
+  guildId: string,
+): ChatbotMessage {
+  return {
+    ...toChatbotMessage(message),
+    channelId: message.channel_id,
+    jumpUrl: `https://discord.com/channels/${guildId}/${message.channel_id}/${message.id}`,
+  };
+}
+
+export async function searchGuildMessages({
+  guildId,
+  channelId,
+  plan,
+  discordRequest,
+}: {
+  guildId: string;
+  channelId: string;
+  plan: MessageSearchPlan;
+  discordRequest: DiscordRequest;
+}) {
+  const authorId = await resolveGuildMemberId({
+    guildId,
+    authorQuery: plan.authorQuery,
+    discordRequest,
+  });
+  if (!authorId) return [];
+
+  const query = new URLSearchParams({
+    limit: String(SEARCH_RESULT_LIMIT),
+    channel_id: channelId,
+    author_type: "user",
+    sort_by: plan.content ? "relevance" : "timestamp",
+  });
+
+  if (authorId) query.append("author_id", authorId);
+  if (plan.content) query.set("content", plan.content);
+  if (plan.has) query.append("has", plan.has);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await discordRequest<DiscordMessageSearchResponse>(
+      `/guilds/${guildId}/messages/search?${query}`,
+    );
+
+    if (response.messages) {
+      const seen = new Set<string>();
+      return response.messages
+        .flat()
+        .filter((message) => {
+          if (seen.has(message.id)) return false;
+          seen.add(message.id);
+          return !message.webhook_id && !message.author?.bot;
+        })
+        .slice(0, SEARCH_RESULT_LIMIT)
+        .map((message) => toSearchResult(message, guildId));
+    }
+
+    if (response.code !== 110000 || attempt === 2) break;
+    await Bun.sleep(Math.max(response.retry_after ?? 1, 1) * 1_000);
+  }
+
+  return [];
 }
 
 export async function getRecentHumanMessages({
@@ -282,16 +449,48 @@ export async function handleChatbotMention({
     message.channel_id,
     discordRequest,
     async () => {
+      const searchPlan = message.guild_id
+        ? parseMessageSearchRequest(request)
+        : null;
+      const searchPromise =
+        message.guild_id && searchPlan
+          ? searchGuildMessages({
+              guildId: message.guild_id,
+              channelId: message.channel_id,
+              plan: searchPlan,
+              discordRequest,
+            })
+              .then((results) => ({
+                status: "complete" as const,
+                results,
+              }))
+              .catch(() => {
+                console.warn("Discord message search unavailable.");
+                return {
+                  status: "unavailable" as const,
+                  results: [] as ChatbotMessage[],
+                };
+              })
+          : Promise.resolve({
+              status: "not_requested" as const,
+              results: [] as ChatbotMessage[],
+            });
+      const [messages, search] = await Promise.all([
+        getRecentHumanMessages({
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          discordRequest,
+        }),
+        searchPromise,
+      ]);
       const job: ChatbotJob = {
         id: randomUUID(),
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,
-        messages: await getRecentHumanMessages({
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          discordRequest,
-        }),
+        messages,
+        searchStatus: search.status,
+        searchResults: search.results,
       };
       const dispatch = macAgentBridge.dispatch(job);
 
