@@ -39,6 +39,31 @@ Answers are public replies, fit in one Discord message, and use a normal typing
 indicator while Codex works. Each run is independent and its transcript and
 temporary attachments are discarded afterward.
 
+### Chatbot setup
+
+The hosted bot and Mac helper require these values:
+
+- `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY`, and `DISCORD_BOT_TOKEN` from
+  the MiniSago application in the Discord Developer Portal.
+- `MINISAGO_MAC_BRIDGE_SECRET`, generated with `openssl rand -hex 32` and set
+  to the same value in local `.env.local` and the hosted production secret
+  file. Never commit either secret file.
+
+Enable Discord's Message Content privileged intent, deploy the hosted bot, and
+then install the per-user Mac helper:
+
+```bash
+bun run deploy
+bun run mac-agent:install
+bun run mac-agent:status
+```
+
+The helper starts automatically at login and connects outbound without opening
+a public port on the Mac. Locking the Mac disconnects it; unlocking reconnects
+it without processing messages missed while offline. See
+[Operations](docs/operations.md#private-codex-chatbot) for installation,
+security, logs, and removal details.
+
 ## Commands
 
 | Command                     | Action                        |
