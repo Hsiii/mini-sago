@@ -11,8 +11,7 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const AUTHORIZED_USER_ID = "917446775873343600";
 const MESSAGE_LIMIT = 100;
 const MESSAGE_PAGE_LIMIT = 100;
-const MAX_PAGES = 5;
-const HISTORY_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 
@@ -115,11 +114,9 @@ export function toChatbotMessage(message: DiscordMessage): ChatbotMessage {
 export function isHumanContextMessage(
   message: DiscordMessage,
   requestMessageId: string,
-  cutoff: Date,
 ) {
   return (
     message.id !== requestMessageId &&
-    new Date(message.timestamp) >= cutoff &&
     !message.webhook_id &&
     !message.author?.bot
   );
@@ -145,7 +142,7 @@ export function formatDiscordAnswer(content: string) {
   return `${normalized.slice(0, DISCORD_MESSAGE_LIMIT - 1).trimEnd()}…`;
 }
 
-async function getRecentHumanMessages({
+export async function getRecentHumanMessages({
   channelId,
   requestMessageId,
   discordRequest,
@@ -160,7 +157,7 @@ async function getRecentHumanMessages({
   const messages: ChatbotMessage[] = [];
   let before: string | undefined;
 
-  for (let pageNumber = 0; pageNumber < MAX_PAGES; pageNumber += 1) {
+  for (;;) {
     const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) });
     if (before) {
       query.set("before", before);
@@ -171,7 +168,13 @@ async function getRecentHumanMessages({
     );
 
     for (const message of page) {
-      if (isHumanContextMessage(message, requestMessageId, cutoff)) {
+      const withinHistoryWindow = new Date(message.timestamp) >= cutoff;
+      const needsBackfill = messages.length < MESSAGE_LIMIT;
+
+      if (
+        isHumanContextMessage(message, requestMessageId) &&
+        (withinHistoryWindow || needsBackfill)
+      ) {
         messages.push(toChatbotMessage(message));
       }
 
@@ -181,13 +184,11 @@ async function getRecentHumanMessages({
     }
 
     const oldestMessage = page.at(-1);
-    if (
-      page.length < MESSAGE_PAGE_LIMIT ||
-      !oldestMessage ||
-      new Date(oldestMessage.timestamp) < cutoff
-    ) {
+    if (page.length < MESSAGE_PAGE_LIMIT || !oldestMessage) {
       break;
     }
+
+    if (oldestMessage.id === before) break;
 
     before = oldestMessage.id;
   }

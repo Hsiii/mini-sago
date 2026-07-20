@@ -93,8 +93,9 @@ slash commands and channel access components.
 ## Private Codex chatbot
 
 The hosted process receives Hsi's `@MiniSago` messages through the existing
-Discord Gateway. It fetches the same channel's previous 24 hours, keeps at most
-100 human messages, and sends one transient job through the authenticated
+Discord Gateway. It fetches up to 100 human messages from the same channel,
+covering the previous seven days and continuing further back when needed to
+reach 100 messages, and sends one transient job through the authenticated
 WebSocket at `/api/mac-agent/ws`. There is no polling, public Mac endpoint, or
 durable queue.
 
