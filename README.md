@@ -40,12 +40,8 @@ join dates, and presence are not sent to Codex. Temporary attachment downloads
 are removed after the response, and local diagnostic traces expire after 14
 days.
 
-The chatbot currently works for:
-
-- every member of **鄭仁誠觀察日記** (`917436845187563610`);
-- every member of **WM31** (`1282936453134815275`);
-- every member with access to **#荒野** (`1517766866964316201`);
-- the configured owner in any other visible server, thread, or direct message.
+Chatbot access is limited to selected guilds and channels. The configured owner
+can also use it in other visible servers, threads, and direct messages.
 
 > [!TIP]
 > In Discord's mention picker, choose MiniSago under **Members/Apps**, not a
@@ -56,9 +52,12 @@ Requests received while it is unavailable are not queued.
 
 ### Lets members open optional channels
 
-Members of the configured WM31 server can grant or remove their own access to
-the Wordle and Brawl Stars channels. This keeps optional channels out of the way
-without requiring a moderator to manage every request.
+Members of the configured WM31 server can use the channel-access panel to grant
+or remove their own access to the Wordle and Brawl Stars channels. This keeps
+optional channels out of the way without requiring a moderator to manage every
+request.
+
+Slash commands provide the same actions as a fallback:
 
 | Command                     | Purpose                      |
 | --------------------------- | ---------------------------- |
@@ -66,8 +65,6 @@ without requiring a moderator to manage every request.
 | `/leave-wordle-channel`     | Hide the Wordle channel      |
 | `/join-brawlstars-channel`  | Open the Brawl Stars channel |
 | `/leave-brawlstars-channel` | Hide the Brawl Stars channel |
-
-The same choices are available through the channel-access panel.
 
 ### Posts useful community updates
 
@@ -86,7 +83,7 @@ thread after the pull request is merged.
 | Feature                 | Availability                                      |
 | ----------------------- | ------------------------------------------------- |
 | Instagram link replies  | Every visible server and channel                  |
-| Chatbot                 | Allowed guilds, #荒野, and the owner elsewhere    |
+| Chatbot                 | Selected guilds/channels and the owner elsewhere  |
 | Optional channel access | Configured WM31 server only                       |
 | Vocabulary and feeds    | Their configured server and channel               |
 | Pull-request threads    | The configured repository and Discord destination |
