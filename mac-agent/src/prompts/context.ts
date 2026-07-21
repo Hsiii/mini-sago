@@ -27,6 +27,9 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
     ...(message.reactions?.length ? { reactions: message.reactions } : {}),
     ...(message.channelName ? { channelName: message.channelName } : {}),
     ...(message.jumpUrl ? { jumpUrl: message.jumpUrl } : {}),
+    ...(message.searchPurposes?.length
+      ? { searchPurposes: message.searchPurposes }
+      : {}),
     ...(message.referencedMessage
       ? { referencedMessage: promptMessage(message.referencedMessage) }
       : {}),
@@ -84,7 +87,10 @@ export function answerContext(
       block("discord_search_status", job.searchStatus),
       block(
         "discord_search_results_json",
-        (job.searchResults ?? []).map(promptMessage),
+        (job.searchResults ?? []).map((message, sourceIndex) => ({
+          sourceIndex,
+          ...promptMessage(message),
+        })),
       ),
     );
   }

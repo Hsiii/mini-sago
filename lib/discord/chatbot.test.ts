@@ -5,13 +5,16 @@ import {
   extractChatbotRequest,
   extractMentionRequest,
   formatDiscordAnswer,
+  formatIdentityResolution,
   getNearbyHumanMessages,
   getRecentHumanMessages,
   handleChatbotMention,
   isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
+  inferIdentitySubject,
   parseDiscordContextPlan,
+  parseIdentityResolution,
   searchGuildMessages,
   toChatbotMessage,
 } from "./chatbot";
@@ -318,21 +321,83 @@ describe("Discord chatbot", () => {
   test("validates and limits Codex Discord context plans", () => {
     expect(
       parseDiscordContextPlan(`\`\`\`json
-{"history":"extended","queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
+{"task":"identity_resolution","subject":"6uc","history":"extended","queries":[{"purpose":"direct_mention","author":"self","content":"new app"},{"purpose":"context","has":["link","file","invalid"]},{"purpose":"context","embedType":"gif"},{"purpose":"context","attachmentExtension":".pdf"},{"purpose":"context","content":"ignored"}]}
 \`\`\``),
     ).toEqual({
+      task: "identity_resolution",
+      subject: "6uc",
       history: "extended",
       queries: [
-        { author: "self", content: "new app" },
-        { has: ["link", "file"] },
-        { embedType: "gif" },
-        { attachmentExtension: "pdf" },
+        {
+          purpose: "direct_mention",
+          author: "self",
+          content: "new app",
+        },
+        { purpose: "context", has: ["link", "file"] },
+        { purpose: "context", embedType: "gif" },
+        { purpose: "context", attachmentExtension: "pdf" },
       ],
     });
     expect(parseDiscordContextPlan("not json")).toEqual({
+      task: "general",
       history: "local",
       queries: [],
     });
+  });
+
+  test("recognizes direct identity questions", () => {
+    expect(inferIdentitySubject("重新挑戰 6uc 是誰")).toBe("6uc");
+    expect(inferIdentitySubject("who is kiseki?")).toBe("kiseki");
+    expect(inferIdentitySubject("6uc 最近說了什麼")).toBeUndefined();
+  });
+
+  test("downgrades unsupported identity claims and renders uncertainty", () => {
+    const resolution = parseIdentityResolution(
+      JSON.stringify({
+        subject: "6uc",
+        candidate: "午前",
+        confidence: "strong",
+        basis: "third_party_only",
+        sourceIndexes: [0, 99],
+      }),
+      "6uc",
+      1,
+    );
+
+    expect(resolution).toEqual({
+      subject: "6uc",
+      candidate: "午前",
+      confidence: "weak",
+      basis: "third_party_only",
+      sourceIndexes: [0],
+    });
+    expect(
+      formatIdentityResolution(resolution, [
+        {
+          id: "message-1",
+          author: "Someone",
+          timestamp: "2026-07-20T10:00:00.000Z",
+          content: "6uc 是午前",
+          attachments: [],
+          jumpUrl: "https://discord.com/channels/guild-1/channel-1/message-1",
+        },
+      ]),
+    ).toBe(
+      "目前只找到有人說 6uc 是 午前\n但還沒有直接證據把這兩個名字對上\n所以不能算確定\n[原訊息](https://discord.com/channels/guild-1/channel-1/message-1)",
+    );
+  });
+
+  test("normalizes formal Chinese punctuation before posting", () => {
+    expect(
+      formatDiscordAnswer(
+        "重新查完整一點，6uc 應該是午前。\n最直接：有人說「6uc是午前」。",
+      ),
+    ).toBe("重新查完整一點 6uc 應該是午前\n最直接 有人說6uc是午前");
+    expect(
+      formatDiscordAnswer(
+        "請跑 `foo，bar`，再看 https://example.com/a，下一步。",
+      ),
+    ).toBe("請跑 `foo，bar` 再看 https://example.com/a 下一步");
   });
 
   test("searches the guild and returns channel names and safe jump links", async () => {
@@ -343,7 +408,13 @@ describe("Discord chatbot", () => {
       requesterRoleIds: ["role-1"],
       currentChannelId: "channel-1",
       requestMessageId: "request-1",
-      queries: [{ author: "Daniel", has: ["image"] }],
+      queries: [
+        {
+          purpose: "direct_mention",
+          author: "Daniel",
+          has: ["image"],
+        },
+      ],
       discordRequest: async (path) => {
         requestedPaths.push(path);
         if (path.includes("/members/search?")) {
@@ -410,6 +481,7 @@ describe("Discord chatbot", () => {
     expect(results[0]?.jumpUrl).toBe(
       "https://discord.com/channels/guild-1/channel-1/message-1",
     );
+    expect(results[0]?.searchPurposes).toEqual(["direct_mention"]);
   });
 
   test("uses the requester directly for Chinese self-reference", async () => {

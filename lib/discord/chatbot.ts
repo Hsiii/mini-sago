@@ -5,6 +5,8 @@ import type {
   ChatbotAttachment,
   ChatbotJob,
   ChatbotMessage,
+  ChatbotSearchPurpose,
+  ChatbotTask,
 } from "../chatbot/protocol";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -122,6 +124,7 @@ type SearchHas = (typeof SEARCH_HAS_VALUES)[number];
 type SearchEmbedType = (typeof SEARCH_EMBED_TYPES)[number];
 
 export type DiscordSearchQuery = {
+  purpose?: ChatbotSearchPurpose;
   author?: string;
   content?: string;
   has?: SearchHas[];
@@ -133,8 +136,23 @@ export type DiscordSearchQuery = {
 };
 
 export type DiscordContextPlan = {
+  task: ChatbotTask;
+  subject?: string;
   history: "local" | "medium" | "extended";
   queries: DiscordSearchQuery[];
+};
+
+export type IdentityResolution = {
+  subject: string;
+  candidate?: string;
+  confidence: "strong" | "moderate" | "weak" | "unknown";
+  basis:
+    | "direct_self_link"
+    | "independent_corroboration"
+    | "third_party_only"
+    | "conflicting"
+    | "none";
+  sourceIndexes: number[];
 };
 
 type DiscordRequest = <T>(
@@ -283,8 +301,33 @@ export function isChatbotAuthorized(userId: string, guildId?: string) {
   );
 }
 
+const PROTECTED_CHAT_SEGMENT =
+  /```[\s\S]*?```|`[^`\n]*`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s，。！？；：]+/gu;
+
+function normalizeChineseProse(content: string) {
+  return content
+    .replace(/[，、：；]/gu, " ")
+    .replace(/[。！](?=\n)/gu, "")
+    .replace(/[。！]/gu, "\n")
+    .replace(/[「」『』]/gu, "")
+    .replace(/[ \t]+/gu, " ")
+    .replace(/ *\n */gu, "\n")
+    .replace(/\n{3,}/gu, "\n\n");
+}
+
 export function formatDiscordAnswer(content: string) {
-  const normalized = content.trim();
+  const trimmed = content.trim();
+  let normalized = "";
+  let previousEnd = 0;
+
+  for (const match of trimmed.matchAll(PROTECTED_CHAT_SEGMENT)) {
+    const start = match.index;
+    normalized += normalizeChineseProse(trimmed.slice(previousEnd, start));
+    normalized += match[0];
+    previousEnd = start + match[0].length;
+  }
+  normalized += normalizeChineseProse(trimmed.slice(previousEnd));
+  normalized = normalized.trim();
 
   if (!normalized) {
     return "我剛剛腦袋一片空白 再問我一次";
@@ -298,6 +341,19 @@ export function formatDiscordAnswer(content: string) {
 }
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
+const SEARCH_PURPOSES = new Set<ChatbotSearchPurpose>([
+  "context",
+  "direct_mention",
+  "self_claim",
+  "candidate_check",
+]);
+const IDENTITY_BASES = new Set<IdentityResolution["basis"]>([
+  "direct_self_link",
+  "independent_corroboration",
+  "third_party_only",
+  "conflicting",
+  "none",
+]);
 
 function shortString(value: unknown, maximumLength: number) {
   return typeof value === "string" && value.trim()
@@ -312,17 +368,29 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
       .replace(/^```(?:json)?\s*/iu, "")
       .replace(/\s*```$/u, "");
     const payload = JSON.parse(normalized) as {
+      task?: unknown;
+      subject?: unknown;
       history?: unknown;
       queries?: unknown;
     };
+    const task =
+      payload.task === "identity_resolution"
+        ? "identity_resolution"
+        : "general";
+    const subject = shortString(payload.subject, 128);
     const history = ["medium", "extended"].includes(payload.history as string)
       ? (payload.history as "medium" | "extended")
       : "local";
-    if (!Array.isArray(payload.queries)) return { history, queries: [] };
+    if (!Array.isArray(payload.queries)) {
+      return { task, ...(subject ? { subject } : {}), history, queries: [] };
+    }
 
     const queries = payload.queries.slice(0, 4).flatMap((value) => {
       if (!value || typeof value !== "object") return [];
       const query = value as Record<string, unknown>;
+      const purpose = SEARCH_PURPOSES.has(query.purpose as ChatbotSearchPurpose)
+        ? (query.purpose as ChatbotSearchPurpose)
+        : undefined;
       const author = shortString(query.author, 64);
       const searchContent = shortString(query.content, 1_024);
       const has = Array.isArray(query.has)
@@ -364,6 +432,7 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
 
       return [
         {
+          ...(purpose ? { purpose } : {}),
           ...(author ? { author } : {}),
           ...(searchContent ? { content: searchContent } : {}),
           ...(has?.length ? { has } : {}),
@@ -376,10 +445,123 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
       ];
     });
 
-    return { history, queries };
+    return { task, ...(subject ? { subject } : {}), history, queries };
   } catch {
-    return { history: "local", queries: [] };
+    return { task: "general", history: "local", queries: [] };
   }
+}
+
+export function inferIdentitySubject(request: string) {
+  const chinese = request.match(
+    /^\s*(?:重新挑戰\s*)?(.{1,64}?)\s*(?:是誰|是哪位)[？?]?\s*$/u,
+  );
+  if (chinese?.[1]?.trim()) return chinese[1].trim();
+
+  const english = request.match(/^\s*who(?:'s| is)\s+(.{1,64}?)[?]?\s*$/iu);
+  return english?.[1]?.trim() || undefined;
+}
+
+export function parseIdentityResolution(
+  content: string,
+  subject: string,
+  resultCount: number,
+): IdentityResolution {
+  const fallback: IdentityResolution = {
+    subject,
+    confidence: "unknown",
+    basis: "none",
+    sourceIndexes: [],
+  };
+
+  try {
+    const payload = JSON.parse(
+      content
+        .trim()
+        .replace(/^```(?:json)?\s*/iu, "")
+        .replace(/\s*```$/u, ""),
+    ) as Record<string, unknown>;
+    const basis = IDENTITY_BASES.has(
+      payload.basis as IdentityResolution["basis"],
+    )
+      ? (payload.basis as IdentityResolution["basis"])
+      : "none";
+    const candidate = shortString(payload.candidate, 64);
+    const sourceIndexes = Array.isArray(payload.sourceIndexes)
+      ? [
+          ...new Set(
+            payload.sourceIndexes.filter(
+              (index): index is number =>
+                Number.isInteger(index) && index >= 0 && index < resultCount,
+            ),
+          ),
+        ].slice(0, 5)
+      : [];
+    let confidence: IdentityResolution["confidence"] = [
+      "strong",
+      "moderate",
+      "weak",
+      "unknown",
+    ].includes(payload.confidence as string)
+      ? (payload.confidence as IdentityResolution["confidence"])
+      : "unknown";
+
+    if (basis === "third_party_only") confidence = "weak";
+    if (basis === "independent_corroboration" && confidence === "strong") {
+      confidence = "moderate";
+    }
+    if (basis === "conflicting" || basis === "none") confidence = "unknown";
+
+    return {
+      subject,
+      ...(candidate && basis !== "conflicting" && basis !== "none"
+        ? { candidate }
+        : {}),
+      confidence,
+      basis,
+      sourceIndexes,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function formatIdentityResolution(
+  resolution: IdentityResolution,
+  searchResults: ChatbotMessage[],
+) {
+  const links = resolution.sourceIndexes
+    .flatMap((index) => searchResults[index]?.jumpUrl ?? [])
+    .filter((url, index, values) => values.indexOf(url) === index)
+    .slice(0, 2)
+    .map((url, index, values) =>
+      values.length === 1
+        ? `[原訊息](${url})`
+        : `[原訊息 ${index + 1}](${url})`,
+    )
+    .join(" ");
+  const sources = links ? `\n${links}` : "";
+
+  if (
+    resolution.candidate &&
+    resolution.basis === "direct_self_link" &&
+    resolution.confidence === "strong"
+  ) {
+    return `${resolution.subject} 應該是 ${resolution.candidate}\n有本人直接把這兩個名字對上的紀錄${sources}`;
+  }
+
+  if (resolution.candidate && resolution.confidence === "moderate") {
+    return `目前看起來 ${resolution.subject} 是 ${resolution.candidate}\n有幾筆不同來源的紀錄能互相對上${sources}`;
+  }
+
+  if (resolution.candidate && resolution.confidence === "weak") {
+    return `目前只找到有人說 ${resolution.subject} 是 ${resolution.candidate}\n但還沒有直接證據把這兩個名字對上\n所以不能算確定${sources}`;
+  }
+
+  if (resolution.basis === "conflicting") {
+    return `現在還不能確定 ${resolution.subject} 是誰\n找到的紀錄互相對不起來${sources}`;
+  }
+
+  return `現在還找不到能確定 ${resolution.subject} 是誰的紀錄${sources}`;
 }
 
 function memberNames(member: DiscordGuildMember) {
@@ -525,12 +707,14 @@ function toSearchResult(
   message: DiscordMessage,
   guildId: string,
   channelNames: Map<string, string>,
+  searchPurposes: ChatbotSearchPurpose[],
 ): ChatbotMessage {
   return {
     ...toChatbotMessage(message),
     channelId: message.channel_id,
     channelName: channelNames.get(message.channel_id),
     jumpUrl: `https://discord.com/channels/${guildId}/${message.channel_id}/${message.id}`,
+    ...(searchPurposes.length > 0 ? { searchPurposes } : {}),
   };
 }
 
@@ -559,8 +743,10 @@ export async function searchGuildMessages({
     discordRequest,
   });
   const memberIds = new Map<string, string | undefined>();
-  const matches: DiscordMessage[] = [];
-  const seenMessages = new Set<string>();
+  const matches = new Map<
+    string,
+    { message: DiscordMessage; purposes: Set<ChatbotSearchPurpose> }
+  >();
 
   for (const search of queries.slice(0, 4)) {
     let authorId: string | undefined;
@@ -605,16 +791,22 @@ export async function searchGuildMessages({
       if (response.messages) {
         for (const message of response.messages.flat()) {
           if (
-            matches.length >= SEARCH_RESULT_LIMIT ||
             message.id === requestMessageId ||
-            seenMessages.has(message.id) ||
             message.webhook_id ||
             message.author?.bot
           ) {
             continue;
           }
-          seenMessages.add(message.id);
-          matches.push(message);
+          const existing = matches.get(message.id);
+          if (existing) {
+            if (search.purpose) existing.purposes.add(search.purpose);
+            continue;
+          }
+          if (matches.size >= SEARCH_RESULT_LIMIT) continue;
+          matches.set(message.id, {
+            message,
+            purposes: new Set(search.purpose ? [search.purpose] : []),
+          });
         }
         break;
       }
@@ -623,13 +815,13 @@ export async function searchGuildMessages({
       await Bun.sleep(Math.max(response.retry_after ?? 1, 1) * 1_000);
     }
 
-    if (matches.length >= SEARCH_RESULT_LIMIT) break;
+    if (matches.size >= SEARCH_RESULT_LIMIT) break;
   }
 
-  if (matches.length === 0) return [];
+  if (matches.size === 0) return [];
 
-  return matches.map((message) =>
-    toSearchResult(message, guildId, searchableChannels.names),
+  return [...matches.values()].map(({ message, purposes }) =>
+    toSearchResult(message, guildId, searchableChannels.names, [...purposes]),
   );
 }
 
@@ -863,12 +1055,14 @@ export async function handleChatbotMention({
         status: "not_requested" | "complete" | "unavailable";
         results: ChatbotMessage[];
       } = { status: "not_requested", results: [] };
+      let plan: DiscordContextPlan = {
+        task: "general",
+        history: "local",
+        queries: [],
+      };
+      const inferredIdentitySubject = inferIdentitySubject(request);
 
       if (message.guild_id) {
-        let plan: DiscordContextPlan = {
-          history: "local",
-          queries: [],
-        };
         const plannerJob: ChatbotJob = {
           id: randomUUID(),
           purpose: "context_plan",
@@ -891,6 +1085,14 @@ export async function handleChatbotMention({
           }
         } else {
           console.warn("Discord context planning unavailable.");
+        }
+
+        if (inferredIdentitySubject) {
+          plan = {
+            ...plan,
+            task: "identity_resolution",
+            subject: inferredIdentitySubject,
+          };
         }
 
         const historyLimit =
@@ -935,6 +1137,51 @@ export async function handleChatbotMention({
 
         [messages, search] = await Promise.all([historyPromise, searchPromise]);
         searchUnavailable = search.status === "unavailable";
+      } else if (inferredIdentitySubject) {
+        plan = {
+          ...plan,
+          task: "identity_resolution",
+          subject: inferredIdentitySubject,
+        };
+      }
+
+      if (plan.task === "identity_resolution" && plan.subject) {
+        const evidenceJob: ChatbotJob = {
+          id: randomUUID(),
+          purpose: "identity_resolution",
+          task: plan.task,
+          subject: plan.subject,
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages,
+          searchStatus: search.status,
+          searchResults: search.results,
+        };
+        const evidenceDispatch = workflow.dispatch(evidenceJob);
+
+        if (evidenceDispatch.status === "offline") {
+          return { ok: false as const, error: "The Mac disconnected." };
+        }
+
+        if (evidenceDispatch.status === "busy") {
+          return { ok: false as const, error: "The Mac became busy." };
+        }
+
+        const evidenceResult = await evidenceDispatch.result;
+        const resolution = evidenceResult.ok
+          ? parseIdentityResolution(
+              evidenceResult.content,
+              plan.subject,
+              search.results.length,
+            )
+          : parseIdentityResolution("", plan.subject, search.results.length);
+
+        return {
+          ok: true as const,
+          content: formatIdentityResolution(resolution, search.results),
+        };
       }
 
       const job: ChatbotJob = {

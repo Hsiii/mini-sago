@@ -130,13 +130,24 @@ sequenceDiagram
         end
     end
 
-    H->>W: Answer job within same reservation
-    W->>M: Context + search results + attachment metadata
-    M->>M: Download allowed Discord CDN files with cancellation and budgets
-    M->>C: Ephemeral answer prompt + supported files
-    C-->>M: Discord reply
-    M-->>W: Result
-    W-->>H: Result
+    alt Identity resolution
+        H->>W: Evidence resolution job within same reservation
+        W->>M: Context + query provenance + indexed search results
+        M->>C: Schema constrained evidence prompt
+        C-->>M: Candidate + confidence + basis + source indexes
+        M-->>W: Structured verdict
+        W-->>H: Verdict
+        H->>H: Validate confidence and render deterministic reply
+    else General answer
+        H->>W: Answer job within same reservation
+        W->>M: Context + search results + attachment metadata
+        M->>M: Download allowed Discord CDN files with cancellation and budgets
+        M->>C: Ephemeral answer prompt + supported files
+        C-->>M: Discord reply
+        M-->>W: Result
+        W-->>H: Result
+    end
+    H->>H: Normalize casual Chinese punctuation
     H->>D: Reply with only the requester ping allowed
     H->>W: Release reservation
 
@@ -156,9 +167,11 @@ Natural requests to find an older message use Discord's official guild message
 search endpoint. Codex returns a JSON Schema-constrained plan that chooses the
 nearby window or 50/100 same-channel messages and may add up to four guild
 searches using bounded text, sender, link, file, media, embed, hostname, and
-attachment-type filters. MiniSago validates the plan, performs same-channel and
-guild reads in parallel, resolves a named sender—or the requester from “I” and
-“我”—excludes the triggering message, and deduplicates results. Guild search is
+attachment-type filters. Each query carries its retrieval purpose so matching
+messages retain evidence provenance after deduplication. MiniSago validates the
+plan, performs same-channel and guild reads in parallel, resolves a named
+sender—or the requester from “I” and “我”—and excludes the triggering message.
+Guild search is
 restricted to channels where the requester has View Channel and Read Message
 History; if role data is unavailable, it falls back to the current channel. The
 answer run receives compact message records plus up to 25 guild matches with
@@ -166,6 +179,15 @@ channel names and original Discord jump links. A jump link acts as the safe
 repost path without copying or re-uploading someone else's attachment. Discord
 requires View Channel, Read Message History, and the Message Content privileged
 intent for these reads.
+
+Identity questions use a separate schema-constrained evidence resolver instead
+of the freeform answer prompt. It distinguishes direct self-links, independent
+corroboration, third-party claims, conflicts, and missing evidence. The hosted
+process bounds source indexes, downgrades unsupported confidence, and renders
+the final reply deterministically. A lone claim that two aliases are equal can
+therefore be reported only as uncertain. Before any chatbot response is posted,
+formal Chinese punctuation is normalized into spaces and line breaks while
+technical syntax and links remain available.
 
 The Mac helper runs `gpt-5.6-luna` with high reasoning and live public web
 search. Each run is ephemeral. Codex receives only the current transcript and

@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 5;
+export const CHATBOT_PROTOCOL_VERSION = 6;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 
 export type ChatbotAttachment = {
@@ -15,6 +15,14 @@ export type ChatbotReaction = {
   me?: boolean;
 };
 
+export type ChatbotSearchPurpose =
+  | "context"
+  | "direct_mention"
+  | "self_claim"
+  | "candidate_check";
+
+export type ChatbotTask = "general" | "identity_resolution";
+
 export type ChatbotMessage = {
   id: string;
   role?: "user" | "assistant";
@@ -26,12 +34,15 @@ export type ChatbotMessage = {
   channelId?: string;
   channelName?: string;
   jumpUrl?: string;
+  searchPurposes?: ChatbotSearchPurpose[];
   referencedMessage?: Omit<ChatbotMessage, "referencedMessage">;
 };
 
 export type ChatbotJob = {
   id: string;
-  purpose?: "answer" | "context_plan";
+  purpose?: "answer" | "context_plan" | "identity_resolution";
+  task?: ChatbotTask;
+  subject?: string;
   channelId: string;
   requestMessageId: string;
   request: string;

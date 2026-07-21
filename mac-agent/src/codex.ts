@@ -7,6 +7,7 @@ import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
 export {
   buildCodexPrompt,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
+  IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
 } from "./prompts";
@@ -20,6 +21,16 @@ type CodexRunOptions = {
   codexPath: string;
   signal?: AbortSignal;
 };
+
+function withoutAttachments(message: ChatbotJob["messages"][number]) {
+  return {
+    ...message,
+    attachments: [],
+    referencedMessage: message.referencedMessage
+      ? { ...message.referencedMessage, attachments: [] }
+      : undefined,
+  };
+}
 
 function escapeSeatbeltLiteral(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -122,7 +133,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
   let prepared: Awaited<ReturnType<typeof prepareAttachments>> | undefined;
 
   try {
-    prepared = await prepareAttachments(
+    const preparationJob =
       job.purpose === "context_plan"
         ? {
             ...job,
@@ -130,7 +141,18 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
             messages: [],
             searchResults: [],
           }
-        : job,
+        : job.purpose === "identity_resolution"
+          ? {
+              ...job,
+              requestMessage: job.requestMessage
+                ? withoutAttachments(job.requestMessage)
+                : undefined,
+              messages: job.messages.map(withoutAttachments),
+              searchResults: (job.searchResults ?? []).map(withoutAttachments),
+            }
+          : job;
+    prepared = await prepareAttachments(
+      preparationJob,
       timeoutController.signal,
     );
     const prompt = buildCodexPrompt(job, prepared.textBlocks, prepared.ignored);

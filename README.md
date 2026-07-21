@@ -29,10 +29,12 @@ mention MiniSago with a conversational request. The configured owner can also
 use the chatbot in other visible servers, threads, and direct messages.
 MiniSago starts with up to 20 nearby human messages and its own prior replies. A
 locked-down local Codex planner can keep that window, expand it to 50 or 100
-same-channel messages, request guild-wide searches, or combine both before a
-second Codex run answers. Users outside those guilds are silently ignored
-unless they are the configured owner. Reaction emoji and counts travel with
-each message so they can contribute lightweight conversational context.
+same-channel messages, request guild-wide searches, or combine both. General
+requests then use a second Codex run to answer. Identity questions instead use
+a structured evidence resolver followed by deterministic confidence validation
+and reply rendering. Users outside those guilds are silently ignored unless
+they are the configured owner. Reaction emoji and counts travel with each
+message so they can contribute lightweight conversational context.
 
 The chatbot can summarize recent discussion, reason about attachments, and
 search public web pages. Questions such as “When did Daniel send the meme?” use
