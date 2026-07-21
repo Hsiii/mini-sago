@@ -239,10 +239,8 @@ export class ChatbotTraceStore {
       parts.push("規劃後判斷不用另外搜尋伺服器舊訊息");
     }
 
-    if (terminal?.purpose === "identity_resolution") {
-      const verdict = safeJson<{ confidence?: string; basis?: string }>(
-        terminal.output,
-      );
+    if (answerJob?.identityResolution) {
+      const verdict = answerJob.identityResolution;
       parts.push(
         `這題走的是身分證據判定 結果信心是 ${verdict?.confidence ?? "unknown"} 依據類型是 ${verdict?.basis ?? "none"}`,
       );

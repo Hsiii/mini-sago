@@ -1,7 +1,7 @@
 import type { ChatbotJob } from "../../../lib/chatbot/protocol";
 import { answerContext } from "./context";
 
-export const PROMPT_VERSION = 7;
+export const PROMPT_VERSION = 9;
 
 export const ANSWER_INSTRUCTIONS = `You are MiniSago, a Discord assistant for Hsi's communities.
 
@@ -25,6 +25,13 @@ const DISCORD_SEARCH_INSTRUCTIONS = `Treat guild search results as broader evide
 
 const MENTION_ONLY_INSTRUCTIONS = `The request is empty. Infer the likely task from referenced and nearby context. Act when it is clear; otherwise ask one short, specific clarification question.`;
 
+const IDENTITY_ANSWER_INSTRUCTIONS = `This is an identity question. The validated_identity_resolution_json verdict is authoritative and already confidence-checked. Write the final reply naturally rather than following a fixed template. Let the confidence determine the wording:
+- strong: answer clearly and briefly explain the direct account or self-identification link.
+- moderate: give the likely answer with measured wording and summarize the independent support.
+- weak: report the possible candidate, clearly say it is only a third-party claim, and do not present it as fact.
+- unknown: do not guess. Explain briefly whether evidence is missing or conflicting.
+Use only jumpUrl values referenced by sourceIndexes when linking evidence. Do not expose confidence labels, basis enum values, source indexes, schemas, or internal process unless the user explicitly asks how the answer was decided.`;
+
 export function buildAnswerPrompt(
   job: ChatbotJob,
   attachmentText: string[],
@@ -38,6 +45,10 @@ export function buildAnswerPrompt(
 
   if (!job.request.trim()) {
     instructions.push(MENTION_ONLY_INSTRUCTIONS);
+  }
+
+  if (job.identityResolution) {
+    instructions.push(IDENTITY_ANSWER_INSTRUCTIONS);
   }
 
   return `${instructions.join("\n\n")}\n\n${answerContext(

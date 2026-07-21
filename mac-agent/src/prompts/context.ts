@@ -19,6 +19,9 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
   return {
     ...(message.role ? { role: message.role } : {}),
     author: message.author,
+    ...(message.authorAliases?.length
+      ? { authorAliases: message.authorAliases }
+      : {}),
     timestamp: message.timestamp,
     content: message.content,
     ...(message.attachments.length > 0
@@ -49,6 +52,9 @@ function requestMessageContext(job: ChatbotJob) {
 
   return {
     author: message.author,
+    ...(message.authorAliases?.length
+      ? { authorAliases: message.authorAliases }
+      : {}),
     timestamp: message.timestamp,
     ...(message.attachments.length > 0
       ? { attachments: message.attachments.map(promptAttachment) }
@@ -81,6 +87,18 @@ export function answerContext(
   ignoredAttachments: string[],
 ) {
   const sections = [requestContext(job)];
+
+  if (job.identityCandidates?.length) {
+    sections.push(
+      block("discord_identity_candidates_json", job.identityCandidates),
+    );
+  }
+
+  if (job.identityResolution) {
+    sections.push(
+      block("validated_identity_resolution_json", job.identityResolution),
+    );
+  }
 
   if (job.searchStatus && job.searchStatus !== "not_requested") {
     sections.push(

@@ -16,6 +16,7 @@ export const IDENTITY_RESOLUTION_OUTPUT_SCHEMA = {
       type: "string",
       enum: [
         "direct_self_link",
+        "discord_member_profile",
         "independent_corroboration",
         "third_party_only",
         "conflicting",
@@ -32,9 +33,10 @@ export const IDENTITY_RESOLUTION_OUTPUT_SCHEMA = {
 
 const IDENTITY_RESOLUTION_INSTRUCTIONS = `Resolve identity evidence for MiniSago. Do not write a user-facing answer. Return the structured verdict only.
 
-The subject is a username, nickname, or alias. Evaluate whether the supplied messages actually connect it to one candidate person or alias.
+The subject is a username, server nickname, global display name, or alias. Evaluate whether the supplied messages or Discord identity candidates actually connect it to one candidate person or alias. A message's authorAliases and each identity candidate's names are Discord-provided names for the same account, ordered as server nickname, global display name, and username after duplicates are removed.
 
 Evidence rules:
+- A unique Discord identity candidate that contains both the subject and another name is strong platform evidence. Use basis discord_member_profile and return the most recognizable other name as candidate.
 - A person directly identifying the same account or author as both names is strong evidence.
 - Multiple independent and consistent claims may be moderate evidence.
 - One third-party statement is weak evidence even when phrased confidently.

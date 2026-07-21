@@ -32,7 +32,7 @@ locked-down local Codex planner can keep that window, expand it to 50 or 100
 same-channel messages, request guild-wide searches, or combine both. General
 requests then use a second Codex run to answer. Identity questions instead use
 a structured evidence resolver followed by deterministic confidence validation
-and reply rendering. Users outside those guilds are silently ignored unless
+and a final natural-language answer run guided by that verdict. Users outside those guilds are silently ignored unless
 they are the configured owner. Reaction emoji and counts travel with each
 message so they can contribute lightweight conversational context.
 
@@ -48,7 +48,10 @@ topic. Codex makes this decision for every guild request, so a short follow-up
 such as “try again” can continue the prior lookup. English and Chinese requests
 can refer to the requester as “I” or “我”. Member lookup is used only to resolve
 a named sender for that search; roles, join dates, and presence are not exposed
-to Codex.
+to Codex. Identity resolution also looks up the matching guild member, searches
+messages written by and mentioning that member, and includes each author's
+distinct server nickname, global display name, and username so Discord-provided
+names for the same account can be considered together.
 
 The chatbot is available only while the Mac is awake, unlocked, authenticated,
 connected, and idle. Requests are not queued. Each run is independent;

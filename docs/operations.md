@@ -137,7 +137,11 @@ sequenceDiagram
         C-->>M: Candidate + confidence + basis + source indexes
         M-->>W: Structured verdict
         W-->>H: Verdict
-        H->>H: Validate confidence and render deterministic reply
+        H->>H: Validate and downgrade unsupported confidence
+        H->>W: Final identity answer job with validated verdict
+        W->>M: Evidence + confidence + permitted source links
+        M->>C: Natural-language answer prompt
+        C-->>M: Confidence-calibrated Discord reply
     else General answer
         H->>W: Answer job within same reservation
         W->>M: Context + search results + attachment metadata
@@ -183,11 +187,15 @@ intent for these reads.
 Identity questions use a separate schema-constrained evidence resolver instead
 of the freeform answer prompt. It distinguishes direct self-links, independent
 corroboration, third-party claims, conflicts, and missing evidence. The hosted
-process bounds source indexes, downgrades unsupported confidence, and renders
-the final reply deterministically. A lone claim that two aliases are equal can
-therefore be reported only as uncertain. Before any chatbot response is posted,
-formal Chinese punctuation is normalized into spaces and line breaks while
-technical syntax and links remain available.
+process always attempts a guild-member lookup plus searches for messages written
+by and mentioning that member. It supplies each author's distinct server
+nickname, global display name, and username, bounds source indexes, downgrades
+unsupported confidence, and sends the validated verdict to a separate answer
+run. That run chooses natural wording based on the confidence level rather than
+using a fixed reply template. A lone claim that two aliases are equal can
+therefore be reported only as uncertain.
+Before any chatbot response is posted, formal Chinese punctuation is normalized
+into spaces and line breaks while technical syntax and links remain available.
 
 The Mac helper runs `gpt-5.6-luna` with high reasoning and live public web
 search. Each run is ephemeral. Codex receives only the current transcript and

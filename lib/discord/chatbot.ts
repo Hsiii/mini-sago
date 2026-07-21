@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import type {
   ChatbotAttachment,
+  ChatbotIdentityCandidate,
+  ChatbotIdentityResolution,
   ChatbotJob,
   ChatbotMessage,
   ChatbotSearchPurpose,
@@ -48,6 +50,7 @@ type DiscordMessage = {
     bot?: boolean;
   };
   member?: {
+    nick?: string | null;
     roles?: string[];
   };
   attachments?: DiscordAttachment[];
@@ -126,6 +129,7 @@ type SearchEmbedType = (typeof SEARCH_EMBED_TYPES)[number];
 export type DiscordSearchQuery = {
   purpose?: ChatbotSearchPurpose;
   author?: string;
+  mentions?: string;
   content?: string;
   has?: SearchHas[];
   embedType?: SearchEmbedType;
@@ -142,18 +146,7 @@ export type DiscordContextPlan = {
   queries: DiscordSearchQuery[];
 };
 
-export type IdentityResolution = {
-  subject: string;
-  candidate?: string;
-  confidence: "strong" | "moderate" | "weak" | "unknown";
-  basis:
-    | "direct_self_link"
-    | "independent_corroboration"
-    | "third_party_only"
-    | "conflicting"
-    | "none";
-  sourceIndexes: number[];
-};
+export type IdentityResolution = ChatbotIdentityResolution;
 
 type DiscordRequest = <T>(
   path: string,
@@ -162,13 +155,23 @@ type DiscordRequest = <T>(
 
 export type ChatbotMention = DiscordMessage;
 
-function authorName(message: DiscordMessage) {
-  return (
-    message.author?.global_name ||
-    message.author?.username ||
-    message.author?.id ||
-    "Unknown user"
+function authorAliases(message: DiscordMessage) {
+  return [
+    message.member?.nick,
+    message.author?.global_name,
+    message.author?.username,
+  ].filter(
+    (name, index, names): name is string =>
+      Boolean(name) &&
+      names.findIndex(
+        (candidate) =>
+          candidate?.toLocaleLowerCase() === name?.toLocaleLowerCase(),
+      ) === index,
   );
+}
+
+function authorName(message: DiscordMessage) {
+  return authorAliases(message)[0] || message.author?.id || "Unknown user";
 }
 
 function attachment(attachment: DiscordAttachment): ChatbotAttachment {
@@ -220,10 +223,13 @@ function contextMessage(
   message: DiscordMessage,
   botUserId?: string,
 ): Omit<ChatbotMessage, "referencedMessage"> {
+  const aliases = authorAliases(message);
+
   return {
     id: message.id,
     role: message.author?.id === botUserId ? "assistant" : "user",
     author: authorName(message),
+    ...(aliases.length > 1 ? { authorAliases: aliases } : {}),
     timestamp: message.timestamp,
     content: messageContent(message),
     attachments: (message.attachments ?? []).map(attachment),
@@ -341,6 +347,7 @@ export function formatDiscordAnswer(content: string) {
 }
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
+const USER_MENTION_PATTERN = /^<@!?(\d+)>$/u;
 const SEARCH_PURPOSES = new Set<ChatbotSearchPurpose>([
   "context",
   "direct_mention",
@@ -349,6 +356,7 @@ const SEARCH_PURPOSES = new Set<ChatbotSearchPurpose>([
 ]);
 const IDENTITY_BASES = new Set<IdentityResolution["basis"]>([
   "direct_self_link",
+  "discord_member_profile",
   "independent_corroboration",
   "third_party_only",
   "conflicting",
@@ -461,6 +469,37 @@ export function inferIdentitySubject(request: string) {
   return english?.[1]?.trim() || undefined;
 }
 
+export function identitySearchQueries(plan: DiscordContextPlan) {
+  if (plan.task !== "identity_resolution" || !plan.subject) {
+    return plan.queries;
+  }
+
+  return [
+    {
+      purpose: "candidate_check" as const,
+      author: plan.subject,
+      sortBy: "timestamp" as const,
+      sortOrder: "desc" as const,
+    },
+    {
+      purpose: "direct_mention" as const,
+      mentions: plan.subject,
+      sortBy: "timestamp" as const,
+      sortOrder: "desc" as const,
+    },
+    ...plan.queries,
+  ].slice(0, 4);
+}
+
+export function identitySubjectName(
+  subject: string,
+  member?: DiscordGuildMember,
+) {
+  return USER_MENTION_PATTERN.test(subject)
+    ? (member && memberNames(member)[0]) || subject
+    : subject;
+}
+
 export function isTraceExplanationRequest(request: string) {
   const normalized = request.trim().toLocaleLowerCase();
   return [
@@ -476,6 +515,7 @@ export function parseIdentityResolution(
   content: string,
   subject: string,
   resultCount: number,
+  identityCandidates: ChatbotIdentityCandidate[] = [],
 ): IdentityResolution {
   const fallback: IdentityResolution = {
     subject,
@@ -491,9 +531,7 @@ export function parseIdentityResolution(
         .replace(/^```(?:json)?\s*/iu, "")
         .replace(/\s*```$/u, ""),
     ) as Record<string, unknown>;
-    const basis = IDENTITY_BASES.has(
-      payload.basis as IdentityResolution["basis"],
-    )
+    let basis = IDENTITY_BASES.has(payload.basis as IdentityResolution["basis"])
       ? (payload.basis as IdentityResolution["basis"])
       : "none";
     const candidate = shortString(payload.candidate, 64);
@@ -517,6 +555,23 @@ export function parseIdentityResolution(
       : "unknown";
 
     if (basis === "third_party_only") confidence = "weak";
+    if (basis === "discord_member_profile") {
+      const normalizedSubject = subject.toLocaleLowerCase();
+      const normalizedCandidate = candidate?.toLocaleLowerCase();
+      const hasProfileLink = identityCandidates.some((identityCandidate) => {
+        const names = identityCandidate.names.map((name) =>
+          name.toLocaleLowerCase(),
+        );
+        return (
+          names.includes(normalizedSubject) &&
+          Boolean(normalizedCandidate && names.includes(normalizedCandidate))
+        );
+      });
+      if (!hasProfileLink) {
+        basis = "none";
+        confidence = "unknown";
+      }
+    }
     if (basis === "independent_corroboration" && confidence === "strong") {
       confidence = "moderate";
     }
@@ -536,65 +591,38 @@ export function parseIdentityResolution(
   }
 }
 
-export function formatIdentityResolution(
-  resolution: IdentityResolution,
-  searchResults: ChatbotMessage[],
-) {
-  const links = resolution.sourceIndexes
-    .flatMap((index) => searchResults[index]?.jumpUrl ?? [])
-    .filter((url, index, values) => values.indexOf(url) === index)
-    .slice(0, 2)
-    .map((url, index, values) =>
-      values.length === 1
-        ? `[原訊息](${url})`
-        : `[原訊息 ${index + 1}](${url})`,
-    )
-    .join(" ");
-  const sources = links ? `\n${links}` : "";
-
-  if (
-    resolution.candidate &&
-    resolution.basis === "direct_self_link" &&
-    resolution.confidence === "strong"
-  ) {
-    return `${resolution.subject} 應該是 ${resolution.candidate}\n有本人直接把這兩個名字對上的紀錄${sources}`;
-  }
-
-  if (resolution.candidate && resolution.confidence === "moderate") {
-    return `目前看起來 ${resolution.subject} 是 ${resolution.candidate}\n有幾筆不同來源的紀錄能互相對上${sources}`;
-  }
-
-  if (resolution.candidate && resolution.confidence === "weak") {
-    return `目前只找到有人說 ${resolution.subject} 是 ${resolution.candidate}\n但還沒有直接證據把這兩個名字對上\n所以不能算確定${sources}`;
-  }
-
-  if (resolution.basis === "conflicting") {
-    return `現在還不能確定 ${resolution.subject} 是誰\n找到的紀錄互相對不起來${sources}`;
-  }
-
-  return `現在還找不到能確定 ${resolution.subject} 是誰的紀錄${sources}`;
-}
-
 function memberNames(member: DiscordGuildMember) {
   return [member.nick, member.user?.global_name, member.user?.username].filter(
-    (name): name is string => Boolean(name),
+    (name, index, names): name is string =>
+      Boolean(name) &&
+      names.findIndex(
+        (candidate) =>
+          candidate?.toLocaleLowerCase() === name?.toLocaleLowerCase(),
+      ) === index,
   );
 }
 
-async function resolveGuildMemberId({
+async function resolveGuildMember({
   guildId,
-  authorQuery,
+  memberQuery,
   discordRequest,
 }: {
   guildId: string;
-  authorQuery: string;
+  memberQuery: string;
   discordRequest: DiscordRequest;
 }) {
-  const query = new URLSearchParams({ query: authorQuery, limit: "10" });
+  const mentionedUserId = memberQuery.match(USER_MENTION_PATTERN)?.[1];
+  if (mentionedUserId) {
+    return discordRequest<DiscordGuildMember>(
+      `/guilds/${guildId}/members/${mentionedUserId}`,
+    );
+  }
+
+  const query = new URLSearchParams({ query: memberQuery, limit: "10" });
   const members = await discordRequest<DiscordGuildMember[]>(
     `/guilds/${guildId}/members/search?${query}`,
   );
-  const normalizedQuery = authorQuery.toLocaleLowerCase();
+  const normalizedQuery = memberQuery.toLocaleLowerCase();
   const exactMatches = members.filter((member) =>
     memberNames(member).some(
       (name) => name.toLocaleLowerCase() === normalizedQuery,
@@ -607,7 +635,7 @@ async function resolveGuildMemberId({
         ? members[0]
         : undefined;
 
-  return match?.user?.id;
+  return match;
 }
 
 const ADMINISTRATOR = 1n << 3n;
@@ -736,6 +764,7 @@ export async function searchGuildMessages({
   currentChannelId,
   requestMessageId,
   queries,
+  knownMembers = [],
   discordRequest,
 }: {
   guildId: string;
@@ -744,6 +773,7 @@ export async function searchGuildMessages({
   currentChannelId: string;
   requestMessageId: string;
   queries: DiscordSearchQuery[];
+  knownMembers?: DiscordGuildMember[];
   discordRequest: DiscordRequest;
 }) {
   const searchableChannels = await requesterSearchChannels({
@@ -754,27 +784,41 @@ export async function searchGuildMessages({
     discordRequest,
   });
   const memberIds = new Map<string, string | undefined>();
+  for (const member of knownMembers) {
+    for (const name of memberNames(member)) {
+      memberIds.set(name.toLocaleLowerCase(), member.user?.id);
+    }
+  }
   const matches = new Map<
     string,
     { message: DiscordMessage; purposes: Set<ChatbotSearchPurpose> }
   >();
 
   for (const search of queries.slice(0, 4)) {
-    let authorId: string | undefined;
-    if (search.author) {
-      const normalizedAuthor = search.author.toLocaleLowerCase();
-      authorId = SELF_AUTHOR_PATTERN.test(search.author)
+    const resolveMemberId = async (memberQuery: string) => {
+      const normalizedMember = memberQuery.toLocaleLowerCase();
+      let memberId = SELF_AUTHOR_PATTERN.test(memberQuery)
         ? requesterUserId
-        : memberIds.get(normalizedAuthor);
-      if (!authorId && !memberIds.has(normalizedAuthor)) {
-        authorId = await resolveGuildMemberId({
+        : memberIds.get(normalizedMember);
+      if (!memberId && !memberIds.has(normalizedMember)) {
+        const member = await resolveGuildMember({
           guildId,
-          authorQuery: search.author,
+          memberQuery,
           discordRequest,
         });
-        memberIds.set(normalizedAuthor, authorId);
+        memberId = member?.user?.id;
+        memberIds.set(normalizedMember, memberId);
       }
-      if (!authorId) continue;
+      return memberId;
+    };
+    const authorId = search.author
+      ? await resolveMemberId(search.author)
+      : undefined;
+    const mentionedId = search.mentions
+      ? await resolveMemberId(search.mentions)
+      : undefined;
+    if ((search.author && !authorId) || (search.mentions && !mentionedId)) {
+      continue;
     }
 
     const query = new URLSearchParams({
@@ -784,6 +828,7 @@ export async function searchGuildMessages({
       sort_order: search.sortOrder ?? "desc",
     });
     if (authorId) query.append("author_id", authorId);
+    if (mentionedId) query.append("mentions", mentionedId);
     if (search.content) query.set("content", search.content);
     for (const has of search.has ?? []) query.append("has", has);
     if (search.embedType) query.append("embed_type", search.embedType);
@@ -1089,6 +1134,8 @@ export async function handleChatbotMention({
         history: "local",
         queries: [],
       };
+      let identityMember: DiscordGuildMember | undefined;
+      let identityCandidates: ChatbotIdentityCandidate[] = [];
       const inferredIdentitySubject = inferIdentitySubject(request);
 
       if (message.guild_id) {
@@ -1124,6 +1171,28 @@ export async function handleChatbotMention({
           };
         }
 
+        if (plan.task === "identity_resolution" && plan.subject) {
+          try {
+            identityMember = await resolveGuildMember({
+              guildId: message.guild_id,
+              memberQuery: plan.subject,
+              discordRequest,
+            });
+            const names = identityMember ? memberNames(identityMember) : [];
+            if (names.length > 0) {
+              identityCandidates = [{ names }];
+              plan = {
+                ...plan,
+                subject: identitySubjectName(plan.subject, identityMember),
+              };
+            }
+          } catch {
+            console.warn("Discord member lookup unavailable.");
+          }
+        }
+
+        const searchQueries = identitySearchQueries(plan);
+
         const historyLimit =
           plan.history === "extended"
             ? MESSAGE_LIMIT
@@ -1141,14 +1210,15 @@ export async function handleChatbotMention({
               })
             : Promise.resolve(messages);
         const searchPromise =
-          plan.queries.length > 0
+          searchQueries.length > 0
             ? searchGuildMessages({
                 guildId: message.guild_id,
                 requesterUserId,
                 requesterRoleIds: message.member?.roles,
                 currentChannelId: message.channel_id,
                 requestMessageId: message.id,
-                queries: plan.queries,
+                queries: searchQueries,
+                knownMembers: identityMember ? [identityMember] : [],
                 discordRequest,
               })
                 .then((results) => ({
@@ -1184,6 +1254,7 @@ export async function handleChatbotMention({
           requestMessageId: message.id,
           request,
           requestMessage,
+          identityCandidates,
           messages,
           searchStatus: search.status,
           searchResults: search.results,
@@ -1204,13 +1275,32 @@ export async function handleChatbotMention({
               evidenceResult.content,
               plan.subject,
               search.results.length,
+              identityCandidates,
             )
-          : parseIdentityResolution("", plan.subject, search.results.length);
+          : parseIdentityResolution(
+              "",
+              plan.subject,
+              search.results.length,
+              identityCandidates,
+            );
 
-        return {
-          ok: true as const,
-          content: formatIdentityResolution(resolution, search.results),
+        const answerJob: ChatbotJob = {
+          ...evidenceJob,
+          id: randomUUID(),
+          purpose: "answer",
+          identityResolution: resolution,
         };
+        const answerDispatch = workflow.dispatch(answerJob);
+
+        if (answerDispatch.status === "offline") {
+          return { ok: false as const, error: "The Mac disconnected." };
+        }
+
+        if (answerDispatch.status === "busy") {
+          return { ok: false as const, error: "The Mac became busy." };
+        }
+
+        return answerDispatch.result;
       }
 
       const job: ChatbotJob = {

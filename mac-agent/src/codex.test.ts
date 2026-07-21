@@ -146,7 +146,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(7);
+    expect(PROMPT_VERSION).toBe(9);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -192,6 +192,7 @@ describe("Codex chatbot runner", () => {
       purpose: "identity_resolution",
       task: "identity_resolution",
       subject: "6uc",
+      identityCandidates: [{ names: ["6uc", "午前", "wuchien"] }],
       request: "重新挑戰 6uc 是誰",
       searchResults: [
         {
@@ -207,8 +208,35 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("One third-party statement is weak evidence");
     expect(prompt).toContain('"sourceIndex":0');
     expect(prompt).toContain('"searchPurposes":["direct_mention"]');
+    expect(prompt).toContain("<discord_identity_candidates_json>");
+    expect(prompt).toContain('"names":["6uc","午前","wuchien"]');
     expect(outputSchemaForJob(identityJob)).toBe(
       IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
+    );
+
+    const answerPrompt = buildCodexPrompt(
+      {
+        ...identityJob,
+        purpose: "answer",
+        identityResolution: {
+          subject: "6uc",
+          candidate: "午前",
+          confidence: "weak",
+          basis: "third_party_only",
+          sourceIndexes: [0],
+        },
+      },
+      [],
+      [],
+    );
+    expect(answerPrompt).toContain("Write the final reply naturally");
+    expect(answerPrompt).toContain(
+      "clearly say it is only a third-party claim",
+    );
+    expect(answerPrompt).toContain("<validated_identity_resolution_json>");
+    expect(answerPrompt).toContain('"confidence":"weak"');
+    expect(outputSchemaForJob({ ...identityJob, purpose: "answer" })).toBe(
+      undefined,
     );
   });
 

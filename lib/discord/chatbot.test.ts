@@ -5,10 +5,11 @@ import {
   extractChatbotRequest,
   extractMentionRequest,
   formatDiscordAnswer,
-  formatIdentityResolution,
   getNearbyHumanMessages,
   getRecentHumanMessages,
   handleChatbotMention,
+  identitySearchQueries,
+  identitySubjectName,
   isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
@@ -328,6 +329,33 @@ describe("Discord chatbot", () => {
     expect(toChatbotMessage(base, BOT_ID).role).toBe("assistant");
   });
 
+  test("includes Discord server and global display names as author aliases", () => {
+    const message = toChatbotMessage({
+      id: "message-1",
+      channel_id: "channel-1",
+      content: "hello",
+      timestamp: "2026-07-20T11:00:00.000Z",
+      author: {
+        id: "user-1",
+        username: "daniel_account",
+        global_name: "Daniel",
+      },
+      member: { nick: "午前" },
+    });
+
+    expect(message.author).toBe("午前");
+    expect(message.authorAliases).toEqual(["午前", "Daniel", "daniel_account"]);
+    expect(
+      toChatbotMessage({
+        id: "message-2",
+        channel_id: "channel-1",
+        content: "hello again",
+        timestamp: "2026-07-20T11:01:00.000Z",
+        author: { id: "user-1", username: "Daniel", global_name: "daniel" },
+      }).authorAliases,
+    ).toBeUndefined();
+  });
+
   test("validates and limits Codex Discord context plans", () => {
     expect(
       parseDiscordContextPlan(`\`\`\`json
@@ -361,7 +389,46 @@ describe("Discord chatbot", () => {
     expect(inferIdentitySubject("6uc 最近說了什麼")).toBeUndefined();
   });
 
-  test("downgrades unsupported identity claims and renders uncertainty", () => {
+  test("always searches messages by and mentioning an identity subject", () => {
+    expect(
+      identitySearchQueries({
+        task: "identity_resolution",
+        subject: "kiseki",
+        history: "local",
+        queries: [{ purpose: "context", content: "old alias" }],
+      }),
+    ).toEqual([
+      {
+        purpose: "candidate_check",
+        author: "kiseki",
+        sortBy: "timestamp",
+        sortOrder: "desc",
+      },
+      {
+        purpose: "direct_mention",
+        mentions: "kiseki",
+        sortBy: "timestamp",
+        sortOrder: "desc",
+      },
+      { purpose: "context", content: "old alias" },
+    ]);
+  });
+
+  test("turns an actual Discord user mention into its displayed member name", () => {
+    expect(
+      identitySubjectName("<@123456789012345678>", {
+        nick: "Kiseki",
+        user: {
+          id: "123456789012345678",
+          username: "kiseki_account",
+          global_name: "Daniel",
+        },
+      }),
+    ).toBe("Kiseki");
+    expect(identitySubjectName("kiseki")).toBe("kiseki");
+  });
+
+  test("downgrades unsupported identity claims before answer writing", () => {
     const resolution = parseIdentityResolution(
       JSON.stringify({
         subject: "6uc",
@@ -381,20 +448,29 @@ describe("Discord chatbot", () => {
       basis: "third_party_only",
       sourceIndexes: [0],
     });
-    expect(
-      formatIdentityResolution(resolution, [
-        {
-          id: "message-1",
-          author: "Someone",
-          timestamp: "2026-07-20T10:00:00.000Z",
-          content: "6uc 是午前",
-          attachments: [],
-          jumpUrl: "https://discord.com/channels/guild-1/channel-1/message-1",
-        },
-      ]),
-    ).toBe(
-      "目前只找到有人說 6uc 是 午前\n但還沒有直接證據把這兩個名字對上\n所以不能算確定\n[原訊息](https://discord.com/channels/guild-1/channel-1/message-1)",
-    );
+  });
+
+  test("accepts a Discord member profile only when it links both names", () => {
+    const content = JSON.stringify({
+      subject: "kiseki",
+      candidate: "Daniel",
+      confidence: "strong",
+      basis: "discord_member_profile",
+      sourceIndexes: [],
+    });
+    const candidate = { names: ["Kiseki", "Daniel", "daniel_account"] };
+
+    expect(parseIdentityResolution(content, "kiseki", 0, [candidate])).toEqual({
+      subject: "kiseki",
+      candidate: "Daniel",
+      confidence: "strong",
+      basis: "discord_member_profile",
+      sourceIndexes: [],
+    });
+    expect(parseIdentityResolution(content, "kiseki", 0)).toMatchObject({
+      confidence: "unknown",
+      basis: "none",
+    });
   });
 
   test("normalizes formal Chinese punctuation before posting", () => {
@@ -425,6 +501,7 @@ describe("Discord chatbot", () => {
         {
           purpose: "direct_mention",
           author: "Daniel",
+          mentions: "Daniel",
           has: ["image"],
         },
       ],
@@ -488,6 +565,7 @@ describe("Discord chatbot", () => {
     expect(requestedPaths[3]).toContain("channel_id=channel-1");
     expect(requestedPaths[3]).not.toContain("hidden-1");
     expect(requestedPaths[3]).toContain("author_id=user-1");
+    expect(requestedPaths[3]).toContain("mentions=user-1");
     expect(requestedPaths[3]).toContain("has=image");
     expect(results).toHaveLength(1);
     expect(results[0]?.channelName).toBe("memes");
