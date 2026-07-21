@@ -10,13 +10,13 @@ running on an unlocked Mac.
 
 ## Features
 
-| Feature                     | Scope                               |
-| --------------------------- | ----------------------------------- |
-| Instagram link replies      | Every visible server/channel        |
-| Codex chatbot               | Two allowed guilds; owner elsewhere |
-| Channel access and commands | Configured guild only               |
-| Vocabulary and feed updates | Configured guild/channel            |
-| GitHub PR review threads    | Configured repository/channel       |
+| Feature                     | Scope                                   |
+| --------------------------- | --------------------------------------- |
+| Instagram link replies      | Every visible server/channel            |
+| Codex chatbot               | Allowed guilds/channel; owner elsewhere |
+| Channel access and commands | Configured guild only                   |
+| Vocabulary and feed updates | Configured guild/channel                |
+| GitHub PR review threads    | Configured repository/channel           |
 
 Other servers receive only the universal Instagram replies and owner chatbot;
 deployment-specific roles, commands, and scheduled updates stay in their
@@ -26,7 +26,8 @@ configured destinations.
 
 Every member of guilds `917436845187563610` and `1282936453134815275` can
 mention MiniSago with a conversational request. The configured owner can also
-use the chatbot in other visible servers, threads, and direct messages.
+use the chatbot in other visible servers, threads, and direct messages. Channel
+`1517766866964316201` is also available to every member who can access it.
 MiniSago starts with up to 20 nearby human messages and its own prior replies. A
 locked-down local Codex planner can keep that window, expand it to 50 or 100
 same-channel messages, request guild-wide searches, or combine both. General

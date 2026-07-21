@@ -11,6 +11,8 @@ in [README.md](../README.md).
   those locations and in direct messages when the Mac helper is available.
 - **Chatbot guilds:** every member of guilds `917436845187563610` and
   `1282936453134815275` can mention MiniSago and use the chatbot.
+- **Chatbot channel:** every member with access to channel
+  `1517766866964316201` can mention MiniSago and use the chatbot there.
 - **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
   TOEFL posts, Gamer forum alerts, and X alerts are restricted to
   `DISCORD_GUILD_ID`. The current deployment uses the WM31 guild
@@ -159,8 +161,9 @@ sequenceDiagram
 ```
 
 The hosted process receives `@MiniSago` messages from any member of the two
-chatbot guilds through the existing Discord Gateway. Hsi retains access in
-other visible servers and direct messages. In a guild, it first fetches up to 20
+chatbot guilds or the allowed chatbot channel through the existing Discord
+Gateway. Hsi retains access in other visible servers and direct messages. In a
+guild, it first fetches up to 20
 nearby human messages plus MiniSago's own prior replies and sends a transient
 context-planning job through the authenticated WebSocket at
 `/api/mac-agent/ws`. Message context includes compact reaction emoji and counts,

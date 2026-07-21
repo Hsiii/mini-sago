@@ -102,9 +102,15 @@ describe("Discord chatbot", () => {
     });
   });
 
-  test("authorizes every member of the two chatbot guilds", () => {
+  test("authorizes configured guilds, channels, and the owner", () => {
     expect(isChatbotAuthorized("member-1", "917436845187563610")).toBe(true);
     expect(isChatbotAuthorized("member-2", "1282936453134815275")).toBe(true);
+    expect(
+      isChatbotAuthorized("member-3", "other-guild", "1517766866964316201"),
+    ).toBe(true);
+    expect(
+      isChatbotAuthorized("member-3", "other-guild", "other-channel"),
+    ).toBe(false);
     expect(isChatbotAuthorized("member-3", "other-guild")).toBe(false);
     expect(isChatbotAuthorized("member-3")).toBe(false);
     expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);

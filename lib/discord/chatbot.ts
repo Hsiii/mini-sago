@@ -17,6 +17,7 @@ const AUTHORIZED_GUILD_IDS = new Set([
   "917436845187563610",
   "1282936453134815275",
 ]);
+const AUTHORIZED_CHANNEL_IDS = new Set(["1517766866964316201"]);
 const LOCAL_CONTEXT_LIMIT = 20;
 const LOCAL_CONTEXT_FETCH_LIMIT = 25;
 const MEDIUM_CONTEXT_LIMIT = 50;
@@ -300,10 +301,15 @@ export function extractChatbotRequest(
     : null;
 }
 
-export function isChatbotAuthorized(userId: string, guildId?: string) {
+export function isChatbotAuthorized(
+  userId: string,
+  guildId?: string,
+  channelId?: string,
+) {
   return (
     userId === AUTHORIZED_USER_ID ||
-    (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId))
+    (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId)) ||
+    (channelId !== undefined && AUTHORIZED_CHANNEL_IDS.has(channelId))
   );
 }
 
@@ -1055,7 +1061,9 @@ export async function handleChatbotMention({
     return false;
   }
 
-  if (!isChatbotAuthorized(requesterUserId, message.guild_id)) {
+  if (
+    !isChatbotAuthorized(requesterUserId, message.guild_id, message.channel_id)
+  ) {
     if (!message.guild_id) {
       return false;
     }
