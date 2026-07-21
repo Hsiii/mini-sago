@@ -312,7 +312,7 @@ function normalizeChineseProse(content: string) {
     .replace(/[「」『』]/gu, "")
     .replace(/[ \t]+/gu, " ")
     .replace(/ *\n */gu, "\n")
-    .replace(/\n{3,}/gu, "\n\n");
+    .replace(/\n{2,}/gu, "\n");
 }
 
 export function formatDiscordAnswer(content: string) {

@@ -398,6 +398,9 @@ describe("Discord chatbot", () => {
         "請跑 `foo，bar`，再看 https://example.com/a，下一步。",
       ),
     ).toBe("請跑 `foo，bar` 再看 https://example.com/a 下一步");
+    expect(formatDiscordAnswer("第一句。\n\n第二句！\n\n\n第三句")).toBe(
+      "第一句\n第二句\n第三句",
+    );
   });
 
   test("searches the guild and returns channel names and safe jump links", async () => {
