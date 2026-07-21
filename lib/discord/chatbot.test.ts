@@ -16,6 +16,7 @@ import {
   inferIdentitySubject,
   isTraceExplanationRequest,
   parseDiscordContextPlan,
+  parseExecutionRoute,
   parseIdentityResolution,
   searchGuildMessages,
   toChatbotMessage,
@@ -115,6 +116,38 @@ describe("Discord chatbot", () => {
     expect(isChatbotAuthorized("member-3")).toBe(false);
     expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);
     expect(isChatbotAuthorized("917446775873343600")).toBe(true);
+  });
+
+  test("rejects community PR reviews before dispatching to the Mac", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "message-community-pr",
+        channel_id: "channel-1",
+        guild_id: "917436845187563610",
+        content: `<@${BOT_ID}> review https://github.com/Hsiii/health-check-system/pull/42`,
+        timestamp: "2026-07-20T11:00:00.000Z",
+        author: { id: "member-1", username: "Member" },
+      },
+      botUserId: BOT_ID,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "message-community-pr" }] as never;
+        }
+        return undefined as never;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(requests.at(-1)).toEqual({
+      path: "/channels/channel-1/messages",
+      body: {
+        content:
+          "這種會碰 GitHub 或程式碼的重工作目前只有曦可以叫我做 你可以叫我整理聊天或網址內容",
+        allowed_mentions: { parse: [] },
+      },
+    });
   });
 
   test("gives unauthorized guild members a safe Chinese reply", async () => {
@@ -387,6 +420,17 @@ describe("Discord chatbot", () => {
       history: "local",
       queries: [],
     });
+  });
+
+  test("validates Luna execution routes with a deterministic dev fallback", () => {
+    expect(
+      parseExecutionRoute('{"mode":"dev","reason":"PR review"}', "hello"),
+    ).toBe("dev");
+    expect(
+      parseExecutionRoute('{"mode":"chat","reason":"summary"}', "hello"),
+    ).toBe("chat");
+    expect(parseExecutionRoute("not json", "review this PR")).toBe("dev");
+    expect(parseExecutionRoute("not json", "summarize our chat")).toBe("chat");
   });
 
   test("recognizes direct identity questions", () => {

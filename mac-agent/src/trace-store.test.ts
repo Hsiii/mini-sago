@@ -26,6 +26,7 @@ function store() {
 function job(overrides: Partial<ChatbotJob>): ChatbotJob {
   return {
     id: "answer-1",
+    requesterUserId: "test-user",
     purpose: "answer",
     channelId: "channel-1",
     requestMessageId: "request-1",
@@ -69,7 +70,7 @@ describe("chatbot trace store", () => {
       }),
       1_500,
     );
-    traces.start(answer, 1_600);
+    traces.start(answer, 1_600, { model: "owner-model" });
     traces.finish(answer.id, "The answer", 3_000);
 
     const explanation = traces.explainPrevious("channel-1", "request-2");
@@ -78,7 +79,7 @@ describe("chatbot trace store", () => {
     expect(explanation).toContain("關鍵字「launch」、作者 Daniel");
     expect(explanation).toContain("帶回 1 則");
     expect(explanation).toContain("大約 2.0 秒");
-    expect(explanation).toContain("test-model 和第 7 版提示");
+    expect(explanation).toContain("owner-model 和第 7 版提示");
     expect(explanation).toContain("不包含私密思考逐字稿");
     traces.close();
   });

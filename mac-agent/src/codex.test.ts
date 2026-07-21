@@ -2,18 +2,22 @@ import { describe, expect, test } from "bun:test";
 
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import {
+  assertChatbotJobAllowed,
   buildCodexPrompt,
   buildSeatbeltProfile,
-  CHATBOT_MODEL,
-  CHATBOT_REASONING_EFFORT,
+  codexProfileForJob,
+  COMMUNITY_CHATBOT_PROFILE,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
   IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
+  OWNER_CHATBOT_PROFILE,
+  OWNER_ROUTER_PROFILE,
   PROMPT_VERSION,
 } from "./codex";
 
 const job: ChatbotJob = {
   id: "job-1",
+  requesterUserId: "community-member",
   channelId: "channel-1",
   requestMessageId: "message-2",
   request: "What did we decide?",
@@ -42,9 +46,47 @@ const job: ChatbotJob = {
 };
 
 describe("Codex chatbot runner", () => {
-  test("uses Luna with high reasoning", () => {
-    expect(CHATBOT_MODEL).toBe("gpt-5.6-luna");
-    expect(CHATBOT_REASONING_EFFORT).toBe("high");
+  test("uses Luna for chat and routing, then Sol medium for owner dev work", () => {
+    expect(COMMUNITY_CHATBOT_PROFILE).toEqual({
+      model: "gpt-5.6-luna",
+      reasoningEffort: "high",
+    });
+    expect(OWNER_CHATBOT_PROFILE).toEqual({
+      model: "gpt-5.6-sol",
+      reasoningEffort: "medium",
+    });
+    expect(OWNER_ROUTER_PROFILE).toEqual({
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
+    });
+    expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
+    expect(
+      codexProfileForJob({
+        ...job,
+        requesterUserId: "917446775873343600",
+        executionMode: "dev",
+      }),
+    ).toBe(OWNER_CHATBOT_PROFILE);
+    expect(
+      codexProfileForJob({
+        ...job,
+        requesterUserId: "917446775873343600",
+        purpose: "execution_route",
+      }),
+    ).toBe(OWNER_ROUTER_PROFILE);
+  });
+
+  test("rechecks privileged work at the Mac boundary", () => {
+    expect(() =>
+      assertChatbotJobAllowed({ ...job, request: "review this PR" }),
+    ).toThrow("Community users cannot dispatch privileged Codex work.");
+    expect(() =>
+      assertChatbotJobAllowed({
+        ...job,
+        requesterUserId: "917446775873343600",
+        request: "review this PR",
+      }),
+    ).not.toThrow();
   });
 
   test("lets Codex choose extra Discord context", () => {
@@ -146,7 +188,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(9);
+    expect(PROMPT_VERSION).toBe(10);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",

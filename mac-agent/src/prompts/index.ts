@@ -8,16 +8,24 @@ import {
   buildIdentityResolutionPrompt,
   IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
 } from "./identity-resolution";
+import {
+  buildExecutionRoutePrompt,
+  EXECUTION_ROUTE_OUTPUT_SCHEMA,
+} from "./execution-route";
 
 export { ANSWER_INSTRUCTIONS, PROMPT_VERSION } from "./answer";
 export { CONTEXT_PLAN_OUTPUT_SCHEMA } from "./context-plan";
 export { IDENTITY_RESOLUTION_OUTPUT_SCHEMA } from "./identity-resolution";
+export { EXECUTION_ROUTE_OUTPUT_SCHEMA } from "./execution-route";
 
 export function buildCodexPrompt(
   job: ChatbotJob,
   attachmentText: string[],
   ignoredAttachments: string[],
 ) {
+  if (job.purpose === "execution_route") {
+    return buildExecutionRoutePrompt(job);
+  }
   if (job.purpose === "context_plan") return buildContextPlanPrompt(job);
   if (job.purpose === "identity_resolution") {
     return buildIdentityResolutionPrompt(job);
@@ -26,6 +34,7 @@ export function buildCodexPrompt(
 }
 
 export function outputSchemaForJob(job: ChatbotJob) {
+  if (job.purpose === "execution_route") return EXECUTION_ROUTE_OUTPUT_SCHEMA;
   if (job.purpose === "context_plan") return CONTEXT_PLAN_OUTPUT_SCHEMA;
   if (job.purpose === "identity_resolution") {
     return IDENTITY_RESOLUTION_OUTPUT_SCHEMA;

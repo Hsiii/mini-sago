@@ -56,6 +56,14 @@ config, skills, memories, plugins, MCP servers, or repository instructions.
 The trace database is readable only by the local user and is automatically
 pruned after 14 days or when it exceeds 250 MB.
 
+The Discord owner ID is a code-level security boundary. Owner requests use
+GPT-5.6 Sol with medium reasoning. Other authorized community members use
+GPT-5.6 Luna with high reasoning and are limited to conversational,
+summarization, and public-information requests. GitHub pull-request reviews,
+issue mutations, code changes, command execution, and similar privileged
+requests are rejected before they reach the Mac, then checked again by the Mac
+helper before Codex runs.
+
 ## GitHub pull request review threads
 
 | Name                          | Required | Description                                                                                                                              |

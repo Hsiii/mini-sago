@@ -6,8 +6,8 @@ import {
 } from "../../lib/chatbot/protocol";
 import type { MacAgentConfig } from "./config";
 import {
-  CHATBOT_MODEL,
   checkCodexAuthentication,
+  codexProfileForJob,
   PROMPT_VERSION,
   runCodexJob,
 } from "./codex";
@@ -41,7 +41,6 @@ export class MacAgentClient {
 
   constructor(private readonly config: MacAgentConfig) {
     this.traceStore = new ChatbotTraceStore(config.traceDatabasePath, {
-      model: CHATBOT_MODEL,
       promptVersion: PROMPT_VERSION,
     });
     this.sessionMonitor = new SessionMonitor(
@@ -199,7 +198,9 @@ export class MacAgentClient {
         job.purpose === "trace_explanation"
           ? this.traceStore.explainPrevious(job.channelId, job.requestMessageId)
           : await (async () => {
-              this.traceStore.start(job, startedAt);
+              this.traceStore.start(job, startedAt, {
+                model: codexProfileForJob(job).model,
+              });
               const answer = await runCodexJob(job, {
                 ...this.config,
                 signal: controller.signal,

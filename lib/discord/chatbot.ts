@@ -1,8 +1,14 @@
 import { randomUUID } from "node:crypto";
 
+import {
+  canRunChatbotRequest,
+  isPrivilegedChatbotRequest,
+  OWNER_DISCORD_USER_ID,
+} from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import type {
   ChatbotAttachment,
+  ChatbotExecutionMode,
   ChatbotIdentityCandidate,
   ChatbotIdentityResolution,
   ChatbotJob,
@@ -12,7 +18,6 @@ import type {
 } from "../chatbot/protocol";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
-const AUTHORIZED_USER_ID = "917446775873343600";
 const AUTHORIZED_GUILD_IDS = new Set([
   "917436845187563610",
   "1282936453134815275",
@@ -307,10 +312,22 @@ export function isChatbotAuthorized(
   channelId?: string,
 ) {
   return (
-    userId === AUTHORIZED_USER_ID ||
+    userId === OWNER_DISCORD_USER_ID ||
     (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId)) ||
     (channelId !== undefined && AUTHORIZED_CHANNEL_IDS.has(channelId))
   );
+}
+
+function privilegedRequestContext(request: string, message: DiscordMessage) {
+  return [
+    request,
+    messageContent(message),
+    message.referenced_message
+      ? messageContent(message.referenced_message)
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 const PROTECTED_CHAT_SEGMENT =
@@ -463,6 +480,26 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
   } catch {
     return { task: "general", history: "local", queries: [] };
   }
+}
+
+export function parseExecutionRoute(
+  content: string,
+  fallbackContext: string,
+): ChatbotExecutionMode {
+  try {
+    const normalized = content
+      .trim()
+      .replace(/^```(?:json)?\s*/iu, "")
+      .replace(/\s*```$/u, "");
+    const payload = JSON.parse(normalized) as { mode?: unknown };
+    if (payload.mode === "dev" || payload.mode === "chat") {
+      return payload.mode;
+    }
+  } catch {
+    // Fall through to the deterministic safety net.
+  }
+
+  return isPrivilegedChatbotRequest(fallbackContext) ? "dev" : "chat";
 }
 
 export function inferIdentitySubject(request: string) {
@@ -1070,7 +1107,21 @@ export async function handleChatbotMention({
 
     await postChatbotResponse(
       message,
-      `在這個伺服器裡我暫時只聽 <@${AUTHORIZED_USER_ID}> 的 抱歉啦`,
+      `在這個伺服器裡我暫時只聽 <@${OWNER_DISCORD_USER_ID}> 的 抱歉啦`,
+      discordRequest,
+    );
+    return true;
+  }
+
+  if (
+    !canRunChatbotRequest(
+      requesterUserId,
+      privilegedRequestContext(request, message),
+    )
+  ) {
+    await postChatbotResponse(
+      message,
+      "這種會碰 GitHub 或程式碼的重工作目前只有曦可以叫我做 你可以叫我整理聊天或網址內容",
       discordRequest,
     );
     return true;
@@ -1105,6 +1156,7 @@ export async function handleChatbotMention({
       if (isTraceExplanationRequest(request)) {
         const traceDispatch = workflow.dispatch({
           id: randomUUID(),
+          requesterUserId,
           purpose: "trace_explanation",
           channelId: message.channel_id,
           requestMessageId: message.id,
@@ -1133,6 +1185,33 @@ export async function handleChatbotMention({
             botUserId,
             discordRequest,
           });
+      let executionMode: ChatbotExecutionMode = "chat";
+
+      if (requesterUserId === OWNER_DISCORD_USER_ID) {
+        const routeJob: ChatbotJob = {
+          id: randomUUID(),
+          requesterUserId,
+          purpose: "execution_route",
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages,
+        };
+        const routeDispatch = workflow.dispatch(routeJob);
+        if (routeDispatch.status === "accepted") {
+          const routeResult = await routeDispatch.result;
+          executionMode = parseExecutionRoute(
+            routeResult.ok ? routeResult.content : "",
+            privilegedRequestContext(request, message),
+          );
+        } else {
+          executionMode = parseExecutionRoute(
+            "",
+            privilegedRequestContext(request, message),
+          );
+        }
+      }
       let search: {
         status: "not_requested" | "complete" | "unavailable";
         results: ChatbotMessage[];
@@ -1149,7 +1228,9 @@ export async function handleChatbotMention({
       if (message.guild_id) {
         const plannerJob: ChatbotJob = {
           id: randomUUID(),
+          requesterUserId,
           purpose: "context_plan",
+          executionMode,
           channelId: message.channel_id,
           requestMessageId: message.id,
           request,
@@ -1255,7 +1336,9 @@ export async function handleChatbotMention({
       if (plan.task === "identity_resolution" && plan.subject) {
         const evidenceJob: ChatbotJob = {
           id: randomUUID(),
+          requesterUserId,
           purpose: "identity_resolution",
+          executionMode,
           task: plan.task,
           subject: plan.subject,
           channelId: message.channel_id,
@@ -1313,7 +1396,9 @@ export async function handleChatbotMention({
 
       const job: ChatbotJob = {
         id: randomUUID(),
+        requesterUserId,
         purpose: "answer",
+        executionMode,
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,

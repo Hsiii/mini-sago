@@ -66,6 +66,7 @@ describe("Mac agent bridge", () => {
     const { socket, sent } = fakeSocket();
     const job: ChatbotJob = {
       id: "job-1",
+      requesterUserId: "test-user",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "Summarize this",
@@ -118,6 +119,7 @@ describe("Mac agent bridge", () => {
     const { socket } = fakeSocket();
     const job: ChatbotJob = {
       id: "planner-1",
+      requesterUserId: "test-user",
       purpose: "context_plan",
       channelId: "channel-1",
       requestMessageId: "message-1",
