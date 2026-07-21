@@ -154,6 +154,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Taiwanese university group chat");
     expect(prompt).toContain("youthful, socially perceptive, lightly cheeky");
     expect(prompt).toContain("occasional playful aside");
+    expect(prompt).not.toContain("dry punchline");
     expect(prompt).toContain("gentle teasing only when it fits");
     expect(prompt).toContain("proportionate reactions");
     expect(prompt).toContain("do not use ， 。 ： ； 「 」");
