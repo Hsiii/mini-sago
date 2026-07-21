@@ -19,6 +19,7 @@ describe("chatbot attachment limits", () => {
   test("explains oversized attachments with the selected Chinese copy", async () => {
     const prepared = await prepareAttachments({
       id: "job-large-file",
+      requesterUserId: "test-user",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "read this",
@@ -53,6 +54,7 @@ describe("chatbot attachment limits", () => {
       const originalFetch = globalThis.fetch;
       const job: ChatbotJob = {
         id: "job-1",
+        requesterUserId: "test-user",
         channelId: "channel-1",
         requestMessageId: "message-2",
         request: "What is in the notes?",
@@ -118,6 +120,7 @@ describe("chatbot attachment limits", () => {
     const originalFetch = globalThis.fetch;
     const job: ChatbotJob = {
       id: "job-2",
+      requesterUserId: "test-user",
       channelId: "channel-1",
       requestMessageId: "message-2",
       request: "read this",
@@ -172,6 +175,7 @@ describe("chatbot attachment limits", () => {
           prepareAttachments(
             {
               id: "job-cancelled",
+              requesterUserId: "test-user",
               channelId: "channel-1",
               requestMessageId: "message-1",
               request: "read this",

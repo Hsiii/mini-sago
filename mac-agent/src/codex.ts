@@ -1,5 +1,9 @@
 import { join } from "node:path";
 
+import {
+  canRunChatbotRequest,
+  chatbotAccessTier,
+} from "../../lib/chatbot/access";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
@@ -7,20 +11,56 @@ import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
 export {
   buildCodexPrompt,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
+  EXECUTION_ROUTE_OUTPUT_SCHEMA,
   IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
 } from "./prompts";
 
 const LOCAL_TIMEOUT_MS = 110_000;
-export const CHATBOT_MODEL = "gpt-5.6-luna";
-export const CHATBOT_REASONING_EFFORT = "high";
+export const COMMUNITY_CHATBOT_PROFILE = {
+  model: "gpt-5.6-luna",
+  reasoningEffort: "high",
+} as const;
+export const OWNER_CHATBOT_PROFILE = {
+  model: "gpt-5.6-sol",
+  reasoningEffort: "medium",
+} as const;
+export const OWNER_ROUTER_PROFILE = {
+  model: "gpt-5.6-luna",
+  reasoningEffort: "low",
+} as const;
 
 type CodexRunOptions = {
   codexHome: string;
   codexPath: string;
+  workspaceRoot: string;
   signal?: AbortSignal;
 };
+
+export function codexProfileForJob(job: ChatbotJob) {
+  if (job.purpose === "execution_route") return OWNER_ROUTER_PROFILE;
+  return chatbotAccessTier(job.requesterUserId) === "owner" &&
+    job.executionMode === "dev"
+    ? OWNER_CHATBOT_PROFILE
+    : COMMUNITY_CHATBOT_PROFILE;
+}
+
+function privilegedJobContext(job: ChatbotJob) {
+  return [
+    job.request,
+    job.requestMessage?.content,
+    job.requestMessage?.referencedMessage?.content,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function assertChatbotJobAllowed(job: ChatbotJob) {
+  if (!canRunChatbotRequest(job.requesterUserId, privilegedJobContext(job))) {
+    throw new Error("Community users cannot dispatch privileged Codex work.");
+  }
+}
 
 function withoutAttachments(message: ChatbotJob["messages"][number]) {
   return {
@@ -43,7 +83,7 @@ export function buildSeatbeltProfile(codexPath: string) {
 (allow process-exec (literal "${escapeSeatbeltLiteral(codexPath)}"))`;
 }
 
-function codexEnvironment(codexHome: string) {
+function codexEnvironment(codexHome: string, allowDeveloperTools = false) {
   const allowedNames = [
     "HOME",
     "LANG",
@@ -58,7 +98,9 @@ function codexEnvironment(codexHome: string) {
   ];
   const environment: Record<string, string> = {
     CODEX_HOME: codexHome,
-    PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+    PATH: allowDeveloperTools
+      ? process.env.PATH || "/usr/local/bin:/usr/bin:/bin"
+      : "/usr/bin:/bin:/usr/sbin:/sbin",
     TERM: "dumb",
     NO_COLOR: "1",
   };
@@ -73,7 +115,7 @@ function codexEnvironment(codexHome: string) {
   return environment;
 }
 
-function parseFinalResponse(output: string) {
+function parseFinalResponse(output: string, allowDeveloperTools = false) {
   let finalResponse = "";
 
   for (const line of output.split("\n")) {
@@ -87,6 +129,7 @@ function parseFinalResponse(output: string) {
     };
 
     if (
+      !allowDeveloperTools &&
       event.item?.type &&
       ["command_execution", "file_change", "mcp_tool_call"].includes(
         event.item.type,
@@ -125,6 +168,8 @@ export async function checkCodexAuthentication({
 }
 
 export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
+  assertChatbotJobAllowed(job);
+  const profile = codexProfileForJob(job);
   const timeoutController = new AbortController();
   const timeout = setTimeout(() => timeoutController.abort(), LOCAL_TIMEOUT_MS);
   const abort = () => timeoutController.abort();
@@ -157,6 +202,9 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     );
     const prompt = buildCodexPrompt(job, prepared.textBlocks, prepared.ignored);
     const outputSchema = outputSchemaForJob(job);
+    const isDevMode =
+      chatbotAccessTier(job.requesterUserId) === "owner" &&
+      job.executionMode === "dev";
     const codexArguments = [
       options.codexPath,
       "exec",
@@ -166,11 +214,11 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--ignore-user-config",
       "--strict-config",
       "--model",
-      CHATBOT_MODEL,
+      profile.model,
       "--cd",
-      prepared.directory,
+      isDevMode ? options.workspaceRoot : prepared.directory,
       "--config",
-      `model_reasoning_effort="${CHATBOT_REASONING_EFFORT}"`,
+      `model_reasoning_effort="${profile.reasoningEffort}"`,
       "--config",
       'model_verbosity="low"',
       "--config",
@@ -178,11 +226,9 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       'web_search="live"',
       "--config",
-      'default_permissions="minisago-chatbot"',
-      "--config",
-      'permissions.minisago-chatbot.filesystem={":minimal"="read",":workspace_roots"={"."="read"}}',
-      "--config",
-      "permissions.minisago-chatbot.network.enabled=false",
+      isDevMode
+        ? 'default_permissions=":workspace"'
+        : 'default_permissions="minisago-chatbot"',
       "--config",
       "features.hooks=false",
       "--config",
@@ -190,6 +236,17 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       "--config",
       "allow_login_shell=false",
     ];
+
+    if (isDevMode) {
+      codexArguments.push("--config", "sandbox_workspace_write.network=true");
+    } else {
+      codexArguments.push(
+        "--config",
+        'permissions.minisago-chatbot.filesystem={":minimal"="read",":workspace_roots"={"."="read"}}',
+        "--config",
+        "permissions.minisago-chatbot.network.enabled=false",
+      );
+    }
 
     if (outputSchema) {
       const schemaPath = join(prepared.directory, "output-schema.json");
@@ -203,20 +260,20 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
     codexArguments.push("-");
 
-    const process = Bun.spawn(
-      [
-        "/usr/bin/sandbox-exec",
-        "-p",
-        buildSeatbeltProfile(options.codexPath),
-        ...codexArguments,
-      ],
-      {
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-        env: codexEnvironment(options.codexHome),
-      },
-    );
+    const command = isDevMode
+      ? codexArguments
+      : [
+          "/usr/bin/sandbox-exec",
+          "-p",
+          buildSeatbeltProfile(options.codexPath),
+          ...codexArguments,
+        ];
+    const process = Bun.spawn(command, {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: codexEnvironment(options.codexHome, isDevMode),
+    });
     const stop = () => process.kill();
     timeoutController.signal.addEventListener("abort", stop, { once: true });
     process.stdin.write(prompt);
@@ -237,7 +294,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       throw new Error(lastErrorLine || `Codex exited with status ${exitCode}.`);
     }
 
-    return parseFinalResponse(stdout);
+    return parseFinalResponse(stdout, isDevMode);
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", abort);

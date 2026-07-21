@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 9;
+export const CHATBOT_PROTOCOL_VERSION = 11;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 
 export type ChatbotAttachment = {
@@ -22,6 +22,7 @@ export type ChatbotSearchPurpose =
   | "candidate_check";
 
 export type ChatbotTask = "general" | "identity_resolution";
+export type ChatbotExecutionMode = "chat" | "dev";
 
 export type ChatbotIdentityCandidate = {
   names: string[];
@@ -59,12 +60,15 @@ export type ChatbotMessage = {
 
 export type ChatbotJob = {
   id: string;
+  requesterUserId: string;
   purpose?:
     | "answer"
+    | "execution_route"
     | "context_plan"
     | "identity_resolution"
     | "trace_explanation";
   task?: ChatbotTask;
+  executionMode?: ChatbotExecutionMode;
   subject?: string;
   identityCandidates?: ChatbotIdentityCandidate[];
   identityResolution?: ChatbotIdentityResolution;

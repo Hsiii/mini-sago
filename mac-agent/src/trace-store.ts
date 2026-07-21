@@ -138,7 +138,7 @@ export class ChatbotTraceStore {
     this.cleanup();
   }
 
-  start(job: ChatbotJob, now = Date.now()) {
+  start(job: ChatbotJob, now = Date.now(), metadata: TraceStoreMetadata = {}) {
     this.cleanupIfNeeded(now);
     this.database
       .query(
@@ -154,8 +154,8 @@ export class ChatbotTraceStore {
         job.purpose ?? "answer",
         now,
         JSON.stringify(sanitizedJob(job)),
-        this.metadata.model ?? "unknown",
-        this.metadata.promptVersion ?? 0,
+        metadata.model ?? this.metadata.model ?? "unknown",
+        metadata.promptVersion ?? this.metadata.promptVersion ?? 0,
       );
     if (this.databaseBytes() > MAX_DATABASE_BYTES) this.cleanup(now);
   }
