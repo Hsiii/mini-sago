@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "deploy": "bun scripts/deploy.mjs",
+    "release": "bun run deploy && bun run worker:update",
     "build": "tsc --noEmit",
     "start": "bun src/server.ts",
     "test": "bun test",
@@ -18,7 +19,8 @@
     "sync:install": "bun --env-file=.env.local scripts/sync-install-settings.mjs",
     "mac-agent:install": "bun --env-file=.env.local scripts/mac-agent.mjs install",
     "mac-agent:status": "bun scripts/mac-agent.mjs status",
-    "mac-agent:uninstall": "bun scripts/mac-agent.mjs uninstall"
+    "mac-agent:uninstall": "bun scripts/mac-agent.mjs uninstall",
+    "worker:update": "bun run mac-agent:install"
   },
   "dependencies": {
     "tweetnacl": "1.0.3"

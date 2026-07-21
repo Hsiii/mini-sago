@@ -63,6 +63,19 @@ function run(command, args, options = {}) {
   return result;
 }
 
+async function bootstrapLaunchAgent(domain, plist) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const result = run("/bin/launchctl", ["bootstrap", domain, plist], {
+      allowFailure: true,
+      quiet: attempt < 2,
+    });
+    if (result.exitCode === 0) return;
+    if (attempt < 2) await Bun.sleep(500 * (attempt + 1));
+  }
+
+  throw new Error("/bin/launchctl bootstrap failed after 3 attempts");
+}
+
 function escapeXml(value) {
   return value.replace(/[&<>"']/g, (character) => {
     const entities = {
@@ -208,11 +221,7 @@ async function install() {
     allowFailure: true,
     quiet: true,
   });
-  run("/bin/launchctl", [
-    "bootstrap",
-    `gui/${process.getuid()}`,
-    launchAgentFile,
-  ]);
+  await bootstrapLaunchAgent(`gui/${process.getuid()}`, launchAgentFile);
   run("/bin/launchctl", ["kickstart", "-k", serviceTarget]);
 
   console.log("MiniSago Mac helper installed and started.");
