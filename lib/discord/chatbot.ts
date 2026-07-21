@@ -382,27 +382,6 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
   }
 }
 
-const GUILD_MEMBER_QUESTION_PATTERNS = [
-  /^(?:誰是|who\s+is)\s*(.+?)\s*[?？。！!]*$/iu,
-  /^(.+?)\s*(?:是誰|是什麼人|是怎樣的人)\s*[?？。！!]*$/u,
-];
-
-export function fallbackGuildSearchQueries(
-  request: string,
-): DiscordSearchQuery[] {
-  for (const pattern of GUILD_MEMBER_QUESTION_PATTERNS) {
-    const subject = pattern.exec(request.trim())?.[1]?.trim();
-    if (!subject || subject.length > 64) continue;
-
-    return [
-      { author: subject, sortBy: "timestamp", sortOrder: "desc" },
-      { content: subject, sortBy: "relevance", sortOrder: "desc" },
-    ];
-  }
-
-  return [];
-}
-
 function memberNames(member: DiscordGuildMember) {
   return [member.nick, member.user?.global_name, member.user?.username].filter(
     (name): name is string => Boolean(name),
@@ -886,10 +865,9 @@ export async function handleChatbotMention({
       } = { status: "not_requested", results: [] };
 
       if (message.guild_id) {
-        const fallbackQueries = fallbackGuildSearchQueries(request);
         let plan: DiscordContextPlan = {
           history: "local",
-          queries: fallbackQueries,
+          queries: [],
         };
         const plannerJob: ChatbotJob = {
           id: randomUUID(),
@@ -910,9 +888,6 @@ export async function handleChatbotMention({
             );
           } else {
             plan = parseDiscordContextPlan(plannerResult.content);
-            if (plan.queries.length === 0 && fallbackQueries.length > 0) {
-              plan.queries = fallbackQueries;
-            }
           }
         } else {
           console.warn("Discord context planning unavailable.");
