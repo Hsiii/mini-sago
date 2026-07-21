@@ -159,6 +159,11 @@ async function install() {
         "/Applications/ChatGPT.app/Contents/Resources/codex",
     ),
     envLine("MINISAGO_SESSION_MONITOR_PATH", sessionMonitor),
+    envLine(
+      "MINISAGO_TRACE_DATABASE_PATH",
+      process.env.MINISAGO_TRACE_DATABASE_PATH?.trim() ||
+        join(applicationSupport, "traces.sqlite"),
+    ),
   ].join("\n");
   await writeFile(environmentFile, `${environment}\n`, {
     encoding: "utf8",

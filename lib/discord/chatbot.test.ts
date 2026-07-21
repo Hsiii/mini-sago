@@ -13,6 +13,7 @@ import {
   isChatbotAuthorized,
   isHumanContextMessage,
   inferIdentitySubject,
+  isTraceExplanationRequest,
   parseDiscordContextPlan,
   parseIdentityResolution,
   searchGuildMessages,
@@ -62,6 +63,15 @@ describe("Discord chatbot", () => {
         BOT_ID,
       ),
     ).toBeNull();
+  });
+
+  test("recognizes natural requests for the previous response trace", () => {
+    expect(isTraceExplanationRequest("how did she decide。")).toBe(true);
+    expect(isTraceExplanationRequest("你剛剛為什麼這樣回答？")).toBe(true);
+    expect(isTraceExplanationRequest("把決策過程告訴我")).toBe(true);
+    expect(isTraceExplanationRequest("how did she find the article?")).toBe(
+      false,
+    );
   });
 
   test("keeps the replied-to MiniSago message in request context", () => {

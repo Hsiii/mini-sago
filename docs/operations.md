@@ -231,7 +231,20 @@ Metadata-only logs live under
 durations, availability, and failures—not prompts, Discord messages, answers,
 links, or attachment contents.
 
-To stop and remove the helper, its secret file, compiled monitor, and logs:
+Debuggable response traces live separately at
+`~/Library/Application Support/MiniSago/traces.sqlite`. They correlate the
+planning and answering jobs for each Discord request and retain the supplied
+message context, sanitized attachment metadata, planner output, search-result
+context, model output, errors, and timings. Signed attachment URL parameters
+and downloaded attachment bodies are never stored. Traces are owner-readable
+only, expire after 14 days, and are also pruned oldest-first if the database
+exceeds 250 MB. Cleanup runs at helper startup and at least daily while jobs are
+handled. Asking MiniSago a natural follow-up such as “how did you decide?” or
+“你剛剛為什麼這樣回答？” returns a conversational summary of the latest completed
+trace in that channel; it does not expose private model chain-of-thought.
+
+To stop and remove the helper, its secret file, compiled monitor, logs, and
+response traces:
 
 ```bash
 bun run mac-agent:uninstall

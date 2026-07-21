@@ -5,8 +5,14 @@ import {
   type MacAgentServerMessage,
 } from "../../lib/chatbot/protocol";
 import type { MacAgentConfig } from "./config";
-import { checkCodexAuthentication, runCodexJob } from "./codex";
+import {
+  CHATBOT_MODEL,
+  checkCodexAuthentication,
+  PROMPT_VERSION,
+  runCodexJob,
+} from "./codex";
 import { SessionMonitor } from "./session-monitor";
+import { ChatbotTraceStore } from "./trace-store";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const AUTH_RETRY_MS = 30_000;
@@ -30,9 +36,14 @@ export class MacAgentClient {
   private sessionMonitor: SessionMonitor;
   private socket: WebSocket | null = null;
   private stopped = false;
+  private traceStore: ChatbotTraceStore;
   private unlocked = false;
 
   constructor(private readonly config: MacAgentConfig) {
+    this.traceStore = new ChatbotTraceStore(config.traceDatabasePath, {
+      model: CHATBOT_MODEL,
+      promptVersion: PROMPT_VERSION,
+    });
     this.sessionMonitor = new SessionMonitor(
       config.sessionMonitorPath,
       (state) => void this.handleSessionState(state),
@@ -53,6 +64,7 @@ export class MacAgentClient {
     this.socket?.close(1000, "Helper stopped");
     this.socket = null;
     this.sessionMonitor.stop();
+    this.traceStore.close();
   }
 
   private async handleSessionState(state: "locked" | "unlocked") {
@@ -183,10 +195,18 @@ export class MacAgentClient {
     console.log(`Job ${job.id} started.`);
 
     try {
-      const content = await runCodexJob(job, {
-        ...this.config,
-        signal: controller.signal,
-      });
+      const content =
+        job.purpose === "trace_explanation"
+          ? this.traceStore.explainPrevious(job.channelId, job.requestMessageId)
+          : await (async () => {
+              this.traceStore.start(job, startedAt);
+              const answer = await runCodexJob(job, {
+                ...this.config,
+                signal: controller.signal,
+              });
+              this.traceStore.finish(job.id, answer);
+              return answer;
+            })();
 
       if (!controller.signal.aborted && this.authenticated) {
         this.currentJob = null;
@@ -194,6 +214,12 @@ export class MacAgentClient {
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
     } catch (error) {
+      if (job.purpose !== "trace_explanation") {
+        this.traceStore.fail(
+          job.id,
+          error instanceof Error ? error.message : "Codex failed.",
+        );
+      }
       if (!controller.signal.aborted && this.authenticated) {
         this.currentJob = null;
         this.send({

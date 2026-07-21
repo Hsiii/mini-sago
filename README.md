@@ -52,8 +52,11 @@ to Codex.
 
 The chatbot is available only while the Mac is awake, unlocked, authenticated,
 connected, and idle. Requests are not queued. Each run is independent;
-transcripts and temporary attachments are discarded after its public reply.
-The Mac accepts no inbound public connection.
+temporary attachments are discarded after its public reply. The Mac keeps a
+local 14-day trace of the observable planning inputs, retrieval choices, stage
+outputs, and timings so a natural follow-up such as “how did you decide?” can
+explain the previous answer. These traces do not contain private model
+chain-of-thought. The Mac accepts no inbound public connection.
 
 ## Commands
 

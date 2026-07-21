@@ -461,6 +461,17 @@ export function inferIdentitySubject(request: string) {
   return english?.[1]?.trim() || undefined;
 }
 
+export function isTraceExplanationRequest(request: string) {
+  const normalized = request.trim().toLocaleLowerCase();
+  return [
+    /(?:how|why) did (?:you|she|sago|minisago) (?:decide|answer|respond|choose|reach|come up)/u,
+    /(?:explain|show|tell me) (?:your|her|sago(?:'s)?) (?:decision|reasoning|trace|process)/u,
+    /(?:你|妳|她|sago|小莎).{0,8}(?:怎麼|為什麼).{0,8}(?:決定|回答|判斷|得出|選)/u,
+    /(?:怎麼|為什麼).{0,8}(?:這樣回答|這樣判斷|做這個決定)/u,
+    /(?:決策|判斷|回答).{0,4}(?:過程|紀錄|軌跡)/u,
+  ].some((pattern) => pattern.test(normalized));
+}
+
 export function parseIdentityResolution(
   content: string,
   subject: string,
@@ -1038,6 +1049,24 @@ export async function handleChatbotMention({
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
       const requestMessage = toChatbotMessage(message, botUserId);
+      if (isTraceExplanationRequest(request)) {
+        const traceDispatch = workflow.dispatch({
+          id: randomUUID(),
+          purpose: "trace_explanation",
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          request,
+          requestMessage,
+          messages: [],
+        });
+
+        if (traceDispatch.status !== "accepted") {
+          return { ok: false as const, error: "The Mac disconnected." };
+        }
+
+        return traceDispatch.result;
+      }
+
       let messages = message.guild_id
         ? await getNearbyHumanMessages({
             channelId: message.channel_id,

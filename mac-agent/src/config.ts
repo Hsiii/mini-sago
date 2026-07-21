@@ -8,6 +8,7 @@ export type MacAgentConfig = {
   codexHome: string;
   codexPath: string;
   sessionMonitorPath: string;
+  traceDatabasePath: string;
 };
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
@@ -77,5 +78,8 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     sessionMonitorPath:
       process.env.MINISAGO_SESSION_MONITOR_PATH?.trim() ||
       join(defaultApplicationSupport, "bin", "session-monitor"),
+    traceDatabasePath:
+      process.env.MINISAGO_TRACE_DATABASE_PATH?.trim() ||
+      join(defaultApplicationSupport, "traces.sqlite"),
   };
 }

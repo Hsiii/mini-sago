@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 6;
+export const CHATBOT_PROTOCOL_VERSION = 7;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 
 export type ChatbotAttachment = {
@@ -40,7 +40,11 @@ export type ChatbotMessage = {
 
 export type ChatbotJob = {
   id: string;
-  purpose?: "answer" | "context_plan" | "identity_resolution";
+  purpose?:
+    | "answer"
+    | "context_plan"
+    | "identity_resolution"
+    | "trace_explanation";
   task?: ChatbotTask;
   subject?: string;
   channelId: string;
