@@ -6,6 +6,9 @@ const service = "bot-core";
 const remoteHost = process.env.PLATFORM_HOST ?? "platform";
 const remoteDeployRoot =
   process.env.PLATFORM_OPERATIONS_ROOT ?? "/srv/platform/operations";
+const sshConnectTimeout = "10";
+const sshRetryDelay = "15";
+const sshAttempts = 3;
 
 function output(command, args) {
   return execFileSync(command, args, { encoding: "utf8" }).trim();
@@ -21,6 +24,44 @@ function run(command, args) {
 
 function hasRemote(name) {
   return output("git", ["remote"]).split("\n").includes(name);
+}
+
+function deployRemote() {
+  const remoteCommand = `${remoteDeployRoot}/scripts/deploy-${service}`;
+
+  for (let attempt = 1; attempt <= sshAttempts; attempt += 1) {
+    const result = spawnSync(
+      "ssh",
+      [
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        `ConnectTimeout=${sshConnectTimeout}`,
+        remoteHost,
+        remoteCommand,
+      ],
+      { encoding: "utf8" },
+    );
+
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    if (result.status === 0) return;
+
+    const timedOut = result.stderr?.includes("Operation timed out");
+    if (!timedOut || attempt === sshAttempts) {
+      if (timedOut) {
+        console.error(
+          `Unable to reach ${remoteHost} after ${sshAttempts} attempts. Check that its SSH service and firewall permit this network.`,
+        );
+      }
+      process.exit(result.status ?? 1);
+    }
+
+    console.error(
+      `SSH connection to ${remoteHost} timed out; retrying in ${sshRetryDelay} seconds (${attempt}/${sshAttempts}).`,
+    );
+    run("sleep", [sshRetryDelay]);
+  }
 }
 
 function waitForImage(commit) {
@@ -78,4 +119,4 @@ if (!hasRemote("origin")) {
 run("git", ["push", "origin", branch]);
 const commit = output("git", ["rev-parse", "HEAD"]);
 waitForImage(commit);
-run("ssh", [remoteHost, `${remoteDeployRoot}/scripts/deploy-${service}`]);
+deployRemote();

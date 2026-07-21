@@ -330,6 +330,10 @@ repository. Production configuration lives in
 `/srv/platform/secrets/bot-core.env`, and the container joins the external
 `platform_edge` network under the `bot-core` alias.
 
+The deployment command retries SSH connection timeouts three times. If it
+still cannot reach `platform`, restore SSH or its firewall access on the VM,
+then rerun the command. Use `PLATFORM_HOST` to target a replacement host.
+
 Confirm the public endpoints after deployment:
 
 ```bash
