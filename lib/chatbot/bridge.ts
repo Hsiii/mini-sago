@@ -29,6 +29,7 @@ type Worker = {
   id: string;
   socket: Socket;
   capabilities: Set<ChatbotWorkerCapability>;
+  repositories: Set<string>;
   priority: number;
   available: boolean;
   capacity: number;
@@ -55,7 +56,10 @@ export type WorkerSelectionResult =
 
 export type WorkflowLease = {
   dispatch: (job: ChatbotJob) => DispatchResult;
-  route: (capabilities: ChatbotWorkerCapability[]) => WorkerSelectionResult;
+  route: (
+    capabilities: ChatbotWorkerCapability[],
+    repository?: string,
+  ) => WorkerSelectionResult;
   release: () => void;
 };
 
@@ -102,6 +106,21 @@ function validCapabilities(
         ),
     )
   );
+}
+
+function validRepositories(repositories: unknown): repositories is string[] {
+  return (
+    Array.isArray(repositories) &&
+    repositories.every(
+      (repository) =>
+        typeof repository === "string" &&
+        /^[a-z0-9_.-]+\/[a-z0-9_.-]+$/iu.test(repository),
+    )
+  );
+}
+
+function repositoryKey(repository: string) {
+  return repository.toLocaleLowerCase("en-US");
 }
 
 export class MacAgentBridge {
@@ -153,10 +172,12 @@ export class MacAgentBridge {
   dispatch(
     job: ChatbotJob,
     capabilities: ChatbotWorkerCapability[] = [
-      job.executionMode === "dev" ? "dev" : "chat",
+      job.executionMode === "dev-read" || job.executionMode === "dev-write"
+        ? job.executionMode
+        : "chat",
     ],
   ): DispatchResult {
-    const selected = this.selectWorker(capabilities);
+    const selected = this.selectWorker(capabilities, undefined, job.repository);
     if (selected.status !== "accepted") return selected;
     return this.dispatchJob(job, selected.worker.id);
   }
@@ -174,8 +195,8 @@ export class MacAgentBridge {
       status: "accepted",
       workflow: {
         dispatch: (job) => this.dispatchWorkflowJob(job, workflowId),
-        route: (requiredCapabilities) =>
-          this.routeWorkflow(workflowId, requiredCapabilities),
+        route: (requiredCapabilities, repository) =>
+          this.routeWorkflow(workflowId, requiredCapabilities, repository),
         release: () => {
           this.workflows.delete(workflowId);
         },
@@ -268,6 +289,13 @@ export class MacAgentBridge {
   ): DispatchResult {
     const worker = this.workers.get(workerId);
     if (!worker?.available) return { status: "offline" };
+    if (
+      (job.executionMode === "dev-read" || job.executionMode === "dev-write") &&
+      (!job.repository ||
+        !worker.repositories.has(repositoryKey(job.repository)))
+    ) {
+      return { status: "offline" };
+    }
     if (this.pendingJobs.has(job.id)) return { status: "busy" };
     if (!workflowId && this.usedSlots(workerId) >= worker.capacity) {
       return { status: "busy" };
@@ -275,7 +303,9 @@ export class MacAgentBridge {
 
     const result = new Promise<MacAgentJobResult>((resolve) => {
       const timeoutMs =
-        job.executionMode === "dev" && job.purpose === "answer"
+        (job.executionMode === "dev-read" ||
+          job.executionMode === "dev-write") &&
+        job.purpose === "answer"
           ? CHATBOT_DEV_JOB_TIMEOUT_MS
           : CHATBOT_JOB_TIMEOUT_MS;
       const timer = setTimeout(() => {
@@ -304,6 +334,7 @@ export class MacAgentBridge {
   private routeWorkflow(
     workflowId: string,
     capabilities: ChatbotWorkerCapability[],
+    repository?: string,
   ): WorkerSelectionResult {
     const workflow = this.workflows.get(workflowId);
     if (!workflow) return { status: "offline" };
@@ -312,12 +343,15 @@ export class MacAgentBridge {
     const current = this.workers.get(workflow.workerId);
     if (
       current?.available &&
-      capabilities.every((capability) => current.capabilities.has(capability))
+      capabilities.every((capability) =>
+        current.capabilities.has(capability),
+      ) &&
+      (!repository || current.repositories.has(repositoryKey(repository)))
     ) {
       return { status: "accepted" };
     }
 
-    const selected = this.selectWorker(capabilities, workflowId);
+    const selected = this.selectWorker(capabilities, workflowId, repository);
     if (selected.status !== "accepted") return selected;
     workflow.workerId = selected.worker.id;
     return { status: "accepted" };
@@ -326,6 +360,7 @@ export class MacAgentBridge {
   private selectWorker(
     capabilities: ChatbotWorkerCapability[],
     movingWorkflowId?: string,
+    repository?: string,
   ):
     | { status: "offline" }
     | { status: "busy" }
@@ -333,7 +368,10 @@ export class MacAgentBridge {
     const compatible = [...this.workers.values()].filter(
       (worker) =>
         worker.available &&
-        capabilities.every((capability) => worker.capabilities.has(capability)),
+        capabilities.every((capability) =>
+          worker.capabilities.has(capability),
+        ) &&
+        (!repository || worker.repositories.has(repositoryKey(repository))),
     );
     if (compatible.length === 0) return { status: "offline" };
 
@@ -363,6 +401,7 @@ export class MacAgentBridge {
       !safeEqual(message.secret, expectedSecret) ||
       !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(message.workerId) ||
       !validCapabilities(message.capabilities) ||
+      !validRepositories(message.repositories) ||
       !Number.isFinite(message.priority)
     ) {
       socket.close(4001, "Authentication failed");
@@ -385,6 +424,7 @@ export class MacAgentBridge {
       id: message.workerId,
       socket,
       capabilities: new Set(message.capabilities),
+      repositories: new Set(message.repositories.map(repositoryKey)),
       priority: Math.max(0, Math.min(1_000, Math.floor(message.priority))),
       available: false,
       capacity: 1,

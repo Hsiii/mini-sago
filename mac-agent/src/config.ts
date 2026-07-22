@@ -7,23 +7,24 @@ export type MacAgentConfig = {
   bridgeSecret: string;
   codexHome: string;
   codexPath: string;
+  githubReadConfigDir: string;
   githubRepositories: string[];
-  githubRepositoryRoot: string;
+  githubWriteConfigDir: string;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
   headless: boolean;
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
-  workerCapabilities: Array<"chat" | "dev" | "mac">;
+  workerCapabilities: Array<"chat" | "dev-read" | "dev-write" | "mac">;
   workerId: string;
   workerPriority: number;
 };
 
-const workerCapabilityNames = ["chat", "dev", "mac"] as const;
+const workerCapabilityNames = ["chat", "dev-read", "dev-write", "mac"] as const;
 
 export const defaultWorkerCapabilities = (headless: boolean) =>
-  headless ? "chat" : "chat,dev,mac";
+  headless ? "chat,dev-read,dev-write" : "chat,dev-read,dev-write,mac";
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const defaultApplicationSupport =
@@ -122,7 +123,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     workerCapabilities.length !== new Set(configuredCapabilities).size
   ) {
     throw new Error(
-      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev, and mac.",
+      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev-read, dev-write, and mac.",
     );
   }
   const githubRepositories = (process.env.MINISAGO_GITHUB_REPOSITORIES || "")
@@ -138,14 +139,16 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       "MINISAGO_GITHUB_REPOSITORIES must contain owner/repository names.",
     );
   }
+  if (
+    githubRepositories.length === 0 &&
+    workerCapabilities.some((capability) => capability.startsWith("dev-"))
+  ) {
+    throw new Error(
+      "MINISAGO_GITHUB_REPOSITORIES is required for dev-read or dev-write workers.",
+    );
+  }
   const workspaceRoot =
     process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(homedir(), "Projects");
-  const githubRepositoryRoot = workspaceChild(
-    workspaceRoot,
-    process.env.MINISAGO_GITHUB_REPOSITORY_ROOT?.trim() ||
-      join(workspaceRoot, "repositories"),
-    "MINISAGO_GITHUB_REPOSITORY_ROOT",
-  );
   const githubWorktreeRoot = workspaceChild(
     workspaceRoot,
     process.env.MINISAGO_GITHUB_WORKTREE_ROOT?.trim() ||
@@ -163,9 +166,14 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
+    githubReadConfigDir:
+      process.env.MINISAGO_GITHUB_READ_CONFIG_DIR?.trim() ||
+      join(defaultApplicationSupport, "github-read"),
     githubRepositories,
-    githubRepositoryRoot,
     githubWorktreeRoot,
+    githubWriteConfigDir:
+      process.env.MINISAGO_GITHUB_WRITE_CONFIG_DIR?.trim() ||
+      join(defaultApplicationSupport, "github-write"),
     headless,
     maxConcurrentJobs: Math.max(
       1,

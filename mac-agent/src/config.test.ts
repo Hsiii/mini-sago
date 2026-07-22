@@ -7,9 +7,11 @@ import {
 } from "./config";
 
 describe("worker configuration", () => {
-  test("keeps headless workers chat-only by default", () => {
-    expect(defaultWorkerCapabilities(true)).toBe("chat");
-    expect(defaultWorkerCapabilities(false)).toBe("chat,dev,mac");
+  test("advertises enforced dev profiles independently from the Mac target", () => {
+    expect(defaultWorkerCapabilities(true)).toBe("chat,dev-read,dev-write");
+    expect(defaultWorkerCapabilities(false)).toBe(
+      "chat,dev-read,dev-write,mac",
+    );
   });
 
   test("allows plaintext bridge traffic only for local hostnames", () => {
@@ -24,26 +26,26 @@ describe("worker configuration", () => {
     ).toThrow("must use wss://");
   });
 
-  test("keeps GitHub clone and worktree roots inside the dev workspace", () => {
+  test("keeps GitHub worktree roots inside the dev workspace", () => {
     expect(
       workspaceChild(
         "/workspace",
-        "/workspace/repositories",
-        "MINISAGO_GITHUB_REPOSITORY_ROOT",
+        "/workspace/worktrees",
+        "MINISAGO_GITHUB_WORKTREE_ROOT",
       ),
-    ).toBe("/workspace/repositories");
+    ).toBe("/workspace/worktrees");
     expect(() =>
       workspaceChild(
         "/workspace",
-        "/private/repositories",
-        "MINISAGO_GITHUB_REPOSITORY_ROOT",
+        "/private/worktrees",
+        "MINISAGO_GITHUB_WORKTREE_ROOT",
       ),
     ).toThrow("must be a directory inside MINISAGO_WORKSPACE_ROOT");
     expect(() =>
       workspaceChild(
         "/workspace",
         "/workspace",
-        "MINISAGO_GITHUB_REPOSITORY_ROOT",
+        "MINISAGO_GITHUB_WORKTREE_ROOT",
       ),
     ).toThrow("must be a directory inside MINISAGO_WORKSPACE_ROOT");
   });

@@ -1,8 +1,13 @@
-export const CHATBOT_PROTOCOL_VERSION = 12;
+export const CHATBOT_PROTOCOL_VERSION = 13;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
-export const CHATBOT_WORKER_CAPABILITIES = ["chat", "dev", "mac"] as const;
+export const CHATBOT_WORKER_CAPABILITIES = [
+  "chat",
+  "dev-read",
+  "dev-write",
+  "mac",
+] as const;
 export type ChatbotWorkerCapability =
   (typeof CHATBOT_WORKER_CAPABILITIES)[number];
 
@@ -27,7 +32,7 @@ export type ChatbotSearchPurpose =
   | "candidate_check";
 
 export type ChatbotTask = "general" | "identity_resolution";
-export type ChatbotExecutionMode = "chat" | "dev";
+export type ChatbotExecutionMode = "chat" | "dev-read" | "dev-write";
 export type ChatbotExecutionTarget = "default" | "mac";
 
 export type ChatbotIdentityCandidate = {
@@ -76,6 +81,7 @@ export type ChatbotJob = {
   task?: ChatbotTask;
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
+  repository?: string;
   subject?: string;
   identityCandidates?: ChatbotIdentityCandidate[];
   identityResolution?: ChatbotIdentityResolution;
@@ -95,6 +101,7 @@ export type MacAgentClientMessage =
       secret: string;
       workerId: string;
       capabilities: ChatbotWorkerCapability[];
+      repositories: string[];
       priority: number;
     }
   | {

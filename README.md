@@ -61,13 +61,13 @@ Requests received while every compatible worker is unavailable are not queued.
 
 Hsi can route owner-only development requests to Sol for GitHub issue creation,
 PR review, repository changes, tests, and draft-PR delivery. GitHub credentials
-come from the worker's persistent `gh auth login`; community and ordinary chat
-runs cannot execute GitHub tooling.
-
-Cloud Sol remains blocked until repository and operation authorization is
-enforced outside model prompts with restricted credentials and per-job
-checkouts. `MINISAGO_GITHUB_REPOSITORIES` is routing context, not a security
-boundary; see [issue #12](https://github.com/Hsiii/mini-sago/issues/12).
+are split between persistent repo-scoped read and write `gh` logins; community
+and ordinary chat runs cannot execute GitHub tooling. PR review defaults to
+`dev-read`. Only an explicit owner mutation selects `dev-write`, and each job
+receives only its selected disposable repository checkout. The cloud Compose
+stack mounts these credentials into separate capability-specific containers. See
+[issue #12](https://github.com/Hsiii/mini-sago/issues/12) for credential and
+GitHub ruleset setup.
 
 ### Lets members open optional channels
 

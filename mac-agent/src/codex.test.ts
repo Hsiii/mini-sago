@@ -73,7 +73,7 @@ describe("Codex chatbot runner", () => {
       codexProfileForJob({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionMode: "dev-read",
       }),
     ).toBe(OWNER_CHATBOT_PROFILE);
     expect(
@@ -103,7 +103,8 @@ describe("Codex chatbot runner", () => {
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionMode: "dev-read",
+        repository: "Hsiii/mini-sago",
         request: "review this PR",
       },
       [],
@@ -111,8 +112,8 @@ describe("Codex chatbot runner", () => {
     );
     const chatPrompt = buildCodexPrompt(job, [], []);
 
-    expect(devPrompt).toContain("owner-authorized development task");
-    expect(devPrompt).toContain("Work directly");
+    expect(devPrompt).toContain("owner-authorized read-only development task");
+    expect(devPrompt).toContain("never intentionally modify remote state");
     expect(devPrompt).not.toContain("read-only chat task");
     expect(chatPrompt).toContain("read-only chat task");
   });
@@ -216,7 +217,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(11);
+    expect(PROMPT_VERSION).toBe(12);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -379,7 +380,7 @@ describe("Codex chatbot runner", () => {
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionMode: "dev-read",
         purpose: "answer",
       }),
     ).toBe(true);
@@ -387,33 +388,32 @@ describe("Codex chatbot runner", () => {
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionMode: "dev-read",
         purpose: "context_plan",
       }),
     ).toBe(false);
     expect(
       canUseDeveloperTools({
         ...job,
-        executionMode: "dev",
+        executionMode: "dev-read",
         purpose: "answer",
       }),
     ).toBe(false);
   });
 
-  test("labels GitHub repository scope as prompt-only routing context", () => {
-    const policy = buildGithubDeveloperPolicy(
-      {
-        githubRepositories: ["Hsiii/mini-sago"],
-        githubRepositoryRoot: "/workspace/repositories",
-        githubWorktreeRoot: "/workspace/worktrees",
-      },
-      "job-123",
-    );
+  test("describes externally enforced GitHub profiles", () => {
+    const policy = buildGithubDeveloperPolicy({
+      ...job,
+      id: "job-123",
+      executionMode: "dev-read",
+      repository: "Hsiii/mini-sago",
+    });
     const devPrompt = buildCodexPrompt(
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev",
+        executionMode: "dev-read",
+        repository: "Hsiii/mini-sago",
       },
       [],
       [],
@@ -422,11 +422,9 @@ describe("Codex chatbot runner", () => {
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
     expect(policy).toContain("Hsiii/mini-sago");
-    expect(policy).toContain("not an authorization boundary");
-    expect(policy).toContain("/workspace/worktrees/job-123");
-    expect(policy).toContain("draft pull request");
-    expect(policy).toContain("Never push directly to main");
-    expect(policy).toContain("existing gh login");
+    expect(policy).toContain("externally restricted to dev-read");
+    expect(policy).toContain("Remote GitHub access is read-only");
+    expect(policy).toContain("repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");
     expect(chatPrompt).not.toContain("github_development_policy");
   });
