@@ -58,6 +58,10 @@ type DiscordThread = {
   id: string;
 };
 
+type DiscordMessage = {
+  id: string;
+};
+
 export type ReviewRequest = {
   authorDiscordId?: string;
   reviewerDiscordIds: string[];
@@ -277,13 +281,23 @@ async function openReviewThread(
     );
   }
 
-  await discordRequest(
+  const reviewMessage = await discordRequest<DiscordMessage>(
     config.botToken,
     `/channels/${record.threadId}/messages`,
     {
       method: "POST",
       body: JSON.stringify(reviewRequest.message),
     },
+  );
+
+  if (!reviewMessage?.id) {
+    throw new Error("Discord did not return a review message ID");
+  }
+
+  await discordRequest(
+    config.botToken,
+    `/channels/${record.threadId}/pins/${reviewMessage.id}`,
+    { method: "PUT" },
   );
 
   record.reviewRequestSent = true;
