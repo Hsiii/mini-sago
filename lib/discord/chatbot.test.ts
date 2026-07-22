@@ -505,12 +505,13 @@ describe("Discord chatbot", () => {
     expect(
       parseExecutionRoute(
         "not json",
-        "fix this and open a draft PR",
+        "fix this in Hsiii/mini-sago and open a draft PR",
         "https://github.com/Hsiii/mini-sago/issues/12",
       ),
     ).toEqual({
       mode: "dev-write",
       target: "default",
+      mutationScope: "code",
       repository: "Hsiii/mini-sago",
     });
     expect(parseExecutionRoute("not json", "summarize our chat")).toEqual({
@@ -520,6 +521,38 @@ describe("Discord chatbot", () => {
     expect(parseExecutionRoute("not json", "open this on my Mac")).toEqual({
       mode: "dev-write",
       target: "mac",
+      mutationScope: "code",
+    });
+    for (const request of [
+      "write me a poem",
+      "release the balloons",
+      "do not fix the code",
+      "what if we fix the code",
+      "> fix the code in Hsiii/mini-sago",
+      "`fix the code in Hsiii/mini-sago`",
+    ]) {
+      expect(
+        parseExecutionRoute(
+          '{"mode":"dev-write"}',
+          request,
+          `${request}\nhttps://github.com/Hsiii/mini-sago/pull/13`,
+        ),
+      ).toEqual({
+        mode: "dev-read",
+        target: "default",
+        repository: "Hsiii/mini-sago",
+      });
+    }
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev-write"}',
+        "fix this",
+        "fix this\nhttps://github.com/Hsiii/mini-sago/pull/13",
+      ),
+    ).toEqual({
+      mode: "dev-write",
+      target: "default",
+      mutationScope: "code",
     });
   });
 

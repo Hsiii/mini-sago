@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 13;
+export const CHATBOT_PROTOCOL_VERSION = 14;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -34,6 +34,7 @@ export type ChatbotSearchPurpose =
 export type ChatbotTask = "general" | "identity_resolution";
 export type ChatbotExecutionMode = "chat" | "dev-read" | "dev-write";
 export type ChatbotExecutionTarget = "default" | "mac";
+export type ChatbotMutationScope = "code" | "issue" | "deploy";
 
 export type ChatbotIdentityCandidate = {
   names: string[];
@@ -81,6 +82,7 @@ export type ChatbotJob = {
   task?: ChatbotTask;
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
+  mutationScope?: ChatbotMutationScope;
   repository?: string;
   subject?: string;
   identityCandidates?: ChatbotIdentityCandidate[];

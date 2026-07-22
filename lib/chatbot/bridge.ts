@@ -35,6 +35,12 @@ type Worker = {
   capacity: number;
 };
 
+type WorkerPolicy = {
+  workerId?: string;
+  capabilities: Set<ChatbotWorkerCapability>;
+  requireMac: boolean;
+};
+
 type Workflow = {
   workerId: string;
   activeJobId?: string;
@@ -123,6 +129,44 @@ function repositoryKey(repository: string) {
   return repository.toLocaleLowerCase("en-US");
 }
 
+function configuredSecret(name: string) {
+  const secret = process.env[name]?.trim();
+  return secret && Buffer.byteLength(secret) >= 32 ? secret : undefined;
+}
+
+function workerPolicy(secret: string): WorkerPolicy | null {
+  const policies: Array<{ secret?: string; policy: WorkerPolicy }> = [
+    {
+      secret: configuredSecret("MINISAGO_WORKER_READ_BRIDGE_SECRET"),
+      policy: {
+        workerId: process.env.MINISAGO_WORKER_READ_ID?.trim() || "oracle-read",
+        capabilities: new Set(["chat", "dev-read"]),
+        requireMac: false,
+      },
+    },
+    {
+      secret: configuredSecret("MINISAGO_WORKER_WRITE_BRIDGE_SECRET"),
+      policy: {
+        workerId:
+          process.env.MINISAGO_WORKER_WRITE_ID?.trim() || "oracle-write",
+        capabilities: new Set(["dev-write"]),
+        requireMac: false,
+      },
+    },
+    {
+      secret: configuredSecret("MINISAGO_MAC_BRIDGE_SECRET"),
+      policy: {
+        capabilities: new Set(CHATBOT_WORKER_CAPABILITIES),
+        requireMac: true,
+      },
+    },
+  ];
+  const matches = policies.filter(
+    (candidate) => candidate.secret && safeEqual(secret, candidate.secret),
+  );
+  return matches.length === 1 ? matches[0]!.policy : null;
+}
+
 export class MacAgentBridge {
   private workers = new Map<string, Worker>();
   private authenticationTimers = new WeakMap<
@@ -137,7 +181,11 @@ export class MacAgentBridge {
   private workflows = new Map<string, Workflow>();
 
   isConfigured() {
-    return this.configuredSecret() !== null;
+    return Boolean(
+      configuredSecret("MINISAGO_MAC_BRIDGE_SECRET") ||
+      configuredSecret("MINISAGO_WORKER_READ_BRIDGE_SECRET") ||
+      configuredSecret("MINISAGO_WORKER_WRITE_BRIDGE_SECRET"),
+    );
   }
 
   getStatus(capabilities: ChatbotWorkerCapability[] = ["chat"]) {
@@ -392,15 +440,20 @@ export class MacAgentBridge {
   }
 
   private authenticate(socket: Socket, message: MacAgentClientMessage) {
-    const expectedSecret = this.configuredSecret();
+    const policy =
+      message.type === "authenticate" ? workerPolicy(message.secret) : null;
 
     if (
       message.type !== "authenticate" ||
       message.protocolVersion !== CHATBOT_PROTOCOL_VERSION ||
-      !expectedSecret ||
-      !safeEqual(message.secret, expectedSecret) ||
+      !policy ||
       !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(message.workerId) ||
+      (policy.workerId !== undefined && message.workerId !== policy.workerId) ||
       !validCapabilities(message.capabilities) ||
+      !message.capabilities.every((capability) =>
+        policy.capabilities.has(capability),
+      ) ||
+      (policy.requireMac && !message.capabilities.includes("mac")) ||
       !validRepositories(message.repositories) ||
       !Number.isFinite(message.priority)
     ) {
@@ -510,11 +563,6 @@ export class MacAgentBridge {
     if (!timer) return;
     clearTimeout(timer);
     this.heartbeatTimers.delete(socket);
-  }
-
-  private configuredSecret() {
-    const secret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
-    return secret && Buffer.byteLength(secret) >= 32 ? secret : null;
   }
 }
 

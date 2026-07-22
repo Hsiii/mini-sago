@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
+import { isIP } from "node:net";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 export type MacAgentConfig = {
@@ -60,9 +61,11 @@ async function resolveCodexPath() {
 
 export function validateBridgeUrl(value: string) {
   const url = new URL(value);
+  const hostname = url.hostname.replace(/^\[|\]$/gu, "");
+  const ipVersion = isIP(hostname);
   const isLocal =
-    ["localhost", "127.0.0.1", "::1"].includes(url.hostname) ||
-    !url.hostname.includes(".");
+    ["localhost", "127.0.0.1", "::1"].includes(hostname) ||
+    (ipVersion === 0 && !hostname.includes(".") && !hostname.includes(":"));
 
   if (url.protocol !== "wss:" && !(isLocal && url.protocol === "ws:")) {
     throw new Error(

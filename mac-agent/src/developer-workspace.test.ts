@@ -31,6 +31,7 @@ function job(mode: "dev-read" | "dev-write"): ChatbotJob {
     requesterUserId: "917446775873343600",
     purpose: "answer",
     executionMode: mode,
+    ...(mode === "dev-write" ? { mutationScope: "code" as const } : {}),
     repository: "Hsiii/mini-sago",
     channelId: "channel-1",
     requestMessageId: "message-1",
@@ -89,6 +90,45 @@ describe("developer workspace", () => {
       ),
     ).toBe(true);
     expect(commands[1]!.command.at(-1)).toBe("minisago/job-123");
+  });
+
+  test("requires an externally enforced mutation scope for write jobs", async () => {
+    await expect(
+      prepareDeveloperWorkspace(
+        { ...job("dev-write"), mutationScope: undefined },
+        await options(),
+        async () => undefined,
+      ),
+    ).rejects.toThrow("requires an enforced mutation scope");
+  });
+
+  test("blocks GitHub mutations outside the selected scope", async () => {
+    const workspace = await prepareDeveloperWorkspace(
+      { ...job("dev-write"), mutationScope: "issue" },
+      await options(),
+      async () => undefined,
+    );
+    const gh = join(workspace.environment.PATH!.split(":")[0]!, "gh");
+    const environment = {
+      ...process.env,
+      ...workspace.environment,
+      MINISAGO_REAL_GH: "/bin/echo",
+    };
+    const denied = Bun.spawn([gh, "pr", "create", "--draft"], {
+      env: environment,
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await denied.exited).toBe(77);
+    const allowed = Bun.spawn([gh, "issue", "comment", "12"], {
+      env: environment,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await allowed.exited).toBe(0);
+    expect(await new Response(allowed.stdout).text()).toContain(
+      "issue comment 12",
+    );
   });
 
   test("rejects a repository outside the worker advertisement", async () => {
