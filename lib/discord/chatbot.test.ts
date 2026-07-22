@@ -484,7 +484,7 @@ describe("Discord chatbot", () => {
       parseExecutionRoute(
         '{"mode":"dev-read","target":"default","repository":"Hsiii/mini-sago","reason":"PR review"}',
         "review this PR",
-        "https://github.com/Hsiii/mini-sago/pull/13",
+        "inspect src/core first\nhttps://github.com/Hsiii/mini-sago/pull/13",
       ),
     ).toEqual({
       mode: "dev-read",
