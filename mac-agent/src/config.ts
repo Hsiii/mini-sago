@@ -22,6 +22,9 @@ export type MacAgentConfig = {
 
 const workerCapabilityNames = ["chat", "dev", "mac"] as const;
 
+export const defaultWorkerCapabilities = (headless: boolean) =>
+  headless ? "chat" : "chat,dev,mac";
+
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const defaultApplicationSupport =
   process.platform === "darwin"
@@ -106,7 +109,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
   }
   const configuredCapabilities = (
     process.env.MINISAGO_WORKER_CAPABILITIES ||
-    (headless ? "chat,dev" : "chat,dev,mac")
+    defaultWorkerCapabilities(headless)
   )
     .split(",")
     .map((value) => value.trim())

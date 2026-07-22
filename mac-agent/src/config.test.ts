@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { validateBridgeUrl, workspaceChild } from "./config";
+import {
+  defaultWorkerCapabilities,
+  validateBridgeUrl,
+  workspaceChild,
+} from "./config";
 
 describe("worker configuration", () => {
+  test("keeps headless workers chat-only by default", () => {
+    expect(defaultWorkerCapabilities(true)).toBe("chat");
+    expect(defaultWorkerCapabilities(false)).toBe("chat,dev,mac");
+  });
+
   test("allows plaintext bridge traffic only for local hostnames", () => {
     expect(validateBridgeUrl("ws://bot-core:3000/api/mac-agent/ws")).toBe(
       "ws://bot-core:3000/api/mac-agent/ws",

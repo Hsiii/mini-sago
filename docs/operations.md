@@ -255,8 +255,8 @@ cloned repositories stay outside the image.
 
 Recommended split:
 
-- Oracle runs both Luna and Sol for Discord, web, GitHub, repository, test, and
-  build work. This gives MiniSago the Hermes-like always-on behavior.
+- Oracle runs Luna for always-on Discord chat. It must not advertise `dev` or
+  run cloud Sol until issue #12's external GitHub authorization controls land.
 - Mac advertises `chat,dev,mac` at a lower priority. It remains connected as a
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
