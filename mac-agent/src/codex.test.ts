@@ -400,7 +400,7 @@ describe("Codex chatbot runner", () => {
     ).toBe(false);
   });
 
-  test("constrains GitHub work to allowlisted repositories and draft PRs", () => {
+  test("labels GitHub repository scope as prompt-only routing context", () => {
     const policy = buildGithubDeveloperPolicy(
       {
         githubRepositories: ["Hsiii/mini-sago"],
@@ -422,6 +422,7 @@ describe("Codex chatbot runner", () => {
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
     expect(policy).toContain("Hsiii/mini-sago");
+    expect(policy).toContain("not an authorization boundary");
     expect(policy).toContain("/workspace/worktrees/job-123");
     expect(policy).toContain("draft pull request");
     expect(policy).toContain("Never push directly to main");
