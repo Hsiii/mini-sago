@@ -496,9 +496,13 @@ export function parseExecutionRoute(
   target: ChatbotExecutionTarget;
   repository?: string;
 } {
-  const repository = repositoryContext.match(
-    /(?:https?:\/\/github\.com\/|\b)([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
-  )?.[1];
+  const repository =
+    repositoryContext.match(
+      /https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
+    )?.[1] ??
+    ownerRequest.match(
+      /(?:^|\s)([a-z0-9_.-]+\/[a-z0-9_.-]+)(?=$|\s|[,.!?])/iu,
+    )?.[1];
   const writeRequested =
     /\b(?:create|open|update|edit|close|comment on|implement|fix|write|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(?:issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app)?\b/iu.test(
       ownerRequest,
