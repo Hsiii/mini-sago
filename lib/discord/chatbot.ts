@@ -10,6 +10,7 @@ import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
   ChatbotExecutionTarget,
+  ChatbotMutationScope,
   ChatbotIdentityCandidate,
   ChatbotIdentityResolution,
   ChatbotJob,
@@ -494,22 +495,47 @@ export function parseExecutionRoute(
 ): {
   mode: ChatbotExecutionMode;
   target: ChatbotExecutionTarget;
+  mutationScope?: ChatbotMutationScope;
   repository?: string;
 } {
-  const repository =
-    repositoryContext.match(
+  const ownerRepository =
+    ownerRequest.match(
       /https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
     )?.[1] ??
     ownerRequest.match(
       /(?:^|\s)([a-z0-9_.-]+\/[a-z0-9_.-]+)(?=$|\s|[,.!?])/iu,
     )?.[1];
-  const writeRequested =
-    /\b(?:create|open|update|edit|close|comment on|implement|fix|write|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(?:issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app)?\b/iu.test(
-      ownerRequest,
-    ) ||
-    /(?:建立|新增|修改|更新|關閉|留言|實作|修復|寫入|提交|推送|部署|發布).{0,32}(?:issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用)?/iu.test(
-      ownerRequest,
-    );
+  const referencedRepository = repositoryContext.match(
+    /https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
+  )?.[1];
+  const actionableOwnerRequest = ownerRequest
+    .replace(/```[\s\S]*?```/gu, "")
+    .split("\n")
+    .filter((line) => !/^\s*>/u.test(line))
+    .join("\n");
+  const englishMutation = actionableOwnerRequest.match(
+    /^(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|this|that|it)\b/imu,
+  );
+  const chineseMutation = actionableOwnerRequest.match(
+    /^(?:\s*(?:請|幫我|請幫我)\s*)?(建立|新增|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|這個|那個)/imu,
+  );
+  const writeRequested = Boolean(englishMutation || chineseMutation);
+  const mutationText = `${englishMutation?.[1] ?? chineseMutation?.[1] ?? ""} ${englishMutation?.[2] ?? chineseMutation?.[2] ?? ""}`;
+  const mutationScope: ChatbotMutationScope | undefined = !writeRequested
+    ? undefined
+    : /issue|留言|關閉|建立|新增/iu.test(mutationText) &&
+        !/code|repo|repository|project|branch|pr|pull request|程式碼|代碼|專案|分支/iu.test(
+          mutationText,
+        )
+      ? "issue"
+      : /deploy|publish|release|deployment|service|app|部署|發布|服務|應用/iu.test(
+            mutationText,
+          )
+        ? "deploy"
+        : "code";
+  const repository = writeRequested
+    ? ownerRepository
+    : (ownerRepository ?? referencedRepository);
   const target =
     /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
       ownerRequest,
@@ -539,6 +565,9 @@ export function parseExecutionRoute(
       return {
         mode: requestedMode,
         target,
+        ...(requestedMode === "dev-write" && mutationScope
+          ? { mutationScope }
+          : {}),
         ...(repository ? { repository } : {}),
       };
     }
@@ -553,6 +582,7 @@ export function parseExecutionRoute(
         ? "dev-read"
         : "chat",
     target,
+    ...(writeRequested && mutationScope ? { mutationScope } : {}),
     ...(repository ? { repository } : {}),
   };
 }
@@ -1242,6 +1272,7 @@ export async function handleChatbotMention({
           });
       let executionMode: ChatbotExecutionMode = "chat";
       let executionTarget: ChatbotExecutionTarget = "default";
+      let mutationScope: ChatbotMutationScope | undefined;
       let selectedRepository: string | undefined;
 
       if (requesterUserId === OWNER_DISCORD_USER_ID) {
@@ -1265,6 +1296,7 @@ export async function handleChatbotMention({
           );
           executionMode = route.mode;
           executionTarget = route.target;
+          mutationScope = route.mutationScope;
           selectedRepository = route.repository;
         } else {
           const route = parseExecutionRoute(
@@ -1274,6 +1306,7 @@ export async function handleChatbotMention({
           );
           executionMode = route.mode;
           executionTarget = route.target;
+          mutationScope = route.mutationScope;
           selectedRepository = route.repository;
         }
 
@@ -1314,6 +1347,7 @@ export async function handleChatbotMention({
           purpose: "context_plan",
           executionMode,
           executionTarget,
+          mutationScope,
           repository: selectedRepository,
           channelId: message.channel_id,
           requestMessageId: message.id,
@@ -1486,6 +1520,7 @@ export async function handleChatbotMention({
         purpose: "answer",
         executionMode,
         executionTarget,
+        mutationScope,
         repository: selectedRepository,
         channelId: message.channel_id,
         requestMessageId: message.id,

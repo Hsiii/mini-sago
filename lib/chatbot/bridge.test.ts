@@ -4,17 +4,30 @@ import type { ServerWebSocket } from "bun";
 import { MacAgentBridge, type MacAgentSocketData } from "./bridge";
 import { CHATBOT_PROTOCOL_VERSION, type ChatbotJob } from "./protocol";
 
-const originalSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET;
+const originalSecrets = {
+  mac: process.env.MINISAGO_MAC_BRIDGE_SECRET,
+  read: process.env.MINISAGO_WORKER_READ_BRIDGE_SECRET,
+  write: process.env.MINISAGO_WORKER_WRITE_BRIDGE_SECRET,
+};
 const bridgeSecret = "bridge-secret-that-is-at-least-32-bytes";
+const macSecret = "mac-bridge-secret-that-is-at-least-32-bytes";
 
 afterEach(() => {
-  if (originalSecret === undefined) {
-    delete process.env.MINISAGO_MAC_BRIDGE_SECRET;
-    return;
+  for (const [name, value] of Object.entries({
+    MINISAGO_MAC_BRIDGE_SECRET: originalSecrets.mac,
+    MINISAGO_WORKER_READ_BRIDGE_SECRET: originalSecrets.read,
+    MINISAGO_WORKER_WRITE_BRIDGE_SECRET: originalSecrets.write,
+  })) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
   }
-
-  process.env.MINISAGO_MAC_BRIDGE_SECRET = originalSecret;
 });
+
+function useReadWorker() {
+  delete process.env.MINISAGO_MAC_BRIDGE_SECRET;
+  delete process.env.MINISAGO_WORKER_WRITE_BRIDGE_SECRET;
+  process.env.MINISAGO_WORKER_READ_BRIDGE_SECRET = bridgeSecret;
+}
 
 function fakeSocket() {
   const sent: string[] = [];
@@ -33,8 +46,33 @@ function fakeSocket() {
 }
 
 describe("Mac agent bridge", () => {
+  test("binds cloud worker identity and capabilities to its profile secret", () => {
+    useReadWorker();
+    const bridge = new MacAgentBridge();
+    const worker = fakeSocket();
+
+    bridge.open(worker.socket);
+    bridge.message(
+      worker.socket,
+      JSON.stringify({
+        type: "authenticate",
+        protocolVersion: CHATBOT_PROTOCOL_VERSION,
+        secret: bridgeSecret,
+        workerId: "oracle-write",
+        capabilities: ["dev-write"],
+        repositories: ["Hsiii/mini-sago"],
+        priority: 1_000,
+      }),
+    );
+
+    expect(worker.sent).toEqual([]);
+    expect(worker.closed).toEqual([
+      { code: 4001, reason: "Authentication failed" },
+    ]);
+  });
+
   test("stays offline until an authenticated helper reports availability", () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    useReadWorker();
     const bridge = new MacAgentBridge();
     const { socket, sent } = fakeSocket();
 
@@ -45,8 +83,8 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
-        workerId: "oracle",
-        capabilities: ["chat", "dev-read", "dev-write"],
+        workerId: "oracle-read",
+        capabilities: ["chat", "dev-read"],
         repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
@@ -65,7 +103,7 @@ describe("Mac agent bridge", () => {
   });
 
   test("enforces the advertised capacity and resolves matching results", async () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    useReadWorker();
     const bridge = new MacAgentBridge();
     const { socket, sent } = fakeSocket();
     const job: ChatbotJob = {
@@ -84,8 +122,8 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
-        workerId: "oracle",
-        capabilities: ["chat", "dev-read", "dev-write"],
+        workerId: "oracle-read",
+        capabilities: ["chat", "dev-read"],
         repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
@@ -122,7 +160,7 @@ describe("Mac agent bridge", () => {
   });
 
   test("reserves the bridge across planning and answering jobs", async () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    useReadWorker();
     const bridge = new MacAgentBridge();
     const { socket } = fakeSocket();
     const job: ChatbotJob = {
@@ -142,8 +180,8 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
-        workerId: "oracle",
-        capabilities: ["chat", "dev-read", "dev-write"],
+        workerId: "oracle-read",
+        capabilities: ["chat", "dev-read"],
         repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
@@ -196,7 +234,7 @@ describe("Mac agent bridge", () => {
   });
 
   test("runs multiple reserved workflows concurrently up to capacity", async () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    useReadWorker();
     const bridge = new MacAgentBridge();
     const { socket } = fakeSocket();
     const job: ChatbotJob = {
@@ -215,8 +253,8 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
-        workerId: "oracle",
-        capabilities: ["chat", "dev-read", "dev-write"],
+        workerId: "oracle-read",
+        capabilities: ["chat", "dev-read"],
         repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
@@ -272,7 +310,8 @@ describe("Mac agent bridge", () => {
   });
 
   test("keeps cloud and Mac connected while routing workflows by capability", async () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    process.env.MINISAGO_WORKER_READ_BRIDGE_SECRET = bridgeSecret;
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = macSecret;
     const bridge = new MacAgentBridge();
     const cloud = fakeSocket();
     const mac = fakeSocket();
@@ -281,6 +320,7 @@ describe("Mac agent bridge", () => {
       workerId: string,
       capabilities: Array<"chat" | "dev-read" | "dev-write" | "mac">,
       priority: number,
+      secret: string,
     ) => {
       bridge.open(target.socket);
       bridge.message(
@@ -288,7 +328,7 @@ describe("Mac agent bridge", () => {
         JSON.stringify({
           type: "authenticate",
           protocolVersion: CHATBOT_PROTOCOL_VERSION,
-          secret: bridgeSecret,
+          secret,
           workerId,
           capabilities,
           repositories: ["Hsiii/mini-sago"],
@@ -301,8 +341,14 @@ describe("Mac agent bridge", () => {
       );
     };
 
-    authenticate(cloud, "oracle", ["chat", "dev-read", "dev-write"], 100);
-    authenticate(mac, "hsi-mac", ["chat", "dev-read", "dev-write", "mac"], 50);
+    authenticate(cloud, "oracle-read", ["chat", "dev-read"], 100, bridgeSecret);
+    authenticate(
+      mac,
+      "hsi-mac",
+      ["chat", "dev-read", "dev-write", "mac"],
+      50,
+      macSecret,
+    );
     expect(cloud.closed).toEqual([]);
     expect(mac.closed).toEqual([]);
     expect(bridge.getWorkerSummary()).toEqual({
@@ -403,7 +449,7 @@ describe("Mac agent bridge", () => {
   });
 
   test("enforces repository scope before dispatching a dev job", () => {
-    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    useReadWorker();
     const bridge = new MacAgentBridge();
     const worker = fakeSocket();
     bridge.open(worker.socket);
@@ -413,8 +459,8 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
-        workerId: "oracle",
-        capabilities: ["chat", "dev-read", "dev-write"],
+        workerId: "oracle-read",
+        capabilities: ["chat", "dev-read"],
         repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),

@@ -21,10 +21,12 @@ fallback.
 
 ## Universal / cross-guild configuration
 
-| Name                         | Required | Description                                                                                                                     |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_GATEWAY_DISABLED`   | No       | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions                            |
-| `MINISAGO_MAC_BRIDGE_SECRET` | Chatbot  | High-entropy secret shared only by the hosted MiniSago process and Codex worker; leaving it blank disables the WebSocket bridge |
+| Name                                  | Required     | Description                                                                                                    |
+| ------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_GATEWAY_DISABLED`            | No           | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions           |
+| `MINISAGO_MAC_BRIDGE_SECRET`          | Chatbot      | High-entropy secret for the trusted Mac worker; leaving all bridge secrets blank disables the WebSocket bridge |
+| `MINISAGO_WORKER_READ_BRIDGE_SECRET`  | Cloud worker | Separate high-entropy secret bound by the broker to `oracle-read` and `chat,dev-read`                          |
+| `MINISAGO_WORKER_WRITE_BRIDGE_SECRET` | Cloud worker | Separate high-entropy secret bound by the broker to `oracle-write` and `dev-write`                             |
 
 Gateway features are enabled by default whenever `DISCORD_BOT_TOKEN` is set and
 `DISCORD_GATEWAY_DISABLED` is not `true`. They work in every server and channel
@@ -77,8 +79,9 @@ issue mutations, code changes, command execution, and similar privileged
 requests are rejected before they reach the worker, then checked again by the
 worker before Codex runs.
 
-Multiple workers may connect with the same bridge secret as long as they use
-different worker IDs. The bridge prefers the highest-priority compatible
+Cloud profiles must not share bridge secrets. The broker binds the read and
+write secrets to their server-owned worker IDs and capability sets; the Mac
+secret is accepted only from a worker that advertises `mac`. The bridge prefers the highest-priority compatible
 worker, falls back when it is full or offline, and keeps every multi-stage
 workflow on one worker after routing. Luna selects the `mac` target only when
 the request explicitly needs a resource on Hsi's Mac.
@@ -101,7 +104,10 @@ bridge rejects a dev job unless the worker advertised its exact repository;
 the worker then clones only that repository into a disposable job checkout.
 Untrusted PR content can influence analysis but cannot upgrade `dev-read` to
 `dev-write` because the deterministic mutation check uses only the owner's
-request.
+request. A `dev-write` job also carries an owner-derived `issue`, `code`, or
+`deploy` scope. Per-job `gh` and `git` wrappers enforce that scope, require
+draft PR creation, and reject merge, ready, protected-branch, and force-push
+operations outside the prompt.
 
 The read credential must have read-only repository permissions. The write
 credential may create issues, branches, commits, and draft PRs, but GitHub

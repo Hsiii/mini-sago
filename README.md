@@ -65,7 +65,9 @@ are split between persistent repo-scoped read and write `gh` logins; community
 and ordinary chat runs cannot execute GitHub tooling. PR review defaults to
 `dev-read`. Only an explicit owner mutation selects `dev-write`, and each job
 receives only its selected disposable repository checkout. The cloud Compose
-stack mounts these credentials into separate capability-specific containers. See
+stack mounts these credentials, worker secrets, and workspaces into separate
+capability-specific containers. Write jobs also receive an externally enforced
+issue/code/deploy operation scope. See
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12) for credential and
 GitHub ruleset setup.
 

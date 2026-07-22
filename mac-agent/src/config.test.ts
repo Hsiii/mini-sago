@@ -18,11 +18,20 @@ describe("worker configuration", () => {
     expect(validateBridgeUrl("ws://bot-core:3000/api/mac-agent/ws")).toBe(
       "ws://bot-core:3000/api/mac-agent/ws",
     );
+    expect(validateBridgeUrl("ws://[::1]:3000/api/mac-agent/ws")).toBe(
+      "ws://[::1]:3000/api/mac-agent/ws",
+    );
     expect(validateBridgeUrl("wss://bot.example.com/api/mac-agent/ws")).toBe(
       "wss://bot.example.com/api/mac-agent/ws",
     );
     expect(() =>
       validateBridgeUrl("ws://bot.example.com/api/mac-agent/ws"),
+    ).toThrow("must use wss://");
+    expect(() =>
+      validateBridgeUrl("ws://[2001:db8::1]/api/mac-agent/ws"),
+    ).toThrow("must use wss://");
+    expect(() =>
+      validateBridgeUrl("ws://[2606:4700:4700::1111]/api/mac-agent/ws"),
     ).toThrow("must use wss://");
   });
 

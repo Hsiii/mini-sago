@@ -258,9 +258,9 @@ cloned repositories stay outside the image.
 
 Recommended split:
 
-- Oracle runs separate `chat,dev-read` and `dev-write` containers so neither
-  container mounts the other GitHub credential. Enable the write container
-  after its repo scope and protected-branch ruleset are configured.
+- Oracle runs separate `chat,dev-read` and `dev-write` containers with distinct
+  broker secrets, GitHub credentials, state, and workspace volumes. Enable the
+  write container after its repo scope and protected-branch ruleset are configured.
 - Mac advertises `chat,dev-read,dev-write,mac` at a lower priority. It remains connected as a
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
@@ -270,9 +270,9 @@ On the current VM, or after provisioning an Ubuntu AArch64
 this repository, then run:
 
 ```bash
-cp .env.worker.example .env.worker
-mkdir -p workspace/worktrees
-chmod 700 workspace workspace/worktrees .env.worker
+cp .env.worker.example .env.worker.read
+cp .env.worker.example .env.worker.write
+chmod 600 .env.worker.read .env.worker.write
 docker compose -f compose.worker.yaml build
 docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
 docker compose -f compose.worker.yaml up -d
@@ -299,8 +299,11 @@ The worker's two GitHub CLI logins and Codex login use separate persistent volum
 See [Configuration](configuration.md#owner-github-automation) for the runtime
 boundary.
 
-Put the production bridge URL and the same 32-byte-or-longer bridge secret in
-`.env.worker` before login. Device auth writes only to the persistent
+Put the production bridge URL in both worker files and give
+`.env.worker.read` and `.env.worker.write` different 32-byte-or-longer bridge
+secrets before login. Configure the matching values as
+`MINISAGO_WORKER_READ_BRIDGE_SECRET` and
+`MINISAGO_WORKER_WRITE_BRIDGE_SECRET` on the hosted broker. Device auth writes only to the persistent
 `minisago-codex` volume; never copy it into the image or repository. OpenAI
 supports ChatGPT sign-in and device auth for headless Codex, but recommends API
 keys for unattended automation. A Pro login therefore works as the requested
