@@ -275,8 +275,16 @@ docker compose -f compose.worker.yaml up -d
 docker compose -f compose.worker.yaml logs -f worker
 ```
 
-To enable owner GitHub work, set `MINISAGO_GITHUB_REPOSITORIES` in
-`.env.worker`, then authenticate GitHub CLI through its normal browser flow.
+Cloud Sol GitHub work is blocked on
+[issue #12](https://github.com/Hsiii/mini-sago/issues/12). The repository list
+is prompt-only routing context and does not restrict the mounted `gh` login.
+Do not enable the cloud worker's `dev` capability with a broad persistent login
+until the external repository/operation policy and job-scoped credentials are
+implemented.
+
+For a temporary operator-controlled rehearsal only, set
+`MINISAGO_GITHUB_REPOSITORIES` in `.env.worker`, then authenticate GitHub CLI
+through its normal browser flow.
 The login is written to the persistent `minisago-github` volume; do not paste a
 token into Discord, a Codex task, `.env.worker`, or the repository:
 

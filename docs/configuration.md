@@ -55,7 +55,7 @@ the bridge secret must also be present in production.
 | `MINISAGO_WORKER_ID`              | No         | Stable worker identity; defaults from the host, while the container image uses `oracle`                 |
 | `MINISAGO_WORKER_CAPABILITIES`    | No         | Comma-separated `chat`, `dev`, and `mac` capabilities; only a Mac worker should advertise `mac`         |
 | `MINISAGO_WORKER_PRIORITY`        | No         | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing     |
-| `MINISAGO_GITHUB_REPOSITORIES`    | For GitHub | Comma-separated `owner/repository` list supplied to Sol's GitHub policy                                 |
+| `MINISAGO_GITHUB_REPOSITORIES`    | For GitHub | Prompt-only repository routing context for Sol; not an authorization boundary                           |
 | `MINISAGO_GITHUB_REPOSITORY_ROOT` | No         | Persistent canonical clone root; defaults to `<workspace>/repositories`                                 |
 | `MINISAGO_GITHUB_WORKTREE_ROOT`   | No         | Per-job isolated worktree root; defaults to `<workspace>/worktrees`                                     |
 
@@ -96,6 +96,11 @@ persistent workspace keeps canonical clones and uses a job-specific worktree
 for concurrent changes. `MINISAGO_GITHUB_REPOSITORIES` guides Sol's repository
 scope; the authenticated GitHub account's permissions remain the actual access
 boundary.
+
+Do not enable cloud Sol with a broad persistent `gh` login. Repository and
+operation authorization must be enforced outside the prompt with restricted,
+job-scoped credentials and checkouts. This is tracked as blocking work in
+[issue #12](https://github.com/Hsiii/mini-sago/issues/12).
 
 Repository contents, diffs, issues, comments, and command output remain
 untrusted data. MiniSago is instructed to create issue mutations only when Hsi

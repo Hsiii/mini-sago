@@ -64,6 +64,11 @@ PR review, repository changes, tests, and draft-PR delivery. GitHub credentials
 come from the worker's persistent `gh auth login`; community and ordinary chat
 runs cannot execute GitHub tooling.
 
+Cloud Sol remains blocked until repository and operation authorization is
+enforced outside model prompts with restricted credentials and per-job
+checkouts. `MINISAGO_GITHUB_REPOSITORIES` is routing context, not a security
+boundary; see [issue #12](https://github.com/Hsiii/mini-sago/issues/12).
+
 ### Lets members open optional channels
 
 Members of the configured WM31 server can use the channel-access panel to grant
