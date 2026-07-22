@@ -26,6 +26,15 @@ function hasRemote(name) {
   return output("git", ["remote"]).split("\n").includes(name);
 }
 
+function remoteBranchCommit(remote, branch) {
+  return output("git", [
+    "ls-remote",
+    "--exit-code",
+    remote,
+    `refs/heads/${branch}`,
+  ]).split(/\s/u)[0];
+}
+
 function deployRemote() {
   const remoteCommand = `${remoteDeployRoot}/scripts/deploy-${service}`;
 
@@ -116,7 +125,15 @@ if (!hasRemote("origin")) {
   process.exit(1);
 }
 
-run("git", ["push", "origin", branch]);
 const commit = output("git", ["rev-parse", "HEAD"]);
+const remoteCommit = remoteBranchCommit("origin", branch);
+
+if (commit !== remoteCommit) {
+  console.error(
+    "Local main does not match origin/main. Merge changes through a PR, then update local main before deploying. This script never pushes code.",
+  );
+  process.exit(1);
+}
+
 waitForImage(commit);
 deployRemote();
