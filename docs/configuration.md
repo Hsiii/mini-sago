@@ -52,6 +52,9 @@ the bridge secret must also be present in production.
 | `MINISAGO_WORKSPACE_ROOT`       | No       | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container      |
 | `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`       |
 | `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                              |
+| `MINISAGO_WORKER_ID`            | No       | Stable worker identity; defaults from the host, while the container image uses `oracle`                 |
+| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities; only a Mac worker should advertise `mac`         |
+| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing     |
 
 The helper uses the existing `~/.codex/auth.json` through a symlink inside its
 isolated Codex home. It does not copy the credential or load normal Codex
@@ -68,6 +71,12 @@ summarization, and public-information requests. GitHub pull-request reviews,
 issue mutations, code changes, command execution, and similar privileged
 requests are rejected before they reach the worker, then checked again by the
 worker before Codex runs.
+
+Multiple workers may connect with the same bridge secret as long as they use
+different worker IDs. The bridge prefers the highest-priority compatible
+worker, falls back when it is full or offline, and keeps every multi-stage
+workflow on one worker after routing. Luna selects the `mac` target only when
+the request explicitly needs a resource on Hsi's Mac.
 
 ## GitHub pull request review threads
 

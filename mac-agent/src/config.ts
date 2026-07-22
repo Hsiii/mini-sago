@@ -1,5 +1,5 @@
 import { access } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 
 export type MacAgentConfig = {
@@ -12,7 +12,12 @@ export type MacAgentConfig = {
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
+  workerCapabilities: Array<"chat" | "dev" | "mac">;
+  workerId: string;
+  workerPriority: number;
 };
+
+const workerCapabilityNames = ["chat", "dev", "mac"] as const;
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const defaultApplicationSupport =
@@ -66,6 +71,35 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     );
   }
 
+  const headless =
+    process.env.MINISAGO_HEADLESS === "true" || process.platform !== "darwin";
+  const defaultWorkerId = `${headless ? "cloud" : "mac"}-${hostname()}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "-")
+    .slice(0, 64);
+  const workerId = process.env.MINISAGO_WORKER_ID?.trim() || defaultWorkerId;
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(workerId)) {
+    throw new Error("MINISAGO_WORKER_ID must be a safe 1-64 character ID.");
+  }
+  const configuredCapabilities = (
+    process.env.MINISAGO_WORKER_CAPABILITIES ||
+    (headless ? "chat,dev" : "chat,dev,mac")
+  )
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const workerCapabilities = workerCapabilityNames.filter((capability) =>
+    configuredCapabilities.includes(capability),
+  );
+  if (
+    workerCapabilities.length === 0 ||
+    workerCapabilities.length !== new Set(configuredCapabilities).size
+  ) {
+    throw new Error(
+      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev, and mac.",
+    );
+  }
+
   return {
     bridgeUrl: validateBridgeUrl(
       process.env.MINISAGO_BRIDGE_URL?.trim() ||
@@ -76,8 +110,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
-    headless:
-      process.env.MINISAGO_HEADLESS === "true" || process.platform !== "darwin",
+    headless,
     maxConcurrentJobs: Math.max(
       1,
       Math.min(
@@ -95,5 +128,17 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     workspaceRoot:
       process.env.MINISAGO_WORKSPACE_ROOT?.trim() ||
       join(homedir(), "Projects"),
+    workerCapabilities,
+    workerId,
+    workerPriority: Math.max(
+      0,
+      Math.min(
+        1_000,
+        Number.parseInt(
+          process.env.MINISAGO_WORKER_PRIORITY || (headless ? "100" : "50"),
+          10,
+        ) || 0,
+      ),
+    ),
   };
 }

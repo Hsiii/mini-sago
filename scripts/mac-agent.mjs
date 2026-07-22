@@ -171,6 +171,18 @@ async function install() {
       process.env.MINISAGO_MAX_CONCURRENT_JOBS?.trim() || "2",
     ),
     envLine(
+      "MINISAGO_WORKER_ID",
+      process.env.MINISAGO_WORKER_ID?.trim() || "hsi-mac",
+    ),
+    envLine(
+      "MINISAGO_WORKER_CAPABILITIES",
+      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() || "chat,dev,mac",
+    ),
+    envLine(
+      "MINISAGO_WORKER_PRIORITY",
+      process.env.MINISAGO_WORKER_PRIORITY?.trim() || "50",
+    ),
+    envLine(
       "MINISAGO_WORKSPACE_ROOT",
       process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(userHome, "Projects"),
     ),

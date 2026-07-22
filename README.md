@@ -54,9 +54,10 @@ can also use it in other visible servers, threads, and direct messages.
 > In Discord's mention picker, choose MiniSago under **Members/Apps**, not a
 > similarly named role. A role mention does not start the chatbot.
 
-Chat replies require a connected Codex worker with free capacity. The worker can
-run headlessly on Oracle ARM or locally while the Mac is awake and unlocked.
-Requests received while it is unavailable are not queued.
+Chat replies require a compatible Codex worker with free capacity. Oracle can
+run as the preferred always-on worker while the unlocked Mac remains connected
+as a lower-priority fallback and handles requests that need local Mac resources.
+Requests received while every compatible worker is unavailable are not queued.
 
 ### Lets members open optional channels
 

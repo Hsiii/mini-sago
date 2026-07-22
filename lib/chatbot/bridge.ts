@@ -4,20 +4,38 @@ import type { Server, ServerWebSocket } from "bun";
 import {
   CHATBOT_JOB_TIMEOUT_MS,
   CHATBOT_PROTOCOL_VERSION,
+  CHATBOT_WORKER_CAPABILITIES,
   type ChatbotJob,
+  type ChatbotWorkerCapability,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
 } from "./protocol";
 
 export type MacAgentSocketData = {
   authenticated: boolean;
+  workerId?: string;
 };
 
 type PendingJob = {
   id: string;
+  workerId: string;
   workflowId?: string;
   resolve: (result: MacAgentJobResult) => void;
   timer: ReturnType<typeof setTimeout>;
+};
+
+type Worker = {
+  id: string;
+  socket: Socket;
+  capabilities: Set<ChatbotWorkerCapability>;
+  priority: number;
+  available: boolean;
+  capacity: number;
+};
+
+type Workflow = {
+  workerId: string;
+  activeJobId?: string;
 };
 
 export type MacAgentJobResult =
@@ -29,8 +47,14 @@ export type DispatchResult =
   | { status: "busy" }
   | { status: "accepted"; result: Promise<MacAgentJobResult> };
 
+export type WorkerSelectionResult =
+  | { status: "offline" }
+  | { status: "busy" }
+  | { status: "accepted" };
+
 export type WorkflowLease = {
   dispatch: (job: ChatbotJob) => DispatchResult;
+  route: (capabilities: ChatbotWorkerCapability[]) => WorkerSelectionResult;
   release: () => void;
 };
 
@@ -63,31 +87,52 @@ function send(socket: Socket, message: MacAgentServerMessage) {
   socket.send(JSON.stringify(message));
 }
 
+function validCapabilities(
+  capabilities: unknown,
+): capabilities is ChatbotWorkerCapability[] {
+  return (
+    Array.isArray(capabilities) &&
+    capabilities.length > 0 &&
+    capabilities.every(
+      (capability) =>
+        typeof capability === "string" &&
+        CHATBOT_WORKER_CAPABILITIES.includes(
+          capability as ChatbotWorkerCapability,
+        ),
+    )
+  );
+}
+
 export class MacAgentBridge {
-  private activeSocket: Socket | null = null;
-  private available = false;
+  private workers = new Map<string, Worker>();
   private authenticationTimers = new WeakMap<
     Socket,
     ReturnType<typeof setTimeout>
   >();
-  private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
-  private capacity = 1;
+  private heartbeatTimers = new WeakMap<
+    Socket,
+    ReturnType<typeof setTimeout>
+  >();
   private pendingJobs = new Map<string, PendingJob>();
-  private workflowJobs = new Map<string, string>();
-  private workflowIds = new Set<string>();
+  private workflows = new Map<string, Workflow>();
 
   isConfigured() {
     return this.configuredSecret() !== null;
   }
 
-  getStatus() {
-    if (!this.activeSocket || !this.available) {
-      return "offline" as const;
-    }
+  getStatus(capabilities: ChatbotWorkerCapability[] = ["chat"]) {
+    const status = this.selectWorker(capabilities).status;
+    return status === "accepted" ? ("available" as const) : status;
+  }
 
-    return this.usedSlots() >= this.capacity
-      ? ("busy" as const)
-      : ("available" as const);
+  getWorkerSummary() {
+    const workers = [...this.workers.values()];
+    return {
+      connected: workers.length,
+      available: workers.filter((worker) => worker.available).length,
+      capacity: workers.reduce((total, worker) => total + worker.capacity, 0),
+      active: this.pendingJobs.size,
+    };
   }
 
   handleUpgrade(request: Request, server: Server<MacAgentSocketData>) {
@@ -104,73 +149,37 @@ export class MacAgentBridge {
       : new Response("需要 WebSocket 連線", { status: 426 });
   }
 
-  dispatch(job: ChatbotJob): DispatchResult {
-    return this.dispatchJob(job);
+  dispatch(
+    job: ChatbotJob,
+    capabilities: ChatbotWorkerCapability[] = [
+      job.executionMode === "dev" ? "dev" : "chat",
+    ],
+  ): DispatchResult {
+    const selected = this.selectWorker(capabilities);
+    if (selected.status !== "accepted") return selected;
+    return this.dispatchJob(job, selected.worker.id);
   }
 
-  acquireWorkflow(): AcquireWorkflowResult {
-    if (!this.activeSocket || !this.available) {
-      return { status: "offline" };
-    }
-
-    if (this.usedSlots() >= this.capacity) {
-      return { status: "busy" };
-    }
+  acquireWorkflow(
+    capabilities: ChatbotWorkerCapability[] = ["chat"],
+  ): AcquireWorkflowResult {
+    const selected = this.selectWorker(capabilities);
+    if (selected.status !== "accepted") return selected;
 
     const workflowId = randomUUID();
-    this.workflowIds.add(workflowId);
+    this.workflows.set(workflowId, { workerId: selected.worker.id });
 
     return {
       status: "accepted",
       workflow: {
-        dispatch: (job) => this.dispatchJob(job, workflowId),
+        dispatch: (job) => this.dispatchWorkflowJob(job, workflowId),
+        route: (requiredCapabilities) =>
+          this.routeWorkflow(workflowId, requiredCapabilities),
         release: () => {
-          this.workflowIds.delete(workflowId);
+          this.workflows.delete(workflowId);
         },
       },
     };
-  }
-
-  private dispatchJob(job: ChatbotJob, workflowId?: string): DispatchResult {
-    if (!this.activeSocket || !this.available) {
-      return { status: "offline" };
-    }
-
-    if (this.pendingJobs.has(job.id)) {
-      return { status: "busy" };
-    }
-
-    if (workflowId) {
-      if (
-        !this.workflowIds.has(workflowId) ||
-        this.workflowJobs.has(workflowId)
-      ) {
-        return { status: "busy" };
-      }
-    } else if (this.usedSlots() >= this.capacity) {
-      return { status: "busy" };
-    }
-
-    const socket = this.activeSocket!;
-    const result = new Promise<MacAgentJobResult>((resolve) => {
-      const timer = setTimeout(() => {
-        const pendingJob = this.pendingJobs.get(job.id);
-        if (!pendingJob) {
-          return;
-        }
-
-        this.deletePendingJob(pendingJob);
-        send(socket, { type: "cancel", jobId: job.id });
-        resolve({ ok: false, error: "Local Codex timed out." });
-      }, CHATBOT_JOB_TIMEOUT_MS);
-
-      const pendingJob = { id: job.id, workflowId, resolve, timer };
-      this.pendingJobs.set(job.id, pendingJob);
-      if (workflowId) this.workflowJobs.set(workflowId, job.id);
-    });
-
-    send(socket, { type: "job", job });
-    return { status: "accepted", result };
   }
 
   open(socket: Socket) {
@@ -196,27 +205,28 @@ export class MacAgentBridge {
       return;
     }
 
-    if (socket !== this.activeSocket) {
+    const worker = socket.data.workerId
+      ? this.workers.get(socket.data.workerId)
+      : undefined;
+    if (!worker || worker.socket !== socket) {
       socket.close(4003, "Connection replaced");
       return;
     }
 
-    this.armHeartbeatTimeout(socket);
+    this.armHeartbeatTimeout(worker);
 
-    if (message.type === "heartbeat") {
-      return;
-    }
+    if (message.type === "heartbeat") return;
 
     if (message.type === "availability") {
-      this.available = message.available;
-      this.capacity = Number.isFinite(message.capacity)
+      worker.available = message.available;
+      worker.capacity = Number.isFinite(message.capacity)
         ? Math.max(1, Math.min(16, Math.floor(message.capacity)))
         : 1;
       return;
     }
 
     if (message.type === "result") {
-      this.finishJob(message);
+      this.finishJob(worker, message);
       return;
     }
 
@@ -224,23 +234,118 @@ export class MacAgentBridge {
   }
 
   close(socket: Socket) {
-    const authenticationTimer = this.authenticationTimers.get(socket);
+    this.clearAuthenticationTimer(socket);
+    this.clearHeartbeatTimeout(socket);
 
-    if (authenticationTimer) {
-      clearTimeout(authenticationTimer);
-      this.authenticationTimers.delete(socket);
+    const workerId = socket.data.workerId;
+    if (!workerId) return;
+
+    const worker = this.workers.get(workerId);
+    if (!worker || worker.socket !== socket) return;
+
+    this.workers.delete(workerId);
+    this.failPendingJobs(
+      workerId,
+      "The Codex worker disconnected while answering.",
+    );
+  }
+
+  private dispatchWorkflowJob(
+    job: ChatbotJob,
+    workflowId: string,
+  ): DispatchResult {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) return { status: "offline" };
+    if (workflow.activeJobId) return { status: "busy" };
+    return this.dispatchJob(job, workflow.workerId, workflowId);
+  }
+
+  private dispatchJob(
+    job: ChatbotJob,
+    workerId: string,
+    workflowId?: string,
+  ): DispatchResult {
+    const worker = this.workers.get(workerId);
+    if (!worker?.available) return { status: "offline" };
+    if (this.pendingJobs.has(job.id)) return { status: "busy" };
+    if (!workflowId && this.usedSlots(workerId) >= worker.capacity) {
+      return { status: "busy" };
     }
 
-    if (socket !== this.activeSocket) {
-      return;
+    const result = new Promise<MacAgentJobResult>((resolve) => {
+      const timer = setTimeout(() => {
+        const pendingJob = this.pendingJobs.get(job.id);
+        if (!pendingJob) return;
+
+        this.deletePendingJob(pendingJob);
+        const activeWorker = this.workers.get(pendingJob.workerId);
+        if (activeWorker)
+          send(activeWorker.socket, { type: "cancel", jobId: job.id });
+        resolve({ ok: false, error: "Local Codex timed out." });
+      }, CHATBOT_JOB_TIMEOUT_MS);
+
+      const pendingJob = { id: job.id, workerId, workflowId, resolve, timer };
+      this.pendingJobs.set(job.id, pendingJob);
+      if (workflowId) {
+        const workflow = this.workflows.get(workflowId);
+        if (workflow) workflow.activeJobId = job.id;
+      }
+    });
+
+    send(worker.socket, { type: "job", job });
+    return { status: "accepted", result };
+  }
+
+  private routeWorkflow(
+    workflowId: string,
+    capabilities: ChatbotWorkerCapability[],
+  ): WorkerSelectionResult {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) return { status: "offline" };
+    if (workflow.activeJobId) return { status: "busy" };
+
+    const current = this.workers.get(workflow.workerId);
+    if (
+      current?.available &&
+      capabilities.every((capability) => current.capabilities.has(capability))
+    ) {
+      return { status: "accepted" };
     }
 
-    this.activeSocket = null;
-    this.available = false;
-    this.workflowIds.clear();
-    this.workflowJobs.clear();
-    this.clearHeartbeatTimeout();
-    this.failPendingJob("The Codex worker disconnected while answering.");
+    const selected = this.selectWorker(capabilities, workflowId);
+    if (selected.status !== "accepted") return selected;
+    workflow.workerId = selected.worker.id;
+    return { status: "accepted" };
+  }
+
+  private selectWorker(
+    capabilities: ChatbotWorkerCapability[],
+    movingWorkflowId?: string,
+  ):
+    | { status: "offline" }
+    | { status: "busy" }
+    | { status: "accepted"; worker: Worker } {
+    const compatible = [...this.workers.values()].filter(
+      (worker) =>
+        worker.available &&
+        capabilities.every((capability) => worker.capabilities.has(capability)),
+    );
+    if (compatible.length === 0) return { status: "offline" };
+
+    const available = compatible.filter(
+      (worker) => this.usedSlots(worker.id, movingWorkflowId) < worker.capacity,
+    );
+    if (available.length === 0) return { status: "busy" };
+
+    available.sort((left, right) => {
+      const priority = right.priority - left.priority;
+      if (priority !== 0) return priority;
+      const utilization =
+        this.usedSlots(left.id, movingWorkflowId) / left.capacity -
+        this.usedSlots(right.id, movingWorkflowId) / right.capacity;
+      return utilization || left.id.localeCompare(right.id);
+    });
+    return { status: "accepted", worker: available[0]! };
   }
 
   private authenticate(socket: Socket, message: MacAgentClientMessage) {
@@ -250,28 +355,37 @@ export class MacAgentBridge {
       message.type !== "authenticate" ||
       message.protocolVersion !== CHATBOT_PROTOCOL_VERSION ||
       !expectedSecret ||
-      !safeEqual(message.secret, expectedSecret)
+      !safeEqual(message.secret, expectedSecret) ||
+      !/^[a-z0-9][a-z0-9._-]{0,63}$/u.test(message.workerId) ||
+      !validCapabilities(message.capabilities) ||
+      !Number.isFinite(message.priority)
     ) {
       socket.close(4001, "Authentication failed");
       return;
     }
 
-    const oldSocket = this.activeSocket;
-
-    if (oldSocket && oldSocket !== socket) {
-      oldSocket.close(4003, "Connection replaced");
+    const oldWorker = this.workers.get(message.workerId);
+    if (oldWorker && oldWorker.socket !== socket) {
+      this.failPendingJobs(
+        oldWorker.id,
+        "The Codex worker reconnected while answering.",
+      );
+      oldWorker.socket.close(4003, "Connection replaced");
     }
 
-    const timer = this.authenticationTimers.get(socket);
-    if (timer) {
-      clearTimeout(timer);
-      this.authenticationTimers.delete(socket);
-    }
-
+    this.clearAuthenticationTimer(socket);
     socket.data.authenticated = true;
-    this.activeSocket = socket;
-    this.available = false;
-    this.armHeartbeatTimeout(socket);
+    socket.data.workerId = message.workerId;
+    const worker: Worker = {
+      id: message.workerId,
+      socket,
+      capabilities: new Set(message.capabilities),
+      priority: Math.max(0, Math.min(1_000, Math.floor(message.priority))),
+      available: false,
+      capacity: 1,
+    };
+    this.workers.set(worker.id, worker);
+    this.armHeartbeatTimeout(worker);
     send(socket, {
       type: "authenticated",
       protocolVersion: CHATBOT_PROTOCOL_VERSION,
@@ -279,67 +393,78 @@ export class MacAgentBridge {
   }
 
   private finishJob(
+    worker: Worker,
     message: Extract<MacAgentClientMessage, { type: "result" }>,
   ) {
     const pendingJob = this.pendingJobs.get(message.jobId);
-    if (!pendingJob) {
-      return;
-    }
+    if (!pendingJob || pendingJob.workerId !== worker.id) return;
 
     this.deletePendingJob(pendingJob);
     clearTimeout(pendingJob.timer);
-
-    if (message.ok) {
-      pendingJob.resolve({ ok: true, content: message.content });
-      return;
-    }
-
-    pendingJob.resolve({ ok: false, error: message.error });
+    pendingJob.resolve(
+      message.ok
+        ? { ok: true, content: message.content }
+        : { ok: false, error: message.error },
+    );
   }
 
-  private failPendingJob(error: string) {
+  private failPendingJobs(workerId: string, error: string) {
     for (const pendingJob of this.pendingJobs.values()) {
+      if (pendingJob.workerId !== workerId) continue;
       clearTimeout(pendingJob.timer);
+      this.deletePendingJob(pendingJob);
       pendingJob.resolve({ ok: false, error });
     }
-    this.pendingJobs.clear();
-    this.workflowJobs.clear();
   }
 
   private deletePendingJob(pendingJob: PendingJob) {
     this.pendingJobs.delete(pendingJob.id);
-    if (pendingJob.workflowId) {
-      this.workflowJobs.delete(pendingJob.workflowId);
+    if (!pendingJob.workflowId) return;
+    const workflow = this.workflows.get(pendingJob.workflowId);
+    if (workflow?.activeJobId === pendingJob.id) {
+      delete workflow.activeJobId;
     }
   }
 
-  private usedSlots() {
-    let unreservedJobs = 0;
+  private usedSlots(workerId: string, ignoredWorkflowId?: string) {
+    let slots = 0;
+    for (const [workflowId, workflow] of this.workflows) {
+      if (workflowId !== ignoredWorkflowId && workflow.workerId === workerId) {
+        slots += 1;
+      }
+    }
     for (const pendingJob of this.pendingJobs.values()) {
       if (
-        !pendingJob.workflowId ||
-        !this.workflowIds.has(pendingJob.workflowId)
-      ) {
-        unreservedJobs += 1;
-      }
+        pendingJob.workerId === workerId &&
+        (!pendingJob.workflowId || !this.workflows.has(pendingJob.workflowId))
+      )
+        slots += 1;
     }
-    return this.workflowIds.size + unreservedJobs;
+    return slots;
   }
 
-  private armHeartbeatTimeout(socket: Socket) {
-    this.clearHeartbeatTimeout();
-    this.heartbeatTimer = setTimeout(() => {
-      if (socket === this.activeSocket) {
-        socket.close(4004, "Heartbeat timeout");
+  private armHeartbeatTimeout(worker: Worker) {
+    this.clearHeartbeatTimeout(worker.socket);
+    const timer = setTimeout(() => {
+      if (this.workers.get(worker.id)?.socket === worker.socket) {
+        worker.socket.close(4004, "Heartbeat timeout");
       }
     }, 45_000);
+    this.heartbeatTimers.set(worker.socket, timer);
   }
 
-  private clearHeartbeatTimeout() {
-    if (this.heartbeatTimer) {
-      clearTimeout(this.heartbeatTimer);
-      this.heartbeatTimer = undefined;
-    }
+  private clearAuthenticationTimer(socket: Socket) {
+    const timer = this.authenticationTimers.get(socket);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.authenticationTimers.delete(socket);
+  }
+
+  private clearHeartbeatTimeout(socket: Socket) {
+    const timer = this.heartbeatTimers.get(socket);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.heartbeatTimers.delete(socket);
   }
 
   private configuredSecret() {

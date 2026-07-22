@@ -1,5 +1,9 @@
-export const CHATBOT_PROTOCOL_VERSION = 11;
+export const CHATBOT_PROTOCOL_VERSION = 12;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
+
+export const CHATBOT_WORKER_CAPABILITIES = ["chat", "dev", "mac"] as const;
+export type ChatbotWorkerCapability =
+  (typeof CHATBOT_WORKER_CAPABILITIES)[number];
 
 export type ChatbotAttachment = {
   id: string;
@@ -23,6 +27,7 @@ export type ChatbotSearchPurpose =
 
 export type ChatbotTask = "general" | "identity_resolution";
 export type ChatbotExecutionMode = "chat" | "dev";
+export type ChatbotExecutionTarget = "default" | "mac";
 
 export type ChatbotIdentityCandidate = {
   names: string[];
@@ -69,6 +74,7 @@ export type ChatbotJob = {
     | "trace_explanation";
   task?: ChatbotTask;
   executionMode?: ChatbotExecutionMode;
+  executionTarget?: ChatbotExecutionTarget;
   subject?: string;
   identityCandidates?: ChatbotIdentityCandidate[];
   identityResolution?: ChatbotIdentityResolution;
@@ -86,6 +92,9 @@ export type MacAgentClientMessage =
       type: "authenticate";
       protocolVersion: number;
       secret: string;
+      workerId: string;
+      capabilities: ChatbotWorkerCapability[];
+      priority: number;
     }
   | {
       type: "availability";

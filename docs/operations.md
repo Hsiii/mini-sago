@@ -221,9 +221,14 @@ and private browser sessions remain unavailable. Owner dev mode enables
 developer tools and network access inside `MINISAGO_WORKSPACE_ROOT`; on Oracle,
 the container is the outer security boundary.
 
-The worker advertises a bounded concurrency value, defaulting to two. The
-hosted bridge can reserve that many independent Discord workflows at once while
-still keeping each workflow's planning and answer stages sequential.
+Each worker advertises a bounded concurrency value, defaulting to two. The
+hosted bridge can reserve that many independent Discord workflows per worker
+while still keeping each workflow's planning and answer stages sequential.
+Workers also register a stable ID, capabilities, and priority. The bridge
+prefers Oracle for `chat` and `dev`, falls back to another compatible worker
+when Oracle is full or offline, and pins the remaining stages after Luna picks
+the execution target. A request that explicitly needs a Mac resource is moved
+to a connected worker advertising `mac`.
 
 ### Oracle ARM worker
 
@@ -242,10 +247,9 @@ Recommended split:
 
 - Oracle runs both Luna and Sol for Discord, web, GitHub, repository, test, and
   build work. This gives MiniSago the Hermes-like always-on behavior.
-- Mac is a manual fallback only for work that genuinely requires local Mac
-  files or apps. The current bridge accepts one worker connection, so stop the
-  Oracle worker before starting the Mac helper; automatic cross-machine handoff
-  is a separate worker-registry feature.
+- Mac advertises `chat,dev,mac` at a lower priority. It remains connected as a
+  fallback and receives work directly when Luna determines that local Mac
+  files, apps, browser state, or hardware are required.
 
 On the current VM, or after provisioning an Ubuntu AArch64
 `VM.Standard.A1.Flex` VM, install Docker Engine with the Compose plugin, clone
@@ -339,7 +343,8 @@ Uninstalling does not change the normal `~/.codex` login or configuration.
 
 ## Endpoints
 
-- `GET /api/health` returns configuration health.
+- `GET /api/health` returns configuration health plus aggregate connected,
+  available, capacity, and active worker counts. Worker IDs are not exposed.
 - `GET /api/mac-agent/ws` upgrades an authenticated Codex worker connection to a
   WebSocket. It returns `404` when the bridge secret is not configured.
 - `POST /api/interactions` handles Discord slash commands and panel
