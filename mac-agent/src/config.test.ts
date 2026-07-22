@@ -1,8 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { workspaceChild } from "./config";
+import { validateBridgeUrl, workspaceChild } from "./config";
 
 describe("worker configuration", () => {
+  test("allows plaintext bridge traffic only for local hostnames", () => {
+    expect(validateBridgeUrl("ws://bot-core:3000/api/mac-agent/ws")).toBe(
+      "ws://bot-core:3000/api/mac-agent/ws",
+    );
+    expect(validateBridgeUrl("wss://bot.example.com/api/mac-agent/ws")).toBe(
+      "wss://bot.example.com/api/mac-agent/ws",
+    );
+    expect(() =>
+      validateBridgeUrl("ws://bot.example.com/api/mac-agent/ws"),
+    ).toThrow("must use wss://");
+  });
+
   test("keeps GitHub clone and worktree roots inside the dev workspace", () => {
     expect(
       workspaceChild(
