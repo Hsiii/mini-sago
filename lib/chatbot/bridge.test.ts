@@ -55,12 +55,12 @@ describe("Mac agent bridge", () => {
 
     bridge.message(
       socket,
-      JSON.stringify({ type: "availability", available: true }),
+      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
     );
     expect(bridge.getStatus()).toBe("available");
   });
 
-  test("runs one job at a time and resolves its matching result", async () => {
+  test("enforces the advertised capacity and resolves matching results", async () => {
     process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
     const bridge = new MacAgentBridge();
     const { socket, sent } = fakeSocket();
@@ -84,7 +84,7 @@ describe("Mac agent bridge", () => {
     );
     bridge.message(
       socket,
-      JSON.stringify({ type: "availability", available: true }),
+      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
     );
 
     const dispatch = bridge.dispatch(job);
@@ -138,7 +138,7 @@ describe("Mac agent bridge", () => {
     );
     bridge.message(
       socket,
-      JSON.stringify({ type: "availability", available: true }),
+      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
     );
 
     const acquired = bridge.acquireWorkflow();
@@ -180,6 +180,78 @@ describe("Mac agent bridge", () => {
     );
     if (answer.status !== "accepted") throw new Error("Expected answer");
     await answer.result;
+    expect(bridge.getStatus()).toBe("available");
+  });
+
+  test("runs multiple reserved workflows concurrently up to capacity", async () => {
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    const bridge = new MacAgentBridge();
+    const { socket } = fakeSocket();
+    const job: ChatbotJob = {
+      id: "job-1",
+      requesterUserId: "test-user",
+      channelId: "channel-1",
+      requestMessageId: "message-1",
+      request: "Summarize this",
+      messages: [],
+    };
+
+    bridge.open(socket);
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "authenticate",
+        protocolVersion: CHATBOT_PROTOCOL_VERSION,
+        secret: bridgeSecret,
+      }),
+    );
+    bridge.message(
+      socket,
+      JSON.stringify({ type: "availability", available: true, capacity: 2 }),
+    );
+
+    const first = bridge.acquireWorkflow();
+    const second = bridge.acquireWorkflow();
+    expect(first.status).toBe("accepted");
+    expect(second.status).toBe("accepted");
+    expect(bridge.acquireWorkflow().status).toBe("busy");
+    if (first.status !== "accepted" || second.status !== "accepted") {
+      throw new Error("Expected concurrent workflows");
+    }
+
+    const firstJob = first.workflow.dispatch(job);
+    const secondJob = second.workflow.dispatch({ ...job, id: "job-2" });
+    expect(firstJob.status).toBe("accepted");
+    expect(secondJob.status).toBe("accepted");
+
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "job-2",
+        ok: true,
+        content: "second",
+      }),
+    );
+    bridge.message(
+      socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "job-1",
+        ok: true,
+        content: "first",
+      }),
+    );
+
+    if (firstJob.status !== "accepted" || secondJob.status !== "accepted") {
+      throw new Error("Expected concurrent jobs");
+    }
+    expect(await Promise.all([firstJob.result, secondJob.result])).toEqual([
+      { ok: true, content: "first" },
+      { ok: true, content: "second" },
+    ]);
+    first.workflow.release();
+    second.workflow.release();
     expect(bridge.getStatus()).toBe("available");
   });
 });

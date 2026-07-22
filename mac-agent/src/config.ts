@@ -7,6 +7,7 @@ export type MacAgentConfig = {
   bridgeSecret: string;
   codexHome: string;
   codexPath: string;
+  maxConcurrentJobs: number;
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
@@ -76,6 +77,14 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
+    maxConcurrentJobs: Math.max(
+      1,
+      Math.min(
+        16,
+        Number.parseInt(process.env.MINISAGO_MAX_CONCURRENT_JOBS || "4", 10) ||
+          4,
+      ),
+    ),
     sessionMonitorPath:
       process.env.MINISAGO_SESSION_MONITOR_PATH?.trim() ||
       join(defaultApplicationSupport, "bin", "session-monitor"),

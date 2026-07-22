@@ -15,6 +15,7 @@ export type MacAgentSocketData = {
 
 type PendingJob = {
   id: string;
+  workflowId?: string;
   resolve: (result: MacAgentJobResult) => void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -70,8 +71,10 @@ export class MacAgentBridge {
     ReturnType<typeof setTimeout>
   >();
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
-  private pendingJob: PendingJob | null = null;
-  private workflowId: string | null = null;
+  private capacity = 1;
+  private pendingJobs = new Map<string, PendingJob>();
+  private workflowJobs = new Map<string, string>();
+  private workflowIds = new Set<string>();
 
   isConfigured() {
     return this.configuredSecret() !== null;
@@ -82,7 +85,7 @@ export class MacAgentBridge {
       return "offline" as const;
     }
 
-    return this.pendingJob || this.workflowId
+    return this.usedSlots() >= this.capacity
       ? ("busy" as const)
       : ("available" as const);
   }
@@ -110,19 +113,19 @@ export class MacAgentBridge {
       return { status: "offline" };
     }
 
-    if (this.pendingJob || this.workflowId) {
+    if (this.usedSlots() >= this.capacity) {
       return { status: "busy" };
     }
 
     const workflowId = randomUUID();
-    this.workflowId = workflowId;
+    this.workflowIds.add(workflowId);
 
     return {
       status: "accepted",
       workflow: {
         dispatch: (job) => this.dispatchJob(job, workflowId),
         release: () => {
-          if (this.workflowId === workflowId) this.workflowId = null;
+          this.workflowIds.delete(workflowId);
         },
       },
     };
@@ -133,26 +136,37 @@ export class MacAgentBridge {
       return { status: "offline" };
     }
 
-    if (
-      this.pendingJob ||
-      (this.workflowId && this.workflowId !== workflowId)
-    ) {
+    if (this.pendingJobs.has(job.id)) {
+      return { status: "busy" };
+    }
+
+    if (workflowId) {
+      if (
+        !this.workflowIds.has(workflowId) ||
+        this.workflowJobs.has(workflowId)
+      ) {
+        return { status: "busy" };
+      }
+    } else if (this.usedSlots() >= this.capacity) {
       return { status: "busy" };
     }
 
     const socket = this.activeSocket!;
     const result = new Promise<MacAgentJobResult>((resolve) => {
       const timer = setTimeout(() => {
-        if (this.pendingJob?.id !== job.id) {
+        const pendingJob = this.pendingJobs.get(job.id);
+        if (!pendingJob) {
           return;
         }
 
-        this.pendingJob = null;
+        this.deletePendingJob(pendingJob);
         send(socket, { type: "cancel", jobId: job.id });
         resolve({ ok: false, error: "Local Codex timed out." });
       }, CHATBOT_JOB_TIMEOUT_MS);
 
-      this.pendingJob = { id: job.id, resolve, timer };
+      const pendingJob = { id: job.id, workflowId, resolve, timer };
+      this.pendingJobs.set(job.id, pendingJob);
+      if (workflowId) this.workflowJobs.set(workflowId, job.id);
     });
 
     send(socket, { type: "job", job });
@@ -195,6 +209,9 @@ export class MacAgentBridge {
 
     if (message.type === "availability") {
       this.available = message.available;
+      this.capacity = Number.isFinite(message.capacity)
+        ? Math.max(1, Math.min(16, Math.floor(message.capacity)))
+        : 1;
       return;
     }
 
@@ -220,7 +237,8 @@ export class MacAgentBridge {
 
     this.activeSocket = null;
     this.available = false;
-    this.workflowId = null;
+    this.workflowIds.clear();
+    this.workflowJobs.clear();
     this.clearHeartbeatTimeout();
     this.failPendingJob("The Mac disconnected while answering.");
   }
@@ -263,12 +281,12 @@ export class MacAgentBridge {
   private finishJob(
     message: Extract<MacAgentClientMessage, { type: "result" }>,
   ) {
-    if (!this.pendingJob || this.pendingJob.id !== message.jobId) {
+    const pendingJob = this.pendingJobs.get(message.jobId);
+    if (!pendingJob) {
       return;
     }
 
-    const pendingJob = this.pendingJob;
-    this.pendingJob = null;
+    this.deletePendingJob(pendingJob);
     clearTimeout(pendingJob.timer);
 
     if (message.ok) {
@@ -280,14 +298,32 @@ export class MacAgentBridge {
   }
 
   private failPendingJob(error: string) {
-    if (!this.pendingJob) {
-      return;
+    for (const pendingJob of this.pendingJobs.values()) {
+      clearTimeout(pendingJob.timer);
+      pendingJob.resolve({ ok: false, error });
     }
+    this.pendingJobs.clear();
+    this.workflowJobs.clear();
+  }
 
-    const pendingJob = this.pendingJob;
-    this.pendingJob = null;
-    clearTimeout(pendingJob.timer);
-    pendingJob.resolve({ ok: false, error });
+  private deletePendingJob(pendingJob: PendingJob) {
+    this.pendingJobs.delete(pendingJob.id);
+    if (pendingJob.workflowId) {
+      this.workflowJobs.delete(pendingJob.workflowId);
+    }
+  }
+
+  private usedSlots() {
+    let unreservedJobs = 0;
+    for (const pendingJob of this.pendingJobs.values()) {
+      if (
+        !pendingJob.workflowId ||
+        !this.workflowIds.has(pendingJob.workflowId)
+      ) {
+        unreservedJobs += 1;
+      }
+    }
+    return this.workflowIds.size + unreservedJobs;
   }
 
   private armHeartbeatTimeout(socket: Socket) {
