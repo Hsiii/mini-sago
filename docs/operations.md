@@ -8,7 +8,7 @@ in [README.md](../README.md).
 
 - **Universal:** Instagram link replies run in every server and channel where
   MiniSago has the required message permissions. Hsi's chatbot mentions work in
-  those locations and in direct messages when the Mac helper is available.
+  those locations and in direct messages when a Codex worker is available.
 - **Chatbot guilds:** every member of guilds `917436845187563610` and
   `1282936453134815275` can mention MiniSago and use the chatbot.
 - **Chatbot channel:** every member with access to channel
@@ -55,7 +55,7 @@ controls or scheduled feeds there.
     `/api/interactions`.
 11. To enable the private chatbot, configure the same
     `MINISAGO_MAC_BRIDGE_SECRET` in production and `.env.local`, deploy the
-    hosted bridge, then install the Mac helper as described below.
+    hosted bridge, then install a worker as described below.
 
 If production already uses the same bot token, set
 `DISCORD_GATEWAY_DISABLED=true` locally before running the development server.
@@ -103,15 +103,20 @@ sequenceDiagram
     participant D as Discord Gateway and REST API
     participant H as Hosted MiniSago context broker
     participant W as Reserved WebSocket workflow
-    participant M as Unlocked Mac helper
-    participant C as Codex Luna high
+    participant M as Codex worker
+    participant C as Luna router / Luna chat / Sol dev
 
     U->>D: Mention MiniSago
     D->>H: MESSAGE_CREATE
-    H->>H: Authorize guild or owner
+    H->>H: Authorize guild or owner and reject public dev work
     H->>W: Acquire workflow reservation
     H->>D: Fetch 20 nearby messages
     D-->>H: Humans + MiniSago replies + reactions
+    opt Owner request
+        H->>W: Execution routing job
+        M->>C: Luna low classification
+        C-->>M: chat or dev
+    end
     H->>W: Context planning job
     W->>M: Authenticated job
     M->>C: Schema constrained planning prompt
@@ -157,7 +162,7 @@ sequenceDiagram
     H->>D: Reply with only the requester ping allowed
     H->>W: Release reservation
 
-    Note over W,M: Timeout disconnect or Mac lock cancels the active job
+    Note over W,M: Up to the advertised capacity run concurrently
 ```
 
 The hosted process receives `@MiniSago` messages from any member of the two
@@ -200,18 +205,87 @@ therefore be reported only as uncertain.
 Before any chatbot response is posted, formal Chinese punctuation is normalized
 into spaces and line breaks while technical syntax and links remain available.
 
-The Mac helper runs `gpt-5.6-luna` with high reasoning and live public web
-search. Each run is ephemeral. Codex receives only the current transcript and
+The worker runs chat jobs on `gpt-5.6-luna` with high reasoning and live public
+web search. Hsi's requests first pass through a Luna-low execution router;
+dev-mode jobs then run on `gpt-5.6-sol` with medium reasoning. Each run is
+ephemeral. Codex receives only the current transcript and
 up to 10 relevant supported attachments of at most 20 MB each and 40 MB total.
 Images, PDFs, DOCX, and common text formats are supported. Downloads accept
 only Discord's HTTPS CDN hosts and stop when the request is cancelled. Temporary
 files are removed after the run, and output is shortened to one Discord message.
 
-The local process uses an isolated workspace and Codex home, a restrictive
-permission profile, and a macOS process sandbox that prevents Codex from
-launching child processes. Local commands, code execution, file changes, normal
-Codex configuration, memories, MCP servers, plugins, and private browser
-sessions are unavailable. Hosted web search remains available.
+Chat mode uses an isolated workspace and Codex home, a restrictive permission
+profile, and—on macOS—a process sandbox that prevents Codex from launching
+child processes. Normal Codex configuration, memories, MCP servers, plugins,
+and private browser sessions remain unavailable. Owner dev mode enables
+developer tools and network access inside `MINISAGO_WORKSPACE_ROOT`; on Oracle,
+the container is the outer security boundary.
+
+The worker advertises a bounded concurrency value, defaulting to two. The
+hosted bridge can reserve that many independent Discord workflows at once while
+still keeping each workflow's planning and answer stages sequential.
+
+### Oracle ARM worker
+
+Use a normal OCI Ampere A1 Compute VM, not Container Instances. A Compute VM
+provides persistent Docker volumes and is explicitly covered by OCI's A1 Always
+Free allowance; Container Instances have ephemeral container storage and a
+different billing model. Oracle's current Arm page states 3,000 A1 OCPU-hours
+and 18,000 GB-hours per tenancy each month, while its Always Free inventory page
+still states 1,500 and 9,000. Size against the lower 2-OCPU/12-GB figure until
+the Limits, Quotas and Usage page for the actual tenancy confirms otherwise.
+The checked-in worker Dockerfile is multi-architecture: it builds AMD64 on the
+current x86 VM and ARM64 on an A1 VM without emulation. Codex auth, traces, and
+cloned repositories stay outside the image.
+
+Recommended split:
+
+- Oracle runs both Luna and Sol for Discord, web, GitHub, repository, test, and
+  build work. This gives MiniSago the Hermes-like always-on behavior.
+- Mac is a manual fallback only for work that genuinely requires local Mac
+  files or apps. The current bridge accepts one worker connection, so stop the
+  Oracle worker before starting the Mac helper; automatic cross-machine handoff
+  is a separate worker-registry feature.
+
+On the current VM, or after provisioning an Ubuntu AArch64
+`VM.Standard.A1.Flex` VM, install Docker Engine with the Compose plugin, clone
+this repository, then run:
+
+```bash
+cp .env.worker.example .env.worker
+mkdir -p workspace
+chmod 700 workspace .env.worker
+docker compose -f compose.worker.yaml build
+docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
+docker compose -f compose.worker.yaml up -d
+docker compose -f compose.worker.yaml logs -f worker
+```
+
+Put the production bridge URL and the same 32-byte-or-longer bridge secret in
+`.env.worker` before login. Device auth writes only to the persistent
+`minisago-codex` volume; never copy it into the image or repository. OpenAI
+supports ChatGPT sign-in and device auth for headless Codex, but recommends API
+keys for unattended automation. A Pro login therefore works as the requested
+starting point, while reauthentication and plan limits remain operational
+dependencies rather than uptime guarantees.
+
+Oracle also documents that idle Always Free compute can be reclaimed after a
+seven-day low-utilization window. Use a paid/PAYG instance if strict uptime is
+more important than staying entirely inside Always Free; artificial keepalive
+load is not part of this deployment.
+
+The worker needs outbound HTTPS and WSS only. Do not expose Docker, Codex, SSH,
+or a workspace volume publicly. Confirm the resulting image uses the VM's
+native architecture with:
+
+```bash
+docker image inspect minisago-worker --format '{{.Architecture}}'
+```
+
+OCI references: [Ampere A1 Compute](https://docs.oracle.com/en-us/iaas/Content/Compute/References/arm.htm),
+[Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
+and [multi-architecture containers](https://docs.oracle.com/en-us/iaas/Content/ContEng/Tasks/contengrunningarmnodes.htm).
+OpenAI authentication reference: [Codex authentication](https://developers.openai.com/codex/auth).
 
 ### Install the Mac helper
 
@@ -266,7 +340,7 @@ Uninstalling does not change the normal `~/.codex` login or configuration.
 ## Endpoints
 
 - `GET /api/health` returns configuration health.
-- `GET /api/mac-agent/ws` upgrades an authenticated Mac helper connection to a
+- `GET /api/mac-agent/ws` upgrades an authenticated Codex worker connection to a
   WebSocket. It returns `404` when the bridge secret is not configured.
 - `POST /api/interactions` handles Discord slash commands and panel
   components.

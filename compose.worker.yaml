@@ -1,0 +1,16 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    init: true
+    env_file: .env.worker
+    volumes:
+      - minisago-codex:/home/bun/.codex
+      - minisago-state:/var/lib/minisago
+      - ./workspace:/workspace
+
+volumes:
+  minisago-codex:
+  minisago-state:

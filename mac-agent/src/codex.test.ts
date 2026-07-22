@@ -89,6 +89,25 @@ describe("Codex chatbot runner", () => {
     ).not.toThrow();
   });
 
+  test("gives only owner dev jobs an action-oriented prompt", () => {
+    const devPrompt = buildCodexPrompt(
+      {
+        ...job,
+        requesterUserId: "917446775873343600",
+        executionMode: "dev",
+        request: "review this PR",
+      },
+      [],
+      [],
+    );
+    const chatPrompt = buildCodexPrompt(job, [], []);
+
+    expect(devPrompt).toContain("owner-authorized development task");
+    expect(devPrompt).toContain("Work directly");
+    expect(devPrompt).not.toContain("read-only chat task");
+    expect(chatPrompt).toContain("read-only chat task");
+  });
+
   test("lets Codex choose extra Discord context", () => {
     const prompt = buildCodexPrompt(
       {

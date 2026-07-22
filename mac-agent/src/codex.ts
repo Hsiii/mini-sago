@@ -227,7 +227,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       'web_search="live"',
       "--config",
       isDevMode
-        ? 'default_permissions=":workspace"'
+        ? 'default_permissions="minisago-dev"'
         : 'default_permissions="minisago-chatbot"',
       "--config",
       "features.hooks=false",
@@ -238,7 +238,12 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     ];
 
     if (isDevMode) {
-      codexArguments.push("--config", "sandbox_workspace_write.network=true");
+      codexArguments.push(
+        "--config",
+        'permissions.minisago-dev.extends=":workspace"',
+        "--config",
+        "permissions.minisago-dev.network.enabled=true",
+      );
     } else {
       codexArguments.push(
         "--config",
@@ -260,29 +265,30 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
     codexArguments.push("-");
 
-    const command = isDevMode
-      ? codexArguments
-      : [
-          "/usr/bin/sandbox-exec",
-          "-p",
-          buildSeatbeltProfile(options.codexPath),
-          ...codexArguments,
-        ];
-    const process = Bun.spawn(command, {
+    const command =
+      isDevMode || process.platform !== "darwin"
+        ? codexArguments
+        : [
+            "/usr/bin/sandbox-exec",
+            "-p",
+            buildSeatbeltProfile(options.codexPath),
+            ...codexArguments,
+          ];
+    const child = Bun.spawn(command, {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
       env: codexEnvironment(options.codexHome, isDevMode),
     });
-    const stop = () => process.kill();
+    const stop = () => child.kill();
     timeoutController.signal.addEventListener("abort", stop, { once: true });
-    process.stdin.write(prompt);
-    process.stdin.end();
+    child.stdin.write(prompt);
+    child.stdin.end();
 
     const [stdout, stderr, exitCode] = await Promise.all([
-      new Response(process.stdout).text(),
-      new Response(process.stderr).text(),
-      process.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
     ]);
 
     if (timeoutController.signal.aborted) {

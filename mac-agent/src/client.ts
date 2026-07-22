@@ -33,7 +33,7 @@ export class MacAgentClient {
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-  private sessionMonitor: SessionMonitor;
+  private sessionMonitor: SessionMonitor | null;
   private socket: WebSocket | null = null;
   private stopped = false;
   private traceStore: ChatbotTraceStore;
@@ -43,15 +43,24 @@ export class MacAgentClient {
     this.traceStore = new ChatbotTraceStore(config.traceDatabasePath, {
       promptVersion: PROMPT_VERSION,
     });
-    this.sessionMonitor = new SessionMonitor(
-      config.sessionMonitorPath,
-      (state) => void this.handleSessionState(state),
-    );
+    this.sessionMonitor = config.headless
+      ? null
+      : new SessionMonitor(
+          config.sessionMonitorPath,
+          (state) => void this.handleSessionState(state),
+        );
   }
 
   start() {
-    this.sessionMonitor.start();
-    console.log("MiniSago Mac helper started.");
+    if (this.config.headless) {
+      this.unlocked = true;
+      void this.connectWhenReady();
+      console.log("MiniSago headless worker started.");
+      return;
+    }
+
+    this.sessionMonitor?.start();
+    console.log("MiniSago Mac worker started.");
   }
 
   stop() {
@@ -61,7 +70,7 @@ export class MacAgentClient {
     this.abortAllJobs();
     this.socket?.close(1000, "Helper stopped");
     this.socket = null;
-    this.sessionMonitor.stop();
+    this.sessionMonitor?.stop();
     this.traceStore.close();
   }
 
@@ -73,7 +82,7 @@ export class MacAgentClient {
       this.abortAllJobs();
       this.socket?.close(1000, "Mac locked or sleeping");
       this.socket = null;
-      console.log("Mac locked; chatbot unavailable.");
+      console.log("Mac locked; worker unavailable.");
       return;
     }
 
@@ -157,7 +166,7 @@ export class MacAgentClient {
         available: true,
         capacity: this.config.maxConcurrentJobs,
       });
-      console.log("Mac unlocked; chatbot available.");
+      console.log("MiniSago worker available.");
       return;
     }
 
@@ -182,7 +191,7 @@ export class MacAgentClient {
         type: "result",
         jobId: job.id,
         ok: false,
-        error: "Mac helper is busy.",
+        error: "Codex worker is busy.",
       });
       return;
     }

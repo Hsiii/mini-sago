@@ -167,6 +167,14 @@ async function install() {
     envLine("MINISAGO_MAC_BRIDGE_SECRET", bridgeSecret),
     envLine("MINISAGO_CODEX_HOME", codexHome),
     envLine(
+      "MINISAGO_MAX_CONCURRENT_JOBS",
+      process.env.MINISAGO_MAX_CONCURRENT_JOBS?.trim() || "2",
+    ),
+    envLine(
+      "MINISAGO_WORKSPACE_ROOT",
+      process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(userHome, "Projects"),
+    ),
+    envLine(
       "MINISAGO_CODEX_PATH",
       process.env.MINISAGO_CODEX_PATH?.trim() ||
         "/Applications/ChatGPT.app/Contents/Resources/codex",

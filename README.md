@@ -39,7 +39,7 @@ Community members can use these conversational and summarization features, but
 GitHub reviews, code changes, command execution, and other privileged work are
 owner-only. Community requests run on GPT-5.6 Luna with high reasoning; owner
 requests run on GPT-5.6 Sol with medium reasoning. The same boundary is checked
-by both the Discord service and the Mac helper before Codex starts.
+by both the Discord service and the Codex worker before Codex starts.
 
 She only searches channels that the person asking can access. Member roles,
 join dates, and presence are not sent to Codex. Temporary attachment downloads
@@ -53,7 +53,8 @@ can also use it in other visible servers, threads, and direct messages.
 > In Discord's mention picker, choose MiniSago under **Members/Apps**, not a
 > similarly named role. A role mention does not start the chatbot.
 
-Chat replies require the Mac helper to be awake, unlocked, connected, and idle.
+Chat replies require a connected Codex worker with free capacity. The worker can
+run headlessly on Oracle ARM or locally while the Mac is awake and unlocked.
 Requests received while it is unavailable are not queued.
 
 ### Lets members open optional channels
