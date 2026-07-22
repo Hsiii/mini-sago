@@ -4,9 +4,12 @@ ARG CODEX_VERSION=0.145.0
 
 USER root
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates git openssh-client ripgrep \
+  && apt-get install -y --no-install-recommends ca-certificates gh git openssh-client ripgrep \
   && rm -rf /var/lib/apt/lists/* \
-  && BUN_INSTALL=/usr/local bun add --global "@openai/codex@${CODEX_VERSION}"
+  && BUN_INSTALL=/usr/local bun add --global "@openai/codex@${CODEX_VERSION}" \
+  && git config --system user.name Hsi \
+  && git config --system user.email Hsiii@users.noreply.github.com \
+  && git config --system credential.https://github.com.helper '!/usr/bin/gh auth git-credential'
 
 WORKDIR /app/mac-agent
 
@@ -17,14 +20,17 @@ COPY --chown=bun:bun lib /app/lib
 COPY --chown=bun:bun mac-agent/src ./src
 COPY --chown=bun:bun mac-agent/tsconfig.json ./tsconfig.json
 
-RUN mkdir -p /home/bun/.codex /var/lib/minisago /workspace \
-  && chown -R bun:bun /home/bun/.codex /var/lib/minisago /workspace
+RUN mkdir -p /home/bun/.codex /home/bun/.config/gh /var/lib/minisago /workspace/repositories /workspace/worktrees \
+  && chown -R bun:bun /home/bun/.codex /home/bun/.config /var/lib/minisago /workspace \
+  && chmod 700 /home/bun/.config/gh /workspace /workspace/repositories /workspace/worktrees
 
 ENV MINISAGO_HEADLESS=true
 ENV MINISAGO_CODEX_HOME=/home/bun/.codex
 ENV MINISAGO_CODEX_PATH=/usr/local/bin/codex
 ENV MINISAGO_TRACE_DATABASE_PATH=/var/lib/minisago/traces.sqlite
 ENV MINISAGO_WORKSPACE_ROOT=/workspace
+ENV MINISAGO_GITHUB_REPOSITORY_ROOT=/workspace/repositories
+ENV MINISAGO_GITHUB_WORKTREE_ROOT=/workspace/worktrees
 ENV MINISAGO_MAX_CONCURRENT_JOBS=2
 ENV MINISAGO_WORKER_ID=oracle
 ENV MINISAGO_WORKER_CAPABILITIES=chat,dev

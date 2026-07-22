@@ -22,6 +22,7 @@ export function buildCodexPrompt(
   job: ChatbotJob,
   attachmentText: string[],
   ignoredAttachments: string[],
+  developerPolicy?: string,
 ) {
   if (job.purpose === "execution_route") {
     return buildExecutionRoutePrompt(job);
@@ -30,7 +31,12 @@ export function buildCodexPrompt(
   if (job.purpose === "identity_resolution") {
     return buildIdentityResolutionPrompt(job);
   }
-  return buildAnswerPrompt(job, attachmentText, ignoredAttachments);
+  return buildAnswerPrompt(
+    job,
+    attachmentText,
+    ignoredAttachments,
+    developerPolicy,
+  );
 }
 
 export function outputSchemaForJob(job: ChatbotJob) {

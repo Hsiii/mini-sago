@@ -230,6 +230,15 @@ when Oracle is full or offline, and pins the remaining stages after Luna picks
 the execution target. A request that explicitly needs a Mac resource is moved
 to a connected worker advertising `mac`.
 
+For owner dev answers, optional GitHub access uses the `gh` CLI's own persistent
+login. Router, planner, community, and chat processes cannot execute developer
+commands. Canonical clones persist under
+`MINISAGO_GITHUB_REPOSITORY_ROOT`; concurrent changes use a job-specific
+directory under `MINISAGO_GITHUB_WORKTREE_ROOT`. Sol is required to push only a
+feature branch and open a draft PR, never push a protected branch or merge.
+Ordinary chat stages retain the two-minute timeout; final owner dev answers may
+run for up to fifteen minutes for cloning, tests, builds, and PR preparation.
+
 ### Oracle ARM worker
 
 Use a normal OCI Ampere A1 Compute VM, not Container Instances. A Compute VM
@@ -257,13 +266,28 @@ this repository, then run:
 
 ```bash
 cp .env.worker.example .env.worker
-mkdir -p workspace
-chmod 700 workspace .env.worker
+mkdir -p workspace/repositories workspace/worktrees
+chmod 700 workspace workspace/repositories workspace/worktrees .env.worker
 docker compose -f compose.worker.yaml build
 docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
 docker compose -f compose.worker.yaml up -d
 docker compose -f compose.worker.yaml logs -f worker
 ```
+
+To enable owner GitHub work, set `MINISAGO_GITHUB_REPOSITORIES` in
+`.env.worker`, then authenticate GitHub CLI through its normal browser flow.
+The login is written to the persistent `minisago-github` volume; do not paste a
+token into Discord, a Codex task, `.env.worker`, or the repository:
+
+```bash
+docker compose -f compose.worker.yaml run --rm worker gh auth login --hostname github.com --git-protocol https --web
+docker compose -f compose.worker.yaml up -d --force-recreate worker
+docker compose -f compose.worker.yaml exec worker gh auth status
+```
+
+The worker's GitHub CLI login and Codex login use separate persistent volumes.
+See [Configuration](configuration.md#owner-github-automation) for the runtime
+boundary.
 
 Put the production bridge URL and the same 32-byte-or-longer bridge secret in
 `.env.worker` before login. Device auth writes only to the persistent

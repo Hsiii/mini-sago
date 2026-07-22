@@ -8,9 +8,11 @@ services:
     env_file: .env.worker
     volumes:
       - minisago-codex:/home/bun/.codex
+      - minisago-github:/home/bun/.config/gh
       - minisago-state:/var/lib/minisago
       - ./workspace:/workspace
 
 volumes:
   minisago-codex:
+  minisago-github:
   minisago-state:

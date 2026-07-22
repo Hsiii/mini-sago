@@ -3,6 +3,7 @@ import type { Server, ServerWebSocket } from "bun";
 
 import {
   CHATBOT_JOB_TIMEOUT_MS,
+  CHATBOT_DEV_JOB_TIMEOUT_MS,
   CHATBOT_PROTOCOL_VERSION,
   CHATBOT_WORKER_CAPABILITIES,
   type ChatbotJob,
@@ -273,6 +274,10 @@ export class MacAgentBridge {
     }
 
     const result = new Promise<MacAgentJobResult>((resolve) => {
+      const timeoutMs =
+        job.executionMode === "dev" && job.purpose === "answer"
+          ? CHATBOT_DEV_JOB_TIMEOUT_MS
+          : CHATBOT_JOB_TIMEOUT_MS;
       const timer = setTimeout(() => {
         const pendingJob = this.pendingJobs.get(job.id);
         if (!pendingJob) return;
@@ -282,7 +287,7 @@ export class MacAgentBridge {
         if (activeWorker)
           send(activeWorker.socket, { type: "cancel", jobId: job.id });
         resolve({ ok: false, error: "Local Codex timed out." });
-      }, CHATBOT_JOB_TIMEOUT_MS);
+      }, timeoutMs);
 
       const pendingJob = { id: job.id, workerId, workflowId, resolve, timer };
       this.pendingJobs.set(job.id, pendingJob);

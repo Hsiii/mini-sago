@@ -1,12 +1,15 @@
 import { access } from "node:fs/promises";
 import { homedir, hostname } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 export type MacAgentConfig = {
   bridgeUrl: string;
   bridgeSecret: string;
   codexHome: string;
   codexPath: string;
+  githubRepositories: string[];
+  githubRepositoryRoot: string;
+  githubWorktreeRoot: string;
   maxConcurrentJobs: number;
   headless: boolean;
   sessionMonitorPath: string;
@@ -62,6 +65,22 @@ function validateBridgeUrl(value: string) {
   return url.toString();
 }
 
+export function workspaceChild(root: string, candidate: string, name: string) {
+  const absoluteRoot = resolve(root);
+  const absoluteCandidate = resolve(candidate);
+  const pathFromRoot = relative(absoluteRoot, absoluteCandidate);
+  if (
+    !pathFromRoot ||
+    pathFromRoot.startsWith("..") ||
+    isAbsolute(pathFromRoot)
+  ) {
+    throw new Error(
+      `${name} must be a directory inside MINISAGO_WORKSPACE_ROOT.`,
+    );
+  }
+  return absoluteCandidate;
+}
+
 export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
   const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
 
@@ -99,6 +118,33 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev, and mac.",
     );
   }
+  const githubRepositories = (process.env.MINISAGO_GITHUB_REPOSITORIES || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (
+    githubRepositories.some(
+      (repository) => !/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/iu.test(repository),
+    )
+  ) {
+    throw new Error(
+      "MINISAGO_GITHUB_REPOSITORIES must contain owner/repository names.",
+    );
+  }
+  const workspaceRoot =
+    process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(homedir(), "Projects");
+  const githubRepositoryRoot = workspaceChild(
+    workspaceRoot,
+    process.env.MINISAGO_GITHUB_REPOSITORY_ROOT?.trim() ||
+      join(workspaceRoot, "repositories"),
+    "MINISAGO_GITHUB_REPOSITORY_ROOT",
+  );
+  const githubWorktreeRoot = workspaceChild(
+    workspaceRoot,
+    process.env.MINISAGO_GITHUB_WORKTREE_ROOT?.trim() ||
+      join(workspaceRoot, "worktrees"),
+    "MINISAGO_GITHUB_WORKTREE_ROOT",
+  );
 
   return {
     bridgeUrl: validateBridgeUrl(
@@ -110,6 +156,9 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
+    githubRepositories,
+    githubRepositoryRoot,
+    githubWorktreeRoot,
     headless,
     maxConcurrentJobs: Math.max(
       1,
@@ -125,9 +174,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     traceDatabasePath:
       process.env.MINISAGO_TRACE_DATABASE_PATH?.trim() ||
       join(defaultApplicationSupport, "traces.sqlite"),
-    workspaceRoot:
-      process.env.MINISAGO_WORKSPACE_ROOT?.trim() ||
-      join(homedir(), "Projects"),
+    workspaceRoot,
     workerCapabilities,
     workerId,
     workerPriority: Math.max(

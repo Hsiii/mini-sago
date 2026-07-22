@@ -59,6 +59,11 @@ run as the preferred always-on worker while the unlocked Mac remains connected
 as a lower-priority fallback and handles requests that need local Mac resources.
 Requests received while every compatible worker is unavailable are not queued.
 
+Hsi can route owner-only development requests to Sol for GitHub issue creation,
+PR review, repository changes, tests, and draft-PR delivery. GitHub credentials
+come from the worker's persistent `gh auth login`; community and ordinary chat
+runs cannot execute GitHub tooling.
+
 ### Lets members open optional channels
 
 Members of the configured WM31 server can use the channel-access panel to grant
