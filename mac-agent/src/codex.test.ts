@@ -5,6 +5,7 @@ import {
   assertChatbotJobAllowed,
   buildCodexPrompt,
   buildSeatbeltProfile,
+  codexEnvironment,
   codexProfileForJob,
   COMMUNITY_CHATBOT_PROFILE,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
@@ -329,5 +330,19 @@ describe("Codex chatbot runner", () => {
     expect(profile).toContain(
       '(allow process-exec (literal "/Applications/ChatGPT \\"Beta\\"/Contents/Resources/codex"))',
     );
+  });
+
+  test("keeps the Codex launcher and Bun Node shim on the restricted path", () => {
+    const environment = codexEnvironment(
+      "/tmp/codex-home",
+      "/usr/local/bin/codex",
+    );
+
+    expect(environment.CODEX_HOME).toBe("/tmp/codex-home");
+    expect(environment.PATH.split(":")).toContain("/usr/local/bin");
+    expect(environment.PATH.split(":")).toContain(
+      "/usr/local/bun-node-fallback-bin",
+    );
+    expect(environment.PATH.split(":")).toContain("/usr/bin");
   });
 });

@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import {
   canRunChatbotRequest,
@@ -83,7 +83,11 @@ export function buildSeatbeltProfile(codexPath: string) {
 (allow process-exec (literal "${escapeSeatbeltLiteral(codexPath)}"))`;
 }
 
-function codexEnvironment(codexHome: string, allowDeveloperTools = false) {
+export function codexEnvironment(
+  codexHome: string,
+  codexPath: string,
+  allowDeveloperTools = false,
+) {
   const allowedNames = [
     "HOME",
     "LANG",
@@ -96,11 +100,17 @@ function codexEnvironment(codexHome: string, allowDeveloperTools = false) {
     "TMPDIR",
     "USER",
   ];
+  const restrictedPath = "/usr/bin:/bin:/usr/sbin:/sbin";
+  const path = [
+    dirname(codexPath),
+    "/usr/local/bun-node-fallback-bin",
+    allowDeveloperTools ? process.env.PATH : restrictedPath,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(":");
   const environment: Record<string, string> = {
     CODEX_HOME: codexHome,
-    PATH: allowDeveloperTools
-      ? process.env.PATH || "/usr/local/bin:/usr/bin:/bin"
-      : "/usr/bin:/bin:/usr/sbin:/sbin",
+    PATH: path,
     TERM: "dumb",
     NO_COLOR: "1",
   };
@@ -161,7 +171,7 @@ export async function checkCodexAuthentication({
   const process = Bun.spawn([codexPath, "login", "status"], {
     stdout: "ignore",
     stderr: "ignore",
-    env: codexEnvironment(codexHome),
+    env: codexEnvironment(codexHome, codexPath),
   });
 
   return (await process.exited) === 0;
@@ -278,7 +288,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "pipe",
-      env: codexEnvironment(options.codexHome, isDevMode),
+      env: codexEnvironment(options.codexHome, options.codexPath, isDevMode),
     });
     const stop = () => child.kill();
     timeoutController.signal.addEventListener("abort", stop, { once: true });
