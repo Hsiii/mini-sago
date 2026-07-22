@@ -66,8 +66,8 @@ reasoning and may work only inside `MINISAGO_WORKSPACE_ROOT`. Other authorized
 community members use Luna with high reasoning and are limited to conversational,
 summarization, and public-information requests. GitHub pull-request reviews,
 issue mutations, code changes, command execution, and similar privileged
-requests are rejected before they reach the Mac, then checked again by the Mac
-helper before Codex runs.
+requests are rejected before they reach the worker, then checked again by the
+worker before Codex runs.
 
 ## GitHub pull request review threads
 
