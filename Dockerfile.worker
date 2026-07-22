@@ -19,6 +19,7 @@ RUN bun install --frozen-lockfile --production
 COPY --chown=bun:bun lib /app/lib
 COPY --chown=bun:bun mac-agent/src ./src
 COPY --chown=bun:bun mac-agent/tsconfig.json ./tsconfig.json
+COPY --chmod=755 scripts/worker-entrypoint.sh /usr/local/bin/worker-entrypoint
 
 RUN mkdir -p /home/bun/.codex /home/bun/.config/gh /var/lib/minisago /workspace/repositories /workspace/worktrees \
   && chown -R bun:bun /home/bun/.codex /home/bun/.config /var/lib/minisago /workspace \
@@ -36,7 +37,5 @@ ENV MINISAGO_WORKER_ID=oracle
 ENV MINISAGO_WORKER_CAPABILITIES=chat,dev
 ENV MINISAGO_WORKER_PRIORITY=100
 
-USER bun
-
-ENTRYPOINT []
+ENTRYPOINT ["/usr/local/bin/worker-entrypoint"]
 CMD ["bun", "src/index.ts"]
