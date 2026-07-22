@@ -67,6 +67,33 @@ describe("Discord chatbot", () => {
     ).toBeNull();
   });
 
+  test("treats only the owner's unmentioned DMs as chatbot requests", () => {
+    const directMessage = {
+      id: "dm-1",
+      channel_id: "dm-channel-1",
+      content: "幫我找一下",
+      timestamp: "2026-07-22T11:00:00.000Z",
+      author: { id: "917446775873343600", username: "Hsi" },
+    };
+
+    expect(extractChatbotRequest(directMessage, BOT_ID)).toBe("幫我找一下");
+    expect(
+      extractChatbotRequest(
+        {
+          ...directMessage,
+          author: { id: "other-user", username: "Other" },
+        },
+        BOT_ID,
+      ),
+    ).toBeNull();
+    expect(
+      extractChatbotRequest(
+        { ...directMessage, guild_id: "917436845187563610" },
+        BOT_ID,
+      ),
+    ).toBeNull();
+  });
+
   test("recognizes natural requests for the previous response trace", () => {
     expect(isTraceExplanationRequest("how did she decide。")).toBe(true);
     expect(isTraceExplanationRequest("你剛剛為什麼這樣回答？")).toBe(true);
@@ -218,6 +245,36 @@ describe("Discord chatbot", () => {
     expect(handled).toBe(true);
     expect(requests.at(-1)).toEqual({
       path: "/channels/channel-1/messages",
+      body: {
+        content: "我現在沒接上工作機 晚點再叫我一次 💤",
+        allowed_mentions: { parse: [] },
+      },
+    });
+  });
+
+  test("responds to the owner's DM without requiring a mention", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const handled = await handleChatbotMention({
+      message: {
+        id: "dm-1",
+        channel_id: "dm-channel-1",
+        content: "幫我找一下",
+        timestamp: "2026-07-22T11:00:00.000Z",
+        author: { id: "917446775873343600", username: "Hsi" },
+      },
+      botUserId: BOT_ID,
+      discordRequest: async (path, options) => {
+        requests.push({ path, body: options?.body });
+        if (path.endsWith("?limit=1")) {
+          return [{ id: "dm-1" }] as never;
+        }
+        return undefined as never;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(requests.at(-1)).toEqual({
+      path: "/channels/dm-channel-1/messages",
       body: {
         content: "我現在沒接上工作機 晚點再叫我一次 💤",
         allowed_mentions: { parse: [] },
