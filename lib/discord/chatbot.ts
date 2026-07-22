@@ -9,6 +9,7 @@ import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
+  ChatbotExecutionTarget,
   ChatbotIdentityCandidate,
   ChatbotIdentityResolution,
   ChatbotJob,
@@ -485,21 +486,37 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
 export function parseExecutionRoute(
   content: string,
   fallbackContext: string,
-): ChatbotExecutionMode {
+): { mode: ChatbotExecutionMode; target: ChatbotExecutionTarget } {
   try {
     const normalized = content
       .trim()
       .replace(/^```(?:json)?\s*/iu, "")
       .replace(/\s*```$/u, "");
-    const payload = JSON.parse(normalized) as { mode?: unknown };
+    const payload = JSON.parse(normalized) as {
+      mode?: unknown;
+      target?: unknown;
+    };
     if (payload.mode === "dev" || payload.mode === "chat") {
-      return payload.mode;
+      const target = payload.target === "mac" ? "mac" : "default";
+      return { mode: target === "mac" ? "dev" : payload.mode, target };
     }
   } catch {
     // Fall through to the deterministic safety net.
   }
 
-  return isPrivilegedChatbotRequest(fallbackContext) ? "dev" : "chat";
+  const target =
+    /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
+      fallbackContext,
+    )
+      ? "mac"
+      : "default";
+  return {
+    mode:
+      target === "mac" || isPrivilegedChatbotRequest(fallbackContext)
+        ? "dev"
+        : "chat",
+    target,
+  };
 }
 
 export function inferIdentitySubject(request: string) {
@@ -1186,6 +1203,7 @@ export async function handleChatbotMention({
             discordRequest,
           });
       let executionMode: ChatbotExecutionMode = "chat";
+      let executionTarget: ChatbotExecutionTarget = "default";
 
       if (requesterUserId === OWNER_DISCORD_USER_ID) {
         const routeJob: ChatbotJob = {
@@ -1201,15 +1219,33 @@ export async function handleChatbotMention({
         const routeDispatch = workflow.dispatch(routeJob);
         if (routeDispatch.status === "accepted") {
           const routeResult = await routeDispatch.result;
-          executionMode = parseExecutionRoute(
+          const route = parseExecutionRoute(
             routeResult.ok ? routeResult.content : "",
             privilegedRequestContext(request, message),
           );
+          executionMode = route.mode;
+          executionTarget = route.target;
         } else {
-          executionMode = parseExecutionRoute(
+          const route = parseExecutionRoute(
             "",
             privilegedRequestContext(request, message),
           );
+          executionMode = route.mode;
+          executionTarget = route.target;
+        }
+
+        const workerRoute = workflow.route([
+          executionMode === "dev" ? "dev" : "chat",
+          ...(executionTarget === "mac" ? (["mac"] as const) : []),
+        ]);
+        if (workerRoute.status !== "accepted") {
+          return {
+            ok: false as const,
+            error:
+              workerRoute.status === "busy"
+                ? "The compatible worker is busy."
+                : "No compatible worker is online.",
+          };
         }
       }
       let search: {
@@ -1231,6 +1267,7 @@ export async function handleChatbotMention({
           requesterUserId,
           purpose: "context_plan",
           executionMode,
+          executionTarget,
           channelId: message.channel_id,
           requestMessageId: message.id,
           request,
@@ -1339,6 +1376,7 @@ export async function handleChatbotMention({
           requesterUserId,
           purpose: "identity_resolution",
           executionMode,
+          executionTarget,
           task: plan.task,
           subject: plan.subject,
           channelId: message.channel_id,
@@ -1399,6 +1437,7 @@ export async function handleChatbotMention({
         requesterUserId,
         purpose: "answer",
         executionMode,
+        executionTarget,
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,

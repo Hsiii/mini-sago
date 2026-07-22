@@ -124,6 +124,9 @@ export class MacAgentClient {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: this.config.bridgeSecret,
+        workerId: this.config.workerId,
+        capabilities: this.config.workerCapabilities,
+        priority: this.config.workerPriority,
       });
     });
     socket.addEventListener("message", (event) => {

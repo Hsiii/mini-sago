@@ -9,6 +9,7 @@ import {
   codexProfileForJob,
   COMMUNITY_CHATBOT_PROFILE,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
+  EXECUTION_ROUTE_OUTPUT_SCHEMA,
   IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
@@ -60,6 +61,11 @@ describe("Codex chatbot runner", () => {
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
     });
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("target");
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.target.enum).toEqual([
+      "default",
+      "mac",
+    ]);
     expect(codexProfileForJob(job)).toBe(COMMUNITY_CHATBOT_PROFILE);
     expect(
       codexProfileForJob({

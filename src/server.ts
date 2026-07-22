@@ -34,6 +34,7 @@ function buildHealthResponse() {
         githubWebhook: isGithubWebhookConfigured(),
         macBridge: macAgentBridge.isConfigured(),
       },
+      workers: macAgentBridge.getWorkerSummary(),
       roleCount: summary.roleCount,
     });
   } catch (error) {

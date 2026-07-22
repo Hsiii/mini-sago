@@ -424,13 +424,29 @@ describe("Discord chatbot", () => {
 
   test("validates Luna execution routes with a deterministic dev fallback", () => {
     expect(
-      parseExecutionRoute('{"mode":"dev","reason":"PR review"}', "hello"),
-    ).toBe("dev");
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","reason":"PR review"}',
+        "hello",
+      ),
+    ).toEqual({ mode: "dev", target: "default" });
     expect(
-      parseExecutionRoute('{"mode":"chat","reason":"summary"}', "hello"),
-    ).toBe("chat");
-    expect(parseExecutionRoute("not json", "review this PR")).toBe("dev");
-    expect(parseExecutionRoute("not json", "summarize our chat")).toBe("chat");
+      parseExecutionRoute(
+        '{"mode":"chat","target":"default","reason":"summary"}',
+        "hello",
+      ),
+    ).toEqual({ mode: "chat", target: "default" });
+    expect(parseExecutionRoute("not json", "review this PR")).toEqual({
+      mode: "dev",
+      target: "default",
+    });
+    expect(parseExecutionRoute("not json", "summarize our chat")).toEqual({
+      mode: "chat",
+      target: "default",
+    });
+    expect(parseExecutionRoute("not json", "open this on my Mac")).toEqual({
+      mode: "dev",
+      target: "mac",
+    });
   });
 
   test("recognizes direct identity questions", () => {

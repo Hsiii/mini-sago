@@ -45,6 +45,9 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev"],
+        priority: 100,
       }),
     );
 
@@ -80,6 +83,9 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev"],
+        priority: 100,
       }),
     );
     bridge.message(
@@ -134,6 +140,9 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev"],
+        priority: 100,
       }),
     );
     bridge.message(
@@ -203,6 +212,9 @@ describe("Mac agent bridge", () => {
         type: "authenticate",
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev"],
+        priority: 100,
       }),
     );
     bridge.message(
@@ -253,5 +265,133 @@ describe("Mac agent bridge", () => {
     first.workflow.release();
     second.workflow.release();
     expect(bridge.getStatus()).toBe("available");
+  });
+
+  test("keeps cloud and Mac connected while routing workflows by capability", async () => {
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    const bridge = new MacAgentBridge();
+    const cloud = fakeSocket();
+    const mac = fakeSocket();
+    const authenticate = (
+      target: ReturnType<typeof fakeSocket>,
+      workerId: string,
+      capabilities: Array<"chat" | "dev" | "mac">,
+      priority: number,
+    ) => {
+      bridge.open(target.socket);
+      bridge.message(
+        target.socket,
+        JSON.stringify({
+          type: "authenticate",
+          protocolVersion: CHATBOT_PROTOCOL_VERSION,
+          secret: bridgeSecret,
+          workerId,
+          capabilities,
+          priority,
+        }),
+      );
+      bridge.message(
+        target.socket,
+        JSON.stringify({ type: "availability", available: true, capacity: 1 }),
+      );
+    };
+
+    authenticate(cloud, "oracle", ["chat", "dev"], 100);
+    authenticate(mac, "hsi-mac", ["chat", "dev", "mac"], 50);
+    expect(cloud.closed).toEqual([]);
+    expect(mac.closed).toEqual([]);
+    expect(bridge.getWorkerSummary()).toEqual({
+      connected: 2,
+      available: 2,
+      capacity: 2,
+      active: 0,
+    });
+
+    const first = bridge.acquireWorkflow();
+    const fallback = bridge.acquireWorkflow();
+    if (first.status !== "accepted" || fallback.status !== "accepted") {
+      throw new Error("Expected both workers to accept workflows");
+    }
+    const cloudJob: ChatbotJob = {
+      id: "cloud-job",
+      requesterUserId: "owner",
+      channelId: "channel-1",
+      requestMessageId: "message-1",
+      request: "Review a PR",
+      messages: [],
+    };
+    const macJob = { ...cloudJob, id: "mac-job", request: "Open Xcode" };
+    const cloudDispatch = first.workflow.dispatch(cloudJob);
+    const fallbackDispatch = fallback.workflow.dispatch(macJob);
+    expect(JSON.parse(cloud.sent.at(-1)!)).toEqual({
+      type: "job",
+      job: cloudJob,
+    });
+    expect(JSON.parse(mac.sent.at(-1)!)).toEqual({
+      type: "job",
+      job: macJob,
+    });
+    bridge.message(
+      mac.socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "cloud-job",
+        ok: true,
+        content: "wrong worker",
+      }),
+    );
+    expect(bridge.getWorkerSummary().active).toBe(2);
+    bridge.message(
+      cloud.socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "cloud-job",
+        ok: true,
+        content: "routed",
+      }),
+    );
+    bridge.message(
+      mac.socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "mac-job",
+        ok: true,
+        content: "fallback",
+      }),
+    );
+    if (
+      cloudDispatch.status !== "accepted" ||
+      fallbackDispatch.status !== "accepted"
+    ) {
+      throw new Error("Expected routed jobs");
+    }
+    await Promise.all([cloudDispatch.result, fallbackDispatch.result]);
+    fallback.workflow.release();
+
+    expect(first.workflow.route(["dev", "mac"])).toEqual({
+      status: "accepted",
+    });
+    const localDispatch = first.workflow.dispatch({
+      ...macJob,
+      id: "local-job",
+    });
+    expect(JSON.parse(mac.sent.at(-1)!)).toEqual({
+      type: "job",
+      job: { ...macJob, id: "local-job" },
+    });
+    bridge.message(
+      mac.socket,
+      JSON.stringify({
+        type: "result",
+        jobId: "local-job",
+        ok: true,
+        content: "local",
+      }),
+    );
+    if (localDispatch.status !== "accepted") {
+      throw new Error("Expected Mac-routed job");
+    }
+    expect(await localDispatch.result).toEqual({ ok: true, content: "local" });
+    first.workflow.release();
   });
 });
