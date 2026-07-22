@@ -115,6 +115,7 @@ The bridge accepts only `pull_request` events for
 `Hsiii/health-check-system`. When `Hsiii` marks a draft ready, Daniel and
 Jasmine are mentioned. PRs by Daniel, Jasmine, or another author mention Hsi.
 Known team authors are also explicitly added to the public thread.
+The review request containing the pull-request link is pinned in the thread.
 
 ## Configured-guild role access (WM31 by default)
 

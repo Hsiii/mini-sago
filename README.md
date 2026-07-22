@@ -89,8 +89,8 @@ following the bot into every server.
 ### Organizes pull-request reviews
 
 For the configured GitHub repository, MiniSago opens a Discord discussion
-thread for each pull request, adds the relevant reviewers, and archives the
-thread after the pull request is merged.
+thread for each pull request, adds the relevant reviewers, pins the review
+request, and archives the thread after the pull request is merged.
 
 ## Where features work
 
@@ -123,8 +123,8 @@ reconnects after unlock without replaying missed requests.
 
 Install the Discord application with the `bot` and `applications.commands`
 scopes. It needs permission to view channels, read message history, send
-messages and thread replies, and manage only the configured opt-in roles. It
-does not need Manage Messages or Manage Webhooks.
+messages and thread replies, pin PR review requests, and manage only the
+configured opt-in roles. It does not need Manage Webhooks.
 
 Run only one Gateway-enabled instance per bot token. See
 [Configuration](docs/configuration.md) for environment settings and

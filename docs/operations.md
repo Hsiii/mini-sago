@@ -38,8 +38,9 @@ controls or scheduled feeds there.
    `4014` and Instagram messages cannot be read.
 5. Sync the Discord application install settings so the bot profile
    `Add App` / `Add to Server` flow requests `applications.commands`, `bot`,
-   `View Channels`, `Send Messages`, `Read Message History`, `Manage Roles`,
-   `Create Public Threads`, `Send Messages in Threads`, and `Manage Threads`.
+   `View Channels`, `Send Messages`, `Manage Messages`, `Read Message History`,
+   `Manage Roles`, `Create Public Threads`, `Send Messages in Threads`, and
+   `Manage Threads`.
 6. Publish the slash commands.
 7. Publish the channel access panel. Pass a channel ID or set
    `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`.
@@ -385,10 +386,10 @@ webhook with:
 - Secret: the same random value as `GITHUB_WEBHOOK_SECRET`
 - Events: select only **Pull requests**
 
-The `ready_for_review` action creates a public thread named after the PR and
-posts the review request. Repeated deliveries reuse the saved thread instead of
-creating duplicates. A `closed` action archives the thread only when GitHub
-marks the PR as merged.
+The `ready_for_review` action creates a public thread named after the PR, posts
+the review request, and pins that message so the PR link stays easy to find.
+Repeated deliveries reuse the saved thread instead of creating duplicates. A
+`closed` action archives the thread only when GitHub marks the PR as merged.
 
 The production bridge is deployed at `bot.hsichen.dev`. MiniSago's access to
 the `專案討論` text channel (`1521506395034226830`) in guild
@@ -429,10 +430,11 @@ settings through the Discord API. In the Developer Portal, keep
 Installation -> Install Link set to `Discord Provided Link` so the profile
 button uses these defaults.
 
-The synced permission bitfield is `326686018560`, which includes:
+The synced permission bitfield is `326686026752`, which includes:
 
 - `View Channels`
 - `Send Messages`
+- `Manage Messages`
 - `Read Message History`
 - `Manage Roles`
 - `Manage Threads`
@@ -445,13 +447,13 @@ Settings -> Roles -> 迷你西米露 and configure the corresponding permission
 checkboxes. Application install defaults affect new installations and do not
 retroactively rewrite an existing server role.
 
-The first three permissions support universal Instagram replies and owner
-chatbot context. `Manage Roles` is needed only for the configured-guild channel
-access commands and panel.
-The thread permissions let the GitHub bridge create public threads, add team
-members, post review requests, and archive threads after merge. MiniSago does
-not request Manage Messages or Manage Webhooks. Channel-specific overrides must
-still allow the relevant permissions in each target channel.
+`View Channels`, `Send Messages`, and `Read Message History` support universal
+Instagram replies and owner chatbot context. `Manage Roles` is needed only for
+the configured-guild channel access commands and panel. `Manage Messages` lets
+the GitHub bridge pin each review request. The thread permissions let the bridge
+create public threads, add team members, post review requests, and archive
+threads after merge. MiniSago does not request Manage Webhooks. Channel-specific
+overrides must still allow the relevant permissions in each target channel.
 
 Servers that only use universal Instagram replies may disable Manage Roles for
 MiniSago. That does not affect link replies; it only prevents the configured

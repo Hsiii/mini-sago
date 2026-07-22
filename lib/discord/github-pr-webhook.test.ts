@@ -114,7 +114,7 @@ describe("GitHub PR webhook", () => {
   });
 
   test.serial(
-    "creates one public thread, adds participants, and archives it on merge",
+    "creates one public thread, adds participants, pins the review, and archives it on merge",
     async () => {
       const secret = "integration-test-secret";
       const stateDirectory = await mkdtemp(join(tmpdir(), "minisago-pr-test-"));
@@ -142,6 +142,10 @@ describe("GitHub PR webhook", () => {
 
         if (url.endsWith("/channels/1521506395034226830/threads")) {
           return Response.json({ id: "thread-42" });
+        }
+
+        if (url.endsWith("/channels/thread-42/messages")) {
+          return Response.json({ id: "message-42" });
         }
 
         return new Response(null, { status: 204 });
@@ -198,6 +202,11 @@ describe("GitHub PR webhook", () => {
                 users: [DANIEL_ID, JASMINE_ID],
               },
             },
+          },
+          {
+            url: "https://discord.com/api/v10/channels/thread-42/pins/message-42",
+            method: "PUT",
+            body: undefined,
           },
           {
             url: "https://discord.com/api/v10/channels/thread-42",
