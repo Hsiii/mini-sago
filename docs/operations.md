@@ -475,8 +475,8 @@ ghcr.io/hsiii/minisago-worker
 
 Changes must reach `main` through a pull request. `bun run deploy` never pushes
 code: it requires a clean local `main` whose HEAD exactly matches
-`origin/main`, waits for that commit's image workflow, and asks the platform
-operations checkout at `/srv/platform/operations` to deploy both the neutral
+`origin/main`, waits for that commit's image workflow, and asks the Sago Cloud
+operations checkout at `/srv/sago-cloud/operations` to deploy both the neutral
 `bot-core` service and the always-on Codex worker as one MiniSago release:
 
 ```bash
@@ -484,17 +484,17 @@ bun run deploy
 ```
 
 The VM pulls both published images rather than cloning or building this
-repository. Production configuration lives under `/srv/platform/secrets`; only
-the core container joins the external `platform_edge` network under the
+repository. Production configuration lives under `/srv/sago-cloud/secrets`; only
+the core container joins the external `sago_cloud_edge` network under the
 `bot-core` alias. The worker keeps Codex, GitHub CLI, state, repositories, and
-worktrees in external persistent volumes managed by the platform operations
+worktrees in external persistent volumes managed by Sago Cloud operations
 repository.
 
 The deployment command retries SSH connection timeouts three times. It reaches
-the VM through the local `platform` SSH alias, which must resolve over
-Tailscale. If it still cannot reach `platform`, confirm the local device is on
-the shared tailnet and that `ssh platform` succeeds, then rerun the command.
-Use `PLATFORM_HOST` to target a replacement host.
+the VM through the local `sago-cloud` SSH alias, which must resolve over
+Tailscale. If it still cannot reach `sago-cloud`, confirm the local device is on
+the shared tailnet and that `ssh sago-cloud` succeeds, then rerun the command.
+Use `SAGO_CLOUD_HOST` to target a replacement host.
 
 Confirm the public endpoints after deployment:
 
@@ -510,8 +510,8 @@ wss://bot.hsichen.dev/api/mac-agent/ws
 
 The edge proxy must preserve WebSocket upgrade headers for the Mac bridge.
 
-The platform caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
-stored in the external `platform_bot-core-state` volume:
+Sago Cloud caps the bot at 0.25 CPU and 256 MB RAM. Scheduled-post state is
+stored in the external `sago_cloud_bot-core-state` volume:
 
 - TOEFL state when `TOEFL_VOCAB_STATE_FILE` is set to
   `/app/state/toefl-vocab-state.json`.
