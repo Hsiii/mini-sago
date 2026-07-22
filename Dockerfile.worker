@@ -6,7 +6,7 @@ USER root
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates git openssh-client ripgrep \
   && rm -rf /var/lib/apt/lists/* \
-  && bun add --global "@openai/codex@${CODEX_VERSION}"
+  && BUN_INSTALL=/usr/local bun add --global "@openai/codex@${CODEX_VERSION}"
 
 WORKDIR /app/mac-agent
 
@@ -29,4 +29,5 @@ ENV MINISAGO_MAX_CONCURRENT_JOBS=2
 
 USER bun
 
+ENTRYPOINT []
 CMD ["bun", "src/index.ts"]
