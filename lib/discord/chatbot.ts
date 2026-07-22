@@ -302,6 +302,10 @@ export function extractChatbotRequest(
     return mentionRequest;
   }
 
+  if (!message.guild_id && message.author?.id === OWNER_DISCORD_USER_ID) {
+    return content.trim();
+  }
+
   return message.referenced_message?.author?.id === botUserId
     ? content.trim()
     : null;
