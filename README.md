@@ -37,9 +37,10 @@ MiniSago can:
 
 Community members can use these conversational and summarization features, but
 GitHub reviews, code changes, command execution, and other privileged work are
-owner-only. Community requests run on GPT-5.6 Luna with high reasoning; owner
-requests run on GPT-5.6 Sol with medium reasoning. The same boundary is checked
-by both the Discord service and the Codex worker before Codex starts.
+owner-only. Community and owner chat requests run on GPT-5.6 Luna; owner
+requests first use Luna to decide whether development work should switch to
+GPT-5.6 Sol with medium reasoning. The same boundary is checked by both the
+Discord service and the Codex worker before Codex starts.
 
 She only searches channels that the person asking can access. Member roles,
 join dates, and presence are not sent to Codex. Temporary attachment downloads
