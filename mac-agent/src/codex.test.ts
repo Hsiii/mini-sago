@@ -4,7 +4,9 @@ import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import {
   assertChatbotJobAllowed,
   buildCodexPrompt,
+  buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
+  canUseDeveloperTools,
   codexEnvironment,
   codexProfileForJob,
   COMMUNITY_CHATBOT_PROFILE,
@@ -214,7 +216,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(10);
+    expect(PROMPT_VERSION).toBe(11);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -350,5 +352,81 @@ describe("Codex chatbot runner", () => {
       "/usr/local/bun-node-fallback-bin",
     );
     expect(environment.PATH.split(":")).toContain("/usr/bin");
+  });
+
+  test("exposes no token and gives GitHub paths only to owner dev answers", () => {
+    const developerEnvironment = {
+      MINISAGO_GITHUB_REPOSITORIES: "Hsiii/mini-sago",
+    };
+    const chatEnvironment = codexEnvironment(
+      "/tmp/codex-home",
+      "/usr/local/bin/codex",
+      false,
+      developerEnvironment,
+    );
+    const devEnvironment = codexEnvironment(
+      "/tmp/codex-home",
+      "/usr/local/bin/codex",
+      true,
+      developerEnvironment,
+    );
+
+    expect(chatEnvironment.GH_TOKEN).toBeUndefined();
+    expect(chatEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBeUndefined();
+    expect(devEnvironment.GH_TOKEN).toBeUndefined();
+    expect(devEnvironment.MINISAGO_GITHUB_REPOSITORIES).toBe("Hsiii/mini-sago");
+    expect(
+      canUseDeveloperTools({
+        ...job,
+        requesterUserId: "917446775873343600",
+        executionMode: "dev",
+        purpose: "answer",
+      }),
+    ).toBe(true);
+    expect(
+      canUseDeveloperTools({
+        ...job,
+        requesterUserId: "917446775873343600",
+        executionMode: "dev",
+        purpose: "context_plan",
+      }),
+    ).toBe(false);
+    expect(
+      canUseDeveloperTools({
+        ...job,
+        executionMode: "dev",
+        purpose: "answer",
+      }),
+    ).toBe(false);
+  });
+
+  test("constrains GitHub work to allowlisted repositories and draft PRs", () => {
+    const policy = buildGithubDeveloperPolicy(
+      {
+        githubRepositories: ["Hsiii/mini-sago"],
+        githubRepositoryRoot: "/workspace/repositories",
+        githubWorktreeRoot: "/workspace/worktrees",
+      },
+      "job-123",
+    );
+    const devPrompt = buildCodexPrompt(
+      {
+        ...job,
+        requesterUserId: "917446775873343600",
+        executionMode: "dev",
+      },
+      [],
+      [],
+      policy,
+    );
+    const chatPrompt = buildCodexPrompt(job, [], [], policy);
+
+    expect(policy).toContain("Hsiii/mini-sago");
+    expect(policy).toContain("/workspace/worktrees/job-123");
+    expect(policy).toContain("draft pull request");
+    expect(policy).toContain("Never push directly to main");
+    expect(policy).toContain("existing gh login");
+    expect(devPrompt).toContain("github_development_policy");
+    expect(chatPrompt).not.toContain("github_development_policy");
   });
 });

@@ -187,6 +187,20 @@ async function install() {
       process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(userHome, "Projects"),
     ),
     envLine(
+      "MINISAGO_GITHUB_REPOSITORIES",
+      process.env.MINISAGO_GITHUB_REPOSITORIES?.trim() || "",
+    ),
+    envLine(
+      "MINISAGO_GITHUB_REPOSITORY_ROOT",
+      process.env.MINISAGO_GITHUB_REPOSITORY_ROOT?.trim() ||
+        join(userHome, "Projects", "repositories"),
+    ),
+    envLine(
+      "MINISAGO_GITHUB_WORKTREE_ROOT",
+      process.env.MINISAGO_GITHUB_WORKTREE_ROOT?.trim() ||
+        join(userHome, "Projects", "worktrees"),
+    ),
+    envLine(
       "MINISAGO_CODEX_PATH",
       process.env.MINISAGO_CODEX_PATH?.trim() ||
         "/Applications/ChatGPT.app/Contents/Resources/codex",

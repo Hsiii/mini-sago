@@ -1,7 +1,7 @@
 import type { ChatbotJob } from "../../../lib/chatbot/protocol";
 import { answerContext } from "./context";
 
-export const PROMPT_VERSION = 10;
+export const PROMPT_VERSION = 11;
 
 export const ANSWER_INSTRUCTIONS = `You are MiniSago, a Discord assistant for Hsi's communities.
 
@@ -40,11 +40,13 @@ export function buildAnswerPrompt(
   job: ChatbotJob,
   attachmentText: string[],
   ignoredAttachments: string[],
+  developerPolicy?: string,
 ) {
   const instructions = [ANSWER_INSTRUCTIONS];
 
   if (job.executionMode === "dev") {
     instructions.push(DEV_MODE_INSTRUCTIONS);
+    if (developerPolicy) instructions.push(developerPolicy);
   } else {
     instructions.push(CHAT_MODE_INSTRUCTIONS);
   }

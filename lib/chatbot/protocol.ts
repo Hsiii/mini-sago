@@ -1,5 +1,6 @@
 export const CHATBOT_PROTOCOL_VERSION = 12;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
+export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
 export const CHATBOT_WORKER_CAPABILITIES = ["chat", "dev", "mac"] as const;
 export type ChatbotWorkerCapability =

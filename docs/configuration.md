@@ -41,20 +41,23 @@ environments unless that instance is intentionally replacing production.
 These values are consumed by `bun run mac-agent:install` from `.env.local`. Only
 the bridge secret must also be present in production.
 
-| Name                            | Required | Description                                                                                             |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `MINISAGO_MAC_BRIDGE_SECRET`    | Yes      | Same random secret configured on the hosted server                                                      |
-| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only |
-| `MINISAGO_CODEX_PATH`           | No       | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                         |
-| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`  |
-| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled native lock monitor; the installer creates and configures it automatically                     |
-| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database; defaults under the platform state directory                              |
-| `MINISAGO_WORKSPACE_ROOT`       | No       | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container      |
-| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`       |
-| `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                              |
-| `MINISAGO_WORKER_ID`            | No       | Stable worker identity; defaults from the host, while the container image uses `oracle`                 |
-| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities; only a Mac worker should advertise `mac`         |
-| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing     |
+| Name                              | Required   | Description                                                                                             |
+| --------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `MINISAGO_MAC_BRIDGE_SECRET`      | Yes        | Same random secret configured on the hosted server                                                      |
+| `MINISAGO_BRIDGE_URL`             | No         | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only |
+| `MINISAGO_CODEX_PATH`             | No         | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                         |
+| `MINISAGO_CODEX_HOME`             | No         | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`  |
+| `MINISAGO_SESSION_MONITOR_PATH`   | No         | Compiled native lock monitor; the installer creates and configures it automatically                     |
+| `MINISAGO_TRACE_DATABASE_PATH`    | No         | Local response-trace database; defaults under the platform state directory                              |
+| `MINISAGO_WORKSPACE_ROOT`         | No         | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container      |
+| `MINISAGO_MAX_CONCURRENT_JOBS`    | No         | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`       |
+| `MINISAGO_HEADLESS`               | No         | Set to `true` on Linux to stay connected without the macOS session monitor                              |
+| `MINISAGO_WORKER_ID`              | No         | Stable worker identity; defaults from the host, while the container image uses `oracle`                 |
+| `MINISAGO_WORKER_CAPABILITIES`    | No         | Comma-separated `chat`, `dev`, and `mac` capabilities; only a Mac worker should advertise `mac`         |
+| `MINISAGO_WORKER_PRIORITY`        | No         | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing     |
+| `MINISAGO_GITHUB_REPOSITORIES`    | For GitHub | Comma-separated `owner/repository` list supplied to Sol's GitHub policy                                 |
+| `MINISAGO_GITHUB_REPOSITORY_ROOT` | No         | Persistent canonical clone root; defaults to `<workspace>/repositories`                                 |
+| `MINISAGO_GITHUB_WORKTREE_ROOT`   | No         | Per-job isolated worktree root; defaults to `<workspace>/worktrees`                                     |
 
 The helper uses the existing `~/.codex/auth.json` through a symlink inside its
 isolated Codex home. It does not copy the credential or load normal Codex
@@ -77,6 +80,28 @@ different worker IDs. The bridge prefers the highest-priority compatible
 worker, falls back when it is full or offline, and keeps every multi-stage
 workflow on one worker after routing. Luna selects the `mac` target only when
 the request explicitly needs a resource on Hsi's Mac.
+
+## Owner GitHub automation
+
+The worker image includes `gh`. Authenticate it once with `gh auth login`; the
+resulting GitHub CLI configuration is stored in the dedicated
+`minisago-github` Docker volume and survives container replacement. The Mac
+worker uses the user's existing `~/.config/gh` login. MiniSago does not accept,
+copy, or inject a GitHub token through its own configuration.
+
+Only the final owner-authorized dev answer receives developer command and
+network permissions. Luna routing, Discord context planning, identity
+resolution, community jobs, and ordinary owner chat cannot execute `gh`. The
+persistent workspace keeps canonical clones and uses a job-specific worktree
+for concurrent changes. `MINISAGO_GITHUB_REPOSITORIES` guides Sol's repository
+scope; the authenticated GitHub account's permissions remain the actual access
+boundary.
+
+Repository contents, diffs, issues, comments, and command output remain
+untrusted data. MiniSago is instructed to create issue mutations only when Hsi
+asks, keep reviews read-only unless asked to post them, never push a protected
+branch, and deliver code changes as draft PRs without merging or marking them
+ready.
 
 ## GitHub pull request review threads
 
