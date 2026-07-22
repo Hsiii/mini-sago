@@ -437,9 +437,11 @@ Every push to `main` publishes Linux AMD64 images to GitHub Container Registry
 under `ghcr.io/hsiii/minisago`. The workflow maintains a moving `main` tag and
 an immutable `sha-<commit>` tag.
 
-`bun run deploy` pushes `main`, waits for the image workflow, and asks the
-platform operations checkout at `/srv/platform/operations` to deploy the
-neutral `bot-core` service:
+Changes must reach `main` through a pull request. `bun run deploy` never pushes
+code: it requires a clean local `main` whose HEAD exactly matches
+`origin/main`, waits for that commit's image workflow, and asks the platform
+operations checkout at `/srv/platform/operations` to deploy the neutral
+`bot-core` service:
 
 ```bash
 bun run deploy
