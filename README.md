@@ -104,8 +104,8 @@ thread after the pull request is merged.
 
 ## Run your own instance
 
-MiniSago requires [Bun](https://bun.sh/), a Discord application, and a Mac with
-a working Codex login for chatbot responses.
+MiniSago requires [Bun](https://bun.sh/), a Discord application, and a
+compatible worker with a working Codex login for chatbot responses.
 
 Configure the Discord credentials and shared Mac bridge secret described in
 [Configuration](docs/configuration.md), enable Discord's Message Content

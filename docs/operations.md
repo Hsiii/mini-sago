@@ -462,24 +462,31 @@ be above the self-assignable channel roles in Server Settings -> Roles.
 
 ## Production deployment
 
-Every push to `main` publishes Linux AMD64 images to GitHub Container Registry
-under `ghcr.io/hsiii/minisago`. The workflow maintains a moving `main` tag and
-an immutable `sha-<commit>` tag.
+Every push to `main` publishes Linux AMD64 and ARM64 images to GitHub Container
+Registry. The workflow maintains a moving `main` tag and an immutable
+`sha-<commit>` tag for both images:
+
+```text
+ghcr.io/hsiii/minisago
+ghcr.io/hsiii/minisago-worker
+```
 
 Changes must reach `main` through a pull request. `bun run deploy` never pushes
 code: it requires a clean local `main` whose HEAD exactly matches
 `origin/main`, waits for that commit's image workflow, and asks the platform
-operations checkout at `/srv/platform/operations` to deploy the neutral
-`bot-core` service:
+operations checkout at `/srv/platform/operations` to deploy both the neutral
+`bot-core` service and the always-on Codex worker as one MiniSago release:
 
 ```bash
 bun run deploy
 ```
 
-The VM pulls the published image rather than cloning or building this
-repository. Production configuration lives in
-`/srv/platform/secrets/bot-core.env`, and the container joins the external
-`platform_edge` network under the `bot-core` alias.
+The VM pulls both published images rather than cloning or building this
+repository. Production configuration lives under `/srv/platform/secrets`; only
+the core container joins the external `platform_edge` network under the
+`bot-core` alias. The worker keeps Codex, GitHub CLI, state, repositories, and
+worktrees in external persistent volumes managed by the platform operations
+repository.
 
 The deployment command retries SSH connection timeouts three times. It reaches
 the VM through the local `platform` SSH alias, which must resolve over

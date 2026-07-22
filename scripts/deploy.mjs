@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 
 const repository = "Hsiii/MiniSago";
 const workflow = "image.yml";
-const service = "bot-core";
+const service = "minisago";
 const remoteHost = process.env.PLATFORM_HOST ?? "platform";
 const remoteDeployRoot =
   process.env.PLATFORM_OPERATIONS_ROOT ?? "/srv/platform/operations";
