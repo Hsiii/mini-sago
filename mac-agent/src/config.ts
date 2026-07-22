@@ -54,12 +54,16 @@ async function resolveCodexPath() {
   );
 }
 
-function validateBridgeUrl(value: string) {
+export function validateBridgeUrl(value: string) {
   const url = new URL(value);
-  const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  const isLocal =
+    ["localhost", "127.0.0.1", "::1"].includes(url.hostname) ||
+    !url.hostname.includes(".");
 
   if (url.protocol !== "wss:" && !(isLocal && url.protocol === "ws:")) {
-    throw new Error("MINISAGO_BRIDGE_URL must use wss:// unless it is local.");
+    throw new Error(
+      "MINISAGO_BRIDGE_URL must use wss:// unless it is local or container-local.",
+    );
   }
 
   return url.toString();
