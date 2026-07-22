@@ -1132,7 +1132,7 @@ export async function handleChatbotMention({
   if (acquired.status === "offline") {
     await postChatbotResponse(
       message,
-      "叫曦打開他的 Mac 我才能動啦 💤",
+      "我現在沒接上工作機 晚點再叫我一次 💤",
       discordRequest,
     );
     return true;
@@ -1166,7 +1166,7 @@ export async function handleChatbotMention({
         });
 
         if (traceDispatch.status !== "accepted") {
-          return { ok: false as const, error: "The Mac disconnected." };
+          return { ok: false as const, error: "The worker disconnected." };
         }
 
         return traceDispatch.result;
@@ -1353,11 +1353,11 @@ export async function handleChatbotMention({
         const evidenceDispatch = workflow.dispatch(evidenceJob);
 
         if (evidenceDispatch.status === "offline") {
-          return { ok: false as const, error: "The Mac disconnected." };
+          return { ok: false as const, error: "The worker disconnected." };
         }
 
         if (evidenceDispatch.status === "busy") {
-          return { ok: false as const, error: "The Mac became busy." };
+          return { ok: false as const, error: "The worker became busy." };
         }
 
         const evidenceResult = await evidenceDispatch.result;
@@ -1384,11 +1384,11 @@ export async function handleChatbotMention({
         const answerDispatch = workflow.dispatch(answerJob);
 
         if (answerDispatch.status === "offline") {
-          return { ok: false as const, error: "The Mac disconnected." };
+          return { ok: false as const, error: "The worker disconnected." };
         }
 
         if (answerDispatch.status === "busy") {
-          return { ok: false as const, error: "The Mac became busy." };
+          return { ok: false as const, error: "The worker became busy." };
         }
 
         return answerDispatch.result;
@@ -1410,11 +1410,11 @@ export async function handleChatbotMention({
       const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
-        return { ok: false as const, error: "The Mac disconnected." };
+        return { ok: false as const, error: "The worker disconnected." };
       }
 
       if (dispatch.status === "busy") {
-        return { ok: false as const, error: "The Mac became busy." };
+        return { ok: false as const, error: "The worker became busy." };
       }
 
       return dispatch.result;

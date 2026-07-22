@@ -240,7 +240,7 @@ export class MacAgentBridge {
     this.workflowIds.clear();
     this.workflowJobs.clear();
     this.clearHeartbeatTimeout();
-    this.failPendingJob("The Mac disconnected while answering.");
+    this.failPendingJob("The Codex worker disconnected while answering.");
   }
 
   private authenticate(socket: Socket, message: MacAgentClientMessage) {

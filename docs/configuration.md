@@ -21,10 +21,10 @@ fallback.
 
 ## Universal / cross-guild configuration
 
-| Name                         | Required | Description                                                                                                                   |
-| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_GATEWAY_DISABLED`   | No       | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions                          |
-| `MINISAGO_MAC_BRIDGE_SECRET` | Chatbot  | High-entropy secret shared only by the hosted MiniSago process and Mac helper; leaving it blank disables the WebSocket bridge |
+| Name                         | Required | Description                                                                                                                     |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_GATEWAY_DISABLED`   | No       | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions                            |
+| `MINISAGO_MAC_BRIDGE_SECRET` | Chatbot  | High-entropy secret shared only by the hosted MiniSago process and Codex worker; leaving it blank disables the WebSocket bridge |
 
 Gateway features are enabled by default whenever `DISCORD_BOT_TOKEN` is set and
 `DISCORD_GATEWAY_DISABLED` is not `true`. They work in every server and channel
@@ -36,7 +36,7 @@ Only one Gateway-enabled instance should use a bot token at a time. When
 production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
 environments unless that instance is intentionally replacing production.
 
-## Local Mac chatbot helper
+## Codex chatbot worker
 
 These values are consumed by `bun run mac-agent:install` from `.env.local`. Only
 the bridge secret must also be present in production.
@@ -48,7 +48,10 @@ the bridge secret must also be present in production.
 | `MINISAGO_CODEX_PATH`           | No       | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                         |
 | `MINISAGO_CODEX_HOME`           | No       | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`  |
 | `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled native lock monitor; the installer creates and configures it automatically                     |
-| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database; defaults to `~/Library/Application Support/MiniSago/traces.sqlite`       |
+| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database; defaults under the platform state directory                              |
+| `MINISAGO_WORKSPACE_ROOT`       | No       | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container      |
+| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`       |
+| `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                              |
 
 The helper uses the existing `~/.codex/auth.json` through a symlink inside its
 isolated Codex home. It does not copy the credential or load normal Codex
@@ -56,9 +59,11 @@ config, skills, memories, plugins, MCP servers, or repository instructions.
 The trace database is readable only by the local user and is automatically
 pruned after 14 days or when it exceeds 250 MB.
 
-The Discord owner ID is a code-level security boundary. Owner requests use
-GPT-5.6 Sol with medium reasoning. Other authorized community members use
-GPT-5.6 Luna with high reasoning and are limited to conversational,
+The Discord owner ID is a code-level security boundary. Owner requests first
+use GPT-5.6 Luna with low reasoning to choose chat or dev mode. Chat requests
+use Luna with high reasoning; dev requests use GPT-5.6 Sol with medium
+reasoning and may work only inside `MINISAGO_WORKSPACE_ROOT`. Other authorized
+community members use Luna with high reasoning and are limited to conversational,
 summarization, and public-information requests. GitHub pull-request reviews,
 issue mutations, code changes, command execution, and similar privileged
 requests are rejected before they reach the Mac, then checked again by the Mac

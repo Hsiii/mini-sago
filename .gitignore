@@ -3,6 +3,7 @@ node_modules
 .env.local
 .env.production
 .env.production.local
+.env.worker
 .data
 npm-debug.log*
 *.tsbuildinfo

@@ -8,18 +8,17 @@ export type MacAgentConfig = {
   codexHome: string;
   codexPath: string;
   maxConcurrentJobs: number;
+  headless: boolean;
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
 };
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
-const defaultApplicationSupport = join(
-  homedir(),
-  "Library",
-  "Application Support",
-  "MiniSago",
-);
+const defaultApplicationSupport =
+  process.platform === "darwin"
+    ? join(homedir(), "Library", "Application Support", "MiniSago")
+    : join(homedir(), ".local", "state", "minisago");
 
 async function isExecutable(path: string) {
   try {
@@ -77,12 +76,14 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
+    headless:
+      process.env.MINISAGO_HEADLESS === "true" || process.platform !== "darwin",
     maxConcurrentJobs: Math.max(
       1,
       Math.min(
         16,
-        Number.parseInt(process.env.MINISAGO_MAX_CONCURRENT_JOBS || "4", 10) ||
-          4,
+        Number.parseInt(process.env.MINISAGO_MAX_CONCURRENT_JOBS || "2", 10) ||
+          2,
       ),
     ),
     sessionMonitorPath:

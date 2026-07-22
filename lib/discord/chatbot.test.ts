@@ -219,7 +219,7 @@ describe("Discord chatbot", () => {
     expect(requests.at(-1)).toEqual({
       path: "/channels/channel-1/messages",
       body: {
-        content: "叫曦打開他的 Mac 我才能動啦 💤",
+        content: "我現在沒接上工作機 晚點再叫我一次 💤",
         allowed_mentions: { parse: [] },
       },
     });
