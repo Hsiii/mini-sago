@@ -46,7 +46,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
+        capabilities: ["chat", "dev-read", "dev-write"],
+        repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
     );
@@ -84,7 +85,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
+        capabilities: ["chat", "dev-read", "dev-write"],
+        repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
     );
@@ -141,7 +143,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
+        capabilities: ["chat", "dev-read", "dev-write"],
+        repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
     );
@@ -213,7 +216,8 @@ describe("Mac agent bridge", () => {
         protocolVersion: CHATBOT_PROTOCOL_VERSION,
         secret: bridgeSecret,
         workerId: "oracle",
-        capabilities: ["chat", "dev"],
+        capabilities: ["chat", "dev-read", "dev-write"],
+        repositories: ["Hsiii/mini-sago"],
         priority: 100,
       }),
     );
@@ -275,7 +279,7 @@ describe("Mac agent bridge", () => {
     const authenticate = (
       target: ReturnType<typeof fakeSocket>,
       workerId: string,
-      capabilities: Array<"chat" | "dev" | "mac">,
+      capabilities: Array<"chat" | "dev-read" | "dev-write" | "mac">,
       priority: number,
     ) => {
       bridge.open(target.socket);
@@ -287,6 +291,7 @@ describe("Mac agent bridge", () => {
           secret: bridgeSecret,
           workerId,
           capabilities,
+          repositories: ["Hsiii/mini-sago"],
           priority,
         }),
       );
@@ -296,8 +301,8 @@ describe("Mac agent bridge", () => {
       );
     };
 
-    authenticate(cloud, "oracle", ["chat", "dev"], 100);
-    authenticate(mac, "hsi-mac", ["chat", "dev", "mac"], 50);
+    authenticate(cloud, "oracle", ["chat", "dev-read", "dev-write"], 100);
+    authenticate(mac, "hsi-mac", ["chat", "dev-read", "dev-write", "mac"], 50);
     expect(cloud.closed).toEqual([]);
     expect(mac.closed).toEqual([]);
     expect(bridge.getWorkerSummary()).toEqual({
@@ -368,7 +373,9 @@ describe("Mac agent bridge", () => {
     await Promise.all([cloudDispatch.result, fallbackDispatch.result]);
     fallback.workflow.release();
 
-    expect(first.workflow.route(["dev", "mac"])).toEqual({
+    expect(
+      first.workflow.route(["dev-read", "mac"], "Hsiii/mini-sago"),
+    ).toEqual({
       status: "accepted",
     });
     const localDispatch = first.workflow.dispatch({
@@ -393,5 +400,48 @@ describe("Mac agent bridge", () => {
     }
     expect(await localDispatch.result).toEqual({ ok: true, content: "local" });
     first.workflow.release();
+  });
+
+  test("enforces repository scope before dispatching a dev job", () => {
+    process.env.MINISAGO_MAC_BRIDGE_SECRET = bridgeSecret;
+    const bridge = new MacAgentBridge();
+    const worker = fakeSocket();
+    bridge.open(worker.socket);
+    bridge.message(
+      worker.socket,
+      JSON.stringify({
+        type: "authenticate",
+        protocolVersion: CHATBOT_PROTOCOL_VERSION,
+        secret: bridgeSecret,
+        workerId: "oracle",
+        capabilities: ["chat", "dev-read", "dev-write"],
+        repositories: ["Hsiii/mini-sago"],
+        priority: 100,
+      }),
+    );
+    bridge.message(
+      worker.socket,
+      JSON.stringify({ type: "availability", available: true, capacity: 1 }),
+    );
+
+    const workflow = bridge.acquireWorkflow();
+    if (workflow.status !== "accepted") throw new Error("Expected workflow");
+    expect(
+      workflow.workflow.route(["dev-read"], "Hsiii/not-advertised"),
+    ).toEqual({ status: "offline" });
+    expect(
+      workflow.workflow.dispatch({
+        id: "review-job",
+        requesterUserId: "owner",
+        purpose: "answer",
+        executionMode: "dev-read",
+        repository: "Hsiii/not-advertised",
+        channelId: "channel-1",
+        requestMessageId: "message-1",
+        request: "review this PR",
+        messages: [],
+      }).status,
+    ).toBe("offline");
+    workflow.workflow.release();
   });
 });

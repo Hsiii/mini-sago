@@ -105,7 +105,7 @@ sequenceDiagram
     participant H as Hosted MiniSago context broker
     participant W as Reserved WebSocket workflow
     participant M as Codex worker
-    participant C as Luna router / Luna chat / Sol dev
+    participant C as Luna router / Luna chat / Sol dev profiles
 
     U->>D: Mention MiniSago
     D->>H: MESSAGE_CREATE
@@ -116,7 +116,7 @@ sequenceDiagram
     opt Owner request
         H->>W: Execution routing job
         M->>C: Luna low classification
-        C-->>M: chat or dev
+        C-->>M: chat, dev-read, or dev-write + independent target
     end
     H->>W: Context planning job
     W->>M: Authenticated job
@@ -208,7 +208,7 @@ into spaces and line breaks while technical syntax and links remain available.
 
 The worker runs chat jobs on `gpt-5.6-luna` with high reasoning and live public
 web search. Hsi's requests first pass through a Luna-low execution router;
-dev-mode jobs then run on `gpt-5.6-sol` with medium reasoning. Each run is
+`dev-read` and `dev-write` jobs then run on `gpt-5.6-sol` with medium reasoning. Each run is
 ephemeral. Codex receives only the current transcript and
 up to 10 relevant supported attachments of at most 20 MB each and 40 MB total.
 Images, PDFs, DOCX, and common text formats are supported. Downloads accept
@@ -218,25 +218,28 @@ files are removed after the run, and output is shortened to one Discord message.
 Chat mode uses an isolated workspace and Codex home, a restrictive permission
 profile, and—on macOS—a process sandbox that prevents Codex from launching
 child processes. Normal Codex configuration, memories, MCP servers, plugins,
-and private browser sessions remain unavailable. Owner dev mode enables
-developer tools and network access inside `MINISAGO_WORKSPACE_ROOT`; on Oracle,
-the container is the outer security boundary.
+and private browser sessions remain unavailable. Owner `dev-read` and
+`dev-write` modes enable developer tools and network access only inside the
+selected disposable repository checkout; on Oracle, the container remains the
+outer security boundary.
 
 Each worker advertises a bounded concurrency value, defaulting to two. The
 hosted bridge can reserve that many independent Discord workflows per worker
 while still keeping each workflow's planning and answer stages sequential.
 Workers also register a stable ID, capabilities, and priority. The bridge
-prefers Oracle for `chat` and `dev`, falls back to another compatible worker
+prefers Oracle for `chat`, `dev-read`, and `dev-write`, falls back to another compatible worker
 when Oracle is full or offline, and pins the remaining stages after Luna picks
 the execution target. A request that explicitly needs a Mac resource is moved
 to a connected worker advertising `mac`.
 
-For owner dev answers, optional GitHub access uses the `gh` CLI's own persistent
-login. Router, planner, community, and chat processes cannot execute developer
-commands. Canonical clones persist under
-`MINISAGO_GITHUB_REPOSITORY_ROOT`; concurrent changes use a job-specific
-directory under `MINISAGO_GITHUB_WORKTREE_ROOT`. Sol is required to push only a
-feature branch and open a draft PR, never push a protected branch or merge.
+For owner dev answers, GitHub access uses separate persistent `gh` logins.
+`dev-read` gets a repo-scoped read-only login and is the default for reviews;
+`dev-write` gets a separate repo-scoped write login only for explicit owner
+mutations. Router, planner, community, and chat processes cannot execute
+developer commands. Each dev job clones only the selected repository under
+`MINISAGO_GITHUB_WORKTREE_ROOT` and removes the checkout afterward. GitHub
+rulesets must prevent the write identity from pushing protected branches or
+merging; provider and production credentials are not mounted.
 Ordinary chat stages retain the two-minute timeout; final owner dev answers may
 run for up to fifteen minutes for cloning, tests, builds, and PR preparation.
 
@@ -255,9 +258,10 @@ cloned repositories stay outside the image.
 
 Recommended split:
 
-- Oracle runs Luna for always-on Discord chat. It must not advertise `dev` or
-  run cloud Sol until issue #12's external GitHub authorization controls land.
-- Mac advertises `chat,dev,mac` at a lower priority. It remains connected as a
+- Oracle runs separate `chat,dev-read` and `dev-write` containers so neither
+  container mounts the other GitHub credential. Enable the write container
+  after its repo scope and protected-branch ruleset are configured.
+- Mac advertises `chat,dev-read,dev-write,mac` at a lower priority. It remains connected as a
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
 
@@ -267,34 +271,31 @@ this repository, then run:
 
 ```bash
 cp .env.worker.example .env.worker
-mkdir -p workspace/repositories workspace/worktrees
-chmod 700 workspace workspace/repositories workspace/worktrees .env.worker
+mkdir -p workspace/worktrees
+chmod 700 workspace workspace/worktrees .env.worker
 docker compose -f compose.worker.yaml build
 docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
 docker compose -f compose.worker.yaml up -d
 docker compose -f compose.worker.yaml logs -f worker
 ```
 
-Cloud Sol GitHub work is blocked on
-[issue #12](https://github.com/Hsiii/mini-sago/issues/12). The repository list
-is prompt-only routing context and does not restrict the mounted `gh` login.
-Do not enable the cloud worker's `dev` capability with a broad persistent login
-until the external repository/operation policy and job-scoped credentials are
-implemented.
-
-For a temporary operator-controlled rehearsal only, set
-`MINISAGO_GITHUB_REPOSITORIES` in `.env.worker`, then authenticate GitHub CLI
-through its normal browser flow.
-The login is written to the persistent `minisago-github` volume; do not paste a
-token into Discord, a Codex task, `.env.worker`, or the repository:
+Set the exact repository list in `MINISAGO_GITHUB_REPOSITORIES`. Authenticate a
+fine-grained read-only identity into the read volume and a separate
+fine-grained write identity into the write volume. The write identity should
+have only the repository permissions needed for issues, feature branches, and
+draft PRs. A GitHub ruleset must block it from protected-branch pushes and
+merges. Do not paste a token into Discord, a Codex task, `.env.worker`, or the
+repository:
 
 ```bash
-docker compose -f compose.worker.yaml run --rm worker gh auth login --hostname github.com --git-protocol https --web
+docker compose -f compose.worker.yaml run --rm -e GH_CONFIG_DIR=/home/bun/.config/gh-read worker gh auth login --hostname github.com --git-protocol https --web
+docker compose -f compose.worker.yaml run --rm -e GH_CONFIG_DIR=/home/bun/.config/gh-write worker-write gh auth login --hostname github.com --git-protocol https --web
 docker compose -f compose.worker.yaml up -d --force-recreate worker
-docker compose -f compose.worker.yaml exec worker gh auth status
+docker compose -f compose.worker.yaml exec -e GH_CONFIG_DIR=/home/bun/.config/gh-read worker gh auth status
+docker compose -f compose.worker.yaml exec -e GH_CONFIG_DIR=/home/bun/.config/gh-write worker-write gh auth status
 ```
 
-The worker's GitHub CLI login and Codex login use separate persistent volumes.
+The worker's two GitHub CLI logins and Codex login use separate persistent volumes.
 See [Configuration](configuration.md#owner-github-automation) for the runtime
 boundary.
 
@@ -338,9 +339,14 @@ Prerequisites:
 Run:
 
 ```bash
+GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github-read" gh auth login --hostname github.com --git-protocol https --web
+GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github-write" gh auth login --hostname github.com --git-protocol https --web
 bun run mac-agent:install
 bun run mac-agent:status
 ```
+
+Use the same repo scopes and protected-branch rules as the cloud worker. These
+isolated logins are separate from the normal `~/.config/gh` login.
 
 The installer compiles a small native session monitor and registers
 `dev.hsichen.minisago-mac-agent` as a per-user LaunchAgent. It connects only
@@ -372,7 +378,9 @@ response traces:
 bun run mac-agent:uninstall
 ```
 
-Uninstalling does not change the normal `~/.codex` login or configuration.
+Uninstalling removes the helper's isolated GitHub logins; they can be restored
+by authenticating again. It does not change the normal `~/.codex` or
+`~/.config/gh` login and configuration.
 
 ## Endpoints
 

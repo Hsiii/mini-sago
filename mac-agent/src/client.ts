@@ -126,6 +126,7 @@ export class MacAgentClient {
         secret: this.config.bridgeSecret,
         workerId: this.config.workerId,
         capabilities: this.config.workerCapabilities,
+        repositories: this.config.githubRepositories,
         priority: this.config.workerPriority,
       });
     });

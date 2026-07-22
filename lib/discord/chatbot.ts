@@ -489,8 +489,30 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
 
 export function parseExecutionRoute(
   content: string,
-  fallbackContext: string,
-): { mode: ChatbotExecutionMode; target: ChatbotExecutionTarget } {
+  ownerRequest: string,
+  repositoryContext = ownerRequest,
+): {
+  mode: ChatbotExecutionMode;
+  target: ChatbotExecutionTarget;
+  repository?: string;
+} {
+  const repository = repositoryContext.match(
+    /(?:https?:\/\/github\.com\/|\b)([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
+  )?.[1];
+  const writeRequested =
+    /\b(?:create|open|update|edit|close|comment on|implement|fix|write|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(?:issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app)?\b/iu.test(
+      ownerRequest,
+    ) ||
+    /(?:建立|新增|修改|更新|關閉|留言|實作|修復|寫入|提交|推送|部署|發布).{0,32}(?:issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用)?/iu.test(
+      ownerRequest,
+    );
+  const target =
+    /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
+      ownerRequest,
+    )
+      ? "mac"
+      : "default";
+
   try {
     const normalized = content
       .trim()
@@ -499,27 +521,35 @@ export function parseExecutionRoute(
     const payload = JSON.parse(normalized) as {
       mode?: unknown;
       target?: unknown;
+      repository?: unknown;
     };
-    if (payload.mode === "dev" || payload.mode === "chat") {
-      const target = payload.target === "mac" ? "mac" : "default";
-      return { mode: target === "mac" ? "dev" : payload.mode, target };
+    if (
+      payload.mode === "dev-read" ||
+      payload.mode === "dev-write" ||
+      payload.mode === "chat"
+    ) {
+      const requestedMode =
+        payload.mode === "dev-write" && !writeRequested
+          ? "dev-read"
+          : payload.mode;
+      return {
+        mode: requestedMode,
+        target,
+        ...(repository ? { repository } : {}),
+      };
     }
   } catch {
     // Fall through to the deterministic safety net.
   }
 
-  const target =
-    /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
-      fallbackContext,
-    )
-      ? "mac"
-      : "default";
   return {
-    mode:
-      target === "mac" || isPrivilegedChatbotRequest(fallbackContext)
-        ? "dev"
+    mode: writeRequested
+      ? "dev-write"
+      : isPrivilegedChatbotRequest(ownerRequest)
+        ? "dev-read"
         : "chat",
     target,
+    ...(repository ? { repository } : {}),
   };
 }
 
@@ -1208,6 +1238,7 @@ export async function handleChatbotMention({
           });
       let executionMode: ChatbotExecutionMode = "chat";
       let executionTarget: ChatbotExecutionTarget = "default";
+      let selectedRepository: string | undefined;
 
       if (requesterUserId === OWNER_DISCORD_USER_ID) {
         const routeJob: ChatbotJob = {
@@ -1225,23 +1256,30 @@ export async function handleChatbotMention({
           const routeResult = await routeDispatch.result;
           const route = parseExecutionRoute(
             routeResult.ok ? routeResult.content : "",
+            request,
             privilegedRequestContext(request, message),
           );
           executionMode = route.mode;
           executionTarget = route.target;
+          selectedRepository = route.repository;
         } else {
           const route = parseExecutionRoute(
             "",
+            request,
             privilegedRequestContext(request, message),
           );
           executionMode = route.mode;
           executionTarget = route.target;
+          selectedRepository = route.repository;
         }
 
-        const workerRoute = workflow.route([
-          executionMode === "dev" ? "dev" : "chat",
-          ...(executionTarget === "mac" ? (["mac"] as const) : []),
-        ]);
+        const workerRoute = workflow.route(
+          [
+            executionMode === "chat" ? "chat" : executionMode,
+            ...(executionTarget === "mac" ? (["mac"] as const) : []),
+          ],
+          selectedRepository,
+        );
         if (workerRoute.status !== "accepted") {
           return {
             ok: false as const,
@@ -1272,6 +1310,7 @@ export async function handleChatbotMention({
           purpose: "context_plan",
           executionMode,
           executionTarget,
+          repository: selectedRepository,
           channelId: message.channel_id,
           requestMessageId: message.id,
           request,
@@ -1381,6 +1420,7 @@ export async function handleChatbotMention({
           purpose: "identity_resolution",
           executionMode,
           executionTarget,
+          repository: selectedRepository,
           task: plan.task,
           subject: plan.subject,
           channelId: message.channel_id,
@@ -1442,6 +1482,7 @@ export async function handleChatbotMention({
         purpose: "answer",
         executionMode,
         executionTarget,
+        repository: selectedRepository,
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,

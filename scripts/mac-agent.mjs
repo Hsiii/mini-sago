@@ -176,7 +176,8 @@ async function install() {
     ),
     envLine(
       "MINISAGO_WORKER_CAPABILITIES",
-      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() || "chat,dev,mac",
+      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() ||
+        "chat,dev-read,dev-write,mac",
     ),
     envLine(
       "MINISAGO_WORKER_PRIORITY",
@@ -191,9 +192,14 @@ async function install() {
       process.env.MINISAGO_GITHUB_REPOSITORIES?.trim() || "",
     ),
     envLine(
-      "MINISAGO_GITHUB_REPOSITORY_ROOT",
-      process.env.MINISAGO_GITHUB_REPOSITORY_ROOT?.trim() ||
-        join(userHome, "Projects", "repositories"),
+      "MINISAGO_GITHUB_READ_CONFIG_DIR",
+      process.env.MINISAGO_GITHUB_READ_CONFIG_DIR?.trim() ||
+        join(applicationSupport, "github-read"),
+    ),
+    envLine(
+      "MINISAGO_GITHUB_WRITE_CONFIG_DIR",
+      process.env.MINISAGO_GITHUB_WRITE_CONFIG_DIR?.trim() ||
+        join(applicationSupport, "github-write"),
     ),
     envLine(
       "MINISAGO_GITHUB_WORKTREE_ROOT",
