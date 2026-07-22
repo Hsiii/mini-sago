@@ -90,6 +90,7 @@ export type MacAgentClientMessage =
   | {
       type: "availability";
       available: boolean;
+      capacity: number;
     }
   | {
       type: "heartbeat";

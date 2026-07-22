@@ -29,7 +29,7 @@ function parseServerMessage(value: unknown) {
 export class MacAgentClient {
   private authenticated = false;
   private authRetryTimer: ReturnType<typeof setTimeout> | undefined;
-  private currentJob: { id: string; controller: AbortController } | null = null;
+  private currentJobs = new Map<string, AbortController>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
@@ -58,8 +58,7 @@ export class MacAgentClient {
     this.stopped = true;
     this.unlocked = false;
     this.clearTimers();
-    this.currentJob?.controller.abort();
-    this.currentJob = null;
+    this.abortAllJobs();
     this.socket?.close(1000, "Helper stopped");
     this.socket = null;
     this.sessionMonitor.stop();
@@ -71,8 +70,7 @@ export class MacAgentClient {
       this.unlocked = false;
       this.authenticated = false;
       this.clearTimers();
-      this.currentJob?.controller.abort();
-      this.currentJob = null;
+      this.abortAllJobs();
       this.socket?.close(1000, "Mac locked or sleeping");
       this.socket = null;
       console.log("Mac locked; chatbot unavailable.");
@@ -130,8 +128,7 @@ export class MacAgentClient {
       this.socket = null;
       this.authenticated = false;
       this.stopHeartbeat();
-      this.currentJob?.controller.abort();
-      this.currentJob = null;
+      this.abortAllJobs();
       this.scheduleReconnect();
     });
     socket.addEventListener("error", () => {
@@ -155,7 +152,11 @@ export class MacAgentClient {
       this.authenticated = true;
       this.reconnectAttempts = 0;
       this.startHeartbeat();
-      this.send({ type: "availability", available: true });
+      this.send({
+        type: "availability",
+        available: true,
+        capacity: this.config.maxConcurrentJobs,
+      });
       console.log("Mac unlocked; chatbot available.");
       return;
     }
@@ -166,19 +167,17 @@ export class MacAgentClient {
     }
 
     if (message.type === "cancel") {
-      if (this.currentJob?.id === message.jobId) {
-        this.currentJob.controller.abort();
-      }
+      this.currentJobs.get(message.jobId)?.abort();
       return;
     }
 
     if (message.type === "job") {
-      await this.handleJob(message.job);
+      void this.handleJob(message.job);
     }
   }
 
   private async handleJob(job: ChatbotJob) {
-    if (this.currentJob) {
+    if (this.currentJobs.size >= this.config.maxConcurrentJobs) {
       this.send({
         type: "result",
         jobId: job.id,
@@ -189,7 +188,7 @@ export class MacAgentClient {
     }
 
     const controller = new AbortController();
-    this.currentJob = { id: job.id, controller };
+    this.currentJobs.set(job.id, controller);
     const startedAt = Date.now();
     console.log(`Job ${job.id} started.`);
 
@@ -210,7 +209,7 @@ export class MacAgentClient {
             })();
 
       if (!controller.signal.aborted && this.authenticated) {
-        this.currentJob = null;
+        this.currentJobs.delete(job.id);
         this.send({ type: "result", jobId: job.id, ok: true, content });
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
@@ -222,7 +221,7 @@ export class MacAgentClient {
         );
       }
       if (!controller.signal.aborted && this.authenticated) {
-        this.currentJob = null;
+        this.currentJobs.delete(job.id);
         this.send({
           type: "result",
           jobId: job.id,
@@ -232,9 +231,7 @@ export class MacAgentClient {
       }
       console.error(`Job ${job.id} failed after ${Date.now() - startedAt} ms.`);
     } finally {
-      if (this.currentJob?.id === job.id) {
-        this.currentJob = null;
-      }
+      this.currentJobs.delete(job.id);
     }
   }
 
@@ -283,5 +280,10 @@ export class MacAgentClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
     }
+  }
+
+  private abortAllJobs() {
+    for (const controller of this.currentJobs.values()) controller.abort();
+    this.currentJobs.clear();
   }
 }
