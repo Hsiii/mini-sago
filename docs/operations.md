@@ -253,9 +253,9 @@ different billing model. Oracle's current Arm page states 3,000 A1 OCPU-hours
 and 18,000 GB-hours per tenancy each month, while its Always Free inventory page
 still states 1,500 and 9,000. Size against the lower 2-OCPU/12-GB figure until
 the Limits, Quotas and Usage page for the actual tenancy confirms otherwise.
-The checked-in worker Dockerfile is multi-architecture: it builds AMD64 on the
-current x86 VM and ARM64 on an A1 VM without emulation. Codex auth, traces, and
-cloned repositories stay outside the image.
+The checked-in worker image targets Linux ARM64 and builds on a native ARM64
+GitHub Actions runner without emulation. Codex auth, traces, and cloned
+repositories stay outside the image.
 
 Recommended split:
 
@@ -265,14 +265,12 @@ Recommended split:
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
 
-On the current VM, or after provisioning an Ubuntu AArch64
-`VM.Standard.A1.Flex` VM, install Docker Engine with the Compose plugin, clone
-this repository, then run:
+On the Ubuntu AArch64 `VM.Standard.A1.Flex` VM, install Docker Engine with the
+Compose plugin, clone this repository, then run:
 
 ```bash
 cp .env.worker.example .env.worker
-cp .env.worker.example .env.worker.write
-chmod 600 .env.worker.read .env.worker.write
+chmod 600 .env.worker
 docker compose -f compose.worker.yaml build
 docker compose -f compose.worker.yaml run --rm worker codex login --device-auth
 docker compose -f compose.worker.yaml up -d
@@ -321,9 +319,8 @@ native architecture with:
 docker image inspect minisago-worker --format '{{.Architecture}}'
 ```
 
-OCI references: [Ampere A1 Compute](https://docs.oracle.com/en-us/iaas/Content/Compute/References/arm.htm),
-[Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
-and [multi-architecture containers](https://docs.oracle.com/en-us/iaas/Content/ContEng/Tasks/contengrunningarmnodes.htm).
+OCI references: [Ampere A1 Compute](https://docs.oracle.com/en-us/iaas/Content/Compute/References/arm.htm)
+and [Always Free resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm).
 OpenAI authentication reference: [Codex authentication](https://developers.openai.com/codex/auth).
 
 ### Install the Mac helper
