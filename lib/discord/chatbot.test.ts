@@ -5,6 +5,7 @@ import {
   extractChatbotRequest,
   extractMentionRequest,
   formatDiscordAnswer,
+  formatDiscordAnswers,
   getNearbyHumanMessages,
   getRecentHumanMessages,
   handleChatbotMention,
@@ -19,6 +20,7 @@ import {
   parseDiscordContextPlan,
   parseExecutionRoute,
   parseIdentityResolution,
+  postChatbotResponse,
   searchGuildMessages,
   toChatbotMessage,
 } from "./chatbot";
@@ -314,6 +316,47 @@ describe("Discord chatbot", () => {
         },
       },
     });
+  });
+
+  test("posts blank-line-separated answers sequentially", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    const message = {
+      id: "request-1",
+      channel_id: "channel-1",
+      content: `<@${BOT_ID}> help`,
+      timestamp: "2026-07-20T11:00:00.000Z",
+      author: { id: "user-1", username: "User" },
+    };
+    const contents = formatDiscordAnswers(
+      "第一段\n還在第一段\n\n第二段\n\n\n第三段",
+    );
+    await postChatbotResponse(message, contents, async (path, options) => {
+      requests.push({ path, body: options?.body });
+      if (path.endsWith("?limit=1")) {
+        return [{ id: "newer-message" }] as never;
+      }
+      return undefined as never;
+    });
+
+    expect(contents).toEqual(["第一段\n還在第一段", "第二段", "第三段"]);
+    expect(requests.slice(1).map(({ body }) => body)).toEqual([
+      {
+        content: "第一段\n還在第一段",
+        message_reference: {
+          message_id: "request-1",
+          fail_if_not_exists: false,
+        },
+        allowed_mentions: { parse: [], replied_user: true },
+      },
+      {
+        content: "第二段",
+        allowed_mentions: { parse: [] },
+      },
+      {
+        content: "第三段",
+        allowed_mentions: { parse: [] },
+      },
+    ]);
   });
 
   test("accepts only human context messages other than the request", () => {
