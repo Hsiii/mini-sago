@@ -6,6 +6,7 @@ import {
   OWNER_DISCORD_USER_ID,
 } from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
+import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
 import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
@@ -16,7 +17,6 @@ import type {
   ChatbotJob,
   ChatbotMessage,
   ChatbotSearchPurpose,
-  ChatbotTask,
 } from "../chatbot/protocol";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -27,14 +27,6 @@ const AUTHORIZED_GUILD_IDS = new Set([
   "1521168712579682567",
 ]);
 const AUTHORIZED_CHANNEL_IDS = new Set(["1517766866964316201"]);
-const LOCAL_CONTEXT_LIMIT = 20;
-const LOCAL_CONTEXT_FETCH_LIMIT = 25;
-const MEDIUM_CONTEXT_LIMIT = 50;
-const MESSAGE_LIMIT = 100;
-const MESSAGE_PAGE_LIMIT = 100;
-const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
-const SEARCH_RESULT_LIMIT = 25;
-const SEARCH_QUERY_LIMIT = 10;
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 
@@ -150,9 +142,7 @@ export type DiscordSearchQuery = {
 };
 
 export type DiscordContextPlan = {
-  task: ChatbotTask;
-  subject?: string;
-  history: "local" | "medium" | "extended";
+  historyCount: number;
   queries: DiscordSearchQuery[];
 };
 
@@ -367,12 +357,6 @@ export function formatDiscordAnswers(content: string) {
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
 const USER_MENTION_PATTERN = /^<@!?(\d+)>$/u;
-const SEARCH_PURPOSES = new Set<ChatbotSearchPurpose>([
-  "context",
-  "direct_mention",
-  "self_claim",
-  "candidate_check",
-]);
 const IDENTITY_BASES = new Set<IdentityResolution["basis"]>([
   "direct_self_link",
   "discord_member_profile",
@@ -395,86 +379,96 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
       .replace(/^```(?:json)?\s*/iu, "")
       .replace(/\s*```$/u, "");
     const payload = JSON.parse(normalized) as {
-      task?: unknown;
-      subject?: unknown;
-      history?: unknown;
+      historyCount?: unknown;
       queries?: unknown;
     };
-    const task =
-      payload.task === "identity_resolution"
-        ? "identity_resolution"
-        : "general";
-    const subject = shortString(payload.subject, 128);
-    const history = ["medium", "extended"].includes(payload.history as string)
-      ? (payload.history as "medium" | "extended")
-      : "local";
+    const historyCount =
+      typeof payload.historyCount === "number" &&
+      Number.isInteger(payload.historyCount)
+        ? Math.min(
+            Math.max(payload.historyCount, 0),
+            CHATBOT_CONTEXT_LIMITS.maximumHistoryMessages,
+          )
+        : CHATBOT_CONTEXT_LIMITS.nearbyMessages;
     if (!Array.isArray(payload.queries)) {
-      return { task, ...(subject ? { subject } : {}), history, queries: [] };
+      return { historyCount, queries: [] };
     }
 
-    const queries = payload.queries.slice(0, 4).flatMap((value) => {
-      if (!value || typeof value !== "object") return [];
-      const query = value as Record<string, unknown>;
-      const purpose = SEARCH_PURPOSES.has(query.purpose as ChatbotSearchPurpose)
-        ? (query.purpose as ChatbotSearchPurpose)
-        : undefined;
-      const author = shortString(query.author, 64);
-      const searchContent = shortString(query.content, 1_024);
-      const has = Array.isArray(query.has)
-        ? [
-            ...new Set(
-              query.has.filter((item): item is SearchHas =>
-                SEARCH_HAS_VALUES.includes(item as SearchHas),
+    const queries = payload.queries
+      .slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchQueries)
+      .flatMap((value) => {
+        if (!value || typeof value !== "object") return [];
+        const query = value as Record<string, unknown>;
+        const author = shortString(
+          query.author,
+          CHATBOT_CONTEXT_LIMITS.maximumSearchAuthorCharacters,
+        );
+        const searchContent = shortString(
+          query.content,
+          CHATBOT_CONTEXT_LIMITS.maximumSearchContentCharacters,
+        );
+        const has = Array.isArray(query.has)
+          ? [
+              ...new Set(
+                query.has.filter((item): item is SearchHas =>
+                  SEARCH_HAS_VALUES.includes(item as SearchHas),
+                ),
               ),
-            ),
-          ].slice(0, 4)
-        : undefined;
-      const embedType = SEARCH_EMBED_TYPES.includes(
-        query.embedType as SearchEmbedType,
-      )
-        ? (query.embedType as SearchEmbedType)
-        : undefined;
-      const linkHostname = shortString(query.linkHostname, 256);
-      const attachmentExtension = shortString(
-        query.attachmentExtension,
-        32,
-      )?.replace(/^\./, "");
-      const sortBy = ["relevance", "timestamp"].includes(query.sortBy as string)
-        ? (query.sortBy as DiscordSearchQuery["sortBy"])
-        : undefined;
-      const sortOrder = ["asc", "desc"].includes(query.sortOrder as string)
-        ? (query.sortOrder as DiscordSearchQuery["sortOrder"])
-        : undefined;
+            ].slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchFilters)
+          : undefined;
+        const embedType = SEARCH_EMBED_TYPES.includes(
+          query.embedType as SearchEmbedType,
+        )
+          ? (query.embedType as SearchEmbedType)
+          : undefined;
+        const linkHostname = shortString(
+          query.linkHostname,
+          CHATBOT_CONTEXT_LIMITS.maximumSearchHostnameCharacters,
+        );
+        const attachmentExtension = shortString(
+          query.attachmentExtension,
+          CHATBOT_CONTEXT_LIMITS.maximumSearchExtensionCharacters,
+        )?.replace(/^\./, "");
+        const sortBy = ["relevance", "timestamp"].includes(
+          query.sortBy as string,
+        )
+          ? (query.sortBy as DiscordSearchQuery["sortBy"])
+          : undefined;
+        const sortOrder = ["asc", "desc"].includes(query.sortOrder as string)
+          ? (query.sortOrder as DiscordSearchQuery["sortOrder"])
+          : undefined;
 
-      if (
-        !author &&
-        !searchContent &&
-        !has?.length &&
-        !embedType &&
-        !linkHostname &&
-        !attachmentExtension
-      ) {
-        return [];
-      }
+        if (
+          !author &&
+          !searchContent &&
+          !has?.length &&
+          !embedType &&
+          !linkHostname &&
+          !attachmentExtension
+        ) {
+          return [];
+        }
 
-      return [
-        {
-          ...(purpose ? { purpose } : {}),
-          ...(author ? { author } : {}),
-          ...(searchContent ? { content: searchContent } : {}),
-          ...(has?.length ? { has } : {}),
-          ...(embedType ? { embedType } : {}),
-          ...(linkHostname ? { linkHostname } : {}),
-          ...(attachmentExtension ? { attachmentExtension } : {}),
-          ...(sortBy ? { sortBy } : {}),
-          ...(sortOrder ? { sortOrder } : {}),
-        },
-      ];
-    });
+        return [
+          {
+            ...(author ? { author } : {}),
+            ...(searchContent ? { content: searchContent } : {}),
+            ...(has?.length ? { has } : {}),
+            ...(embedType ? { embedType } : {}),
+            ...(linkHostname ? { linkHostname } : {}),
+            ...(attachmentExtension ? { attachmentExtension } : {}),
+            ...(sortBy ? { sortBy } : {}),
+            ...(sortOrder ? { sortOrder } : {}),
+          },
+        ];
+      });
 
-    return { task, ...(subject ? { subject } : {}), history, queries };
+    return { historyCount, queries };
   } catch {
-    return { task: "general", history: "local", queries: [] };
+    return {
+      historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
+      queries: [],
+    };
   }
 }
 
@@ -592,26 +586,25 @@ export function inferIdentitySubject(request: string) {
   return english?.[1]?.trim() || undefined;
 }
 
-export function identitySearchQueries(plan: DiscordContextPlan) {
-  if (plan.task !== "identity_resolution" || !plan.subject) {
-    return plan.queries;
-  }
-
+export function identitySearchQueries(
+  subject: string,
+  queries: DiscordSearchQuery[],
+) {
   return [
     {
       purpose: "candidate_check" as const,
-      author: plan.subject,
+      author: subject,
       sortBy: "timestamp" as const,
       sortOrder: "desc" as const,
     },
     {
       purpose: "direct_mention" as const,
-      mentions: plan.subject,
+      mentions: subject,
       sortBy: "timestamp" as const,
       sortOrder: "desc" as const,
     },
-    ...plan.queries,
-  ].slice(0, 4);
+    ...queries.map((query) => ({ purpose: "context" as const, ...query })),
+  ].slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchQueries);
 }
 
 export function identitySubjectName(
@@ -741,7 +734,10 @@ async function resolveGuildMember({
     );
   }
 
-  const query = new URLSearchParams({ query: memberQuery, limit: "10" });
+  const query = new URLSearchParams({
+    query: memberQuery,
+    limit: String(CHATBOT_CONTEXT_LIMITS.memberSearchResults),
+  });
   const members = await discordRequest<DiscordGuildMember[]>(
     `/guilds/${guildId}/members/search?${query}`,
   );
@@ -853,7 +849,7 @@ async function requesterSearchChannels({
     );
     const ids = [currentChannelId, ...visible.map((channel) => channel.id)]
       .filter((id, index, values) => values.indexOf(id) === index)
-      .slice(0, 500);
+      .slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchChannels);
     const names = new Map(
       visible.flatMap((channel) =>
         channel.name ? [[channel.id, channel.name] as const] : [],
@@ -917,7 +913,10 @@ export async function searchGuildMessages({
     { message: DiscordMessage; purposes: Set<ChatbotSearchPurpose> }
   >();
 
-  for (const search of queries.slice(0, 4)) {
+  for (const search of queries.slice(
+    0,
+    CHATBOT_CONTEXT_LIMITS.maximumSearchQueries,
+  )) {
     const resolveMemberId = async (memberQuery: string) => {
       const normalizedMember = memberQuery.toLocaleLowerCase();
       let memberId = SELF_AUTHOR_PATTERN.test(memberQuery)
@@ -945,7 +944,7 @@ export async function searchGuildMessages({
     }
 
     const query = new URLSearchParams({
-      limit: String(SEARCH_QUERY_LIMIT),
+      limit: String(CHATBOT_CONTEXT_LIMITS.searchResultsPerQuery),
       author_type: "user",
       sort_by: search.sortBy ?? (search.content ? "relevance" : "timestamp"),
       sort_order: search.sortOrder ?? "desc",
@@ -962,7 +961,11 @@ export async function searchGuildMessages({
       query.append("channel_id", channelId);
     }
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt < CHATBOT_CONTEXT_LIMITS.searchRetryAttempts;
+      attempt += 1
+    ) {
       const response = await discordRequest<DiscordMessageSearchResponse>(
         `/guilds/${guildId}/messages/search?${query}`,
       );
@@ -981,7 +984,8 @@ export async function searchGuildMessages({
             if (search.purpose) existing.purposes.add(search.purpose);
             continue;
           }
-          if (matches.size >= SEARCH_RESULT_LIMIT) continue;
+          if (matches.size >= CHATBOT_CONTEXT_LIMITS.maximumSearchResults)
+            continue;
           matches.set(message.id, {
             message,
             purposes: new Set(search.purpose ? [search.purpose] : []),
@@ -990,11 +994,15 @@ export async function searchGuildMessages({
         break;
       }
 
-      if (response.code !== 110000 || attempt === 2) break;
+      if (
+        response.code !== 110000 ||
+        attempt === CHATBOT_CONTEXT_LIMITS.searchRetryAttempts - 1
+      )
+        break;
       await Bun.sleep(Math.max(response.retry_after ?? 1, 1) * 1_000);
     }
 
-    if (matches.size >= SEARCH_RESULT_LIMIT) break;
+    if (matches.size >= CHATBOT_CONTEXT_LIMITS.maximumSearchResults) break;
   }
 
   if (matches.size === 0) return [];
@@ -1017,7 +1025,7 @@ export async function getNearbyHumanMessages({
 }) {
   const query = new URLSearchParams({
     around: requestMessageId,
-    limit: String(LOCAL_CONTEXT_FETCH_LIMIT),
+    limit: String(CHATBOT_CONTEXT_LIMITS.nearbyFetchMessages),
   });
   const messages = await discordRequest<DiscordMessage[]>(
     `/channels/${channelId}/messages?${query}`,
@@ -1027,7 +1035,7 @@ export async function getNearbyHumanMessages({
     .filter((message) =>
       isConversationContextMessage(message, requestMessageId, botUserId),
     )
-    .slice(0, LOCAL_CONTEXT_LIMIT)
+    .slice(0, CHATBOT_CONTEXT_LIMITS.nearbyMessages)
     .map((message) => toChatbotMessage(message, botUserId))
     .reverse();
 }
@@ -1037,7 +1045,7 @@ export async function getRecentHumanMessages({
   requestMessageId,
   botUserId,
   discordRequest,
-  messageLimit = MESSAGE_LIMIT,
+  messageLimit = CHATBOT_CONTEXT_LIMITS.maximumHistoryMessages,
   now = new Date(),
 }: {
   channelId: string;
@@ -1047,12 +1055,16 @@ export async function getRecentHumanMessages({
   messageLimit?: number;
   now?: Date;
 }) {
-  const cutoff = new Date(now.getTime() - HISTORY_WINDOW_MS);
+  const cutoff = new Date(
+    now.getTime() - CHATBOT_CONTEXT_LIMITS.historyWindowMs,
+  );
   const messages: ChatbotMessage[] = [];
   let before: string | undefined;
 
   for (;;) {
-    const query = new URLSearchParams({ limit: String(MESSAGE_PAGE_LIMIT) });
+    const query = new URLSearchParams({
+      limit: String(CHATBOT_CONTEXT_LIMITS.historyPageMessages),
+    });
     if (before) {
       query.set("before", before);
     }
@@ -1078,7 +1090,10 @@ export async function getRecentHumanMessages({
     }
 
     const oldestMessage = page.at(-1);
-    if (page.length < MESSAGE_PAGE_LIMIT || !oldestMessage) {
+    if (
+      page.length < CHATBOT_CONTEXT_LIMITS.historyPageMessages ||
+      !oldestMessage
+    ) {
       break;
     }
 
@@ -1338,13 +1353,12 @@ export async function handleChatbotMention({
         results: ChatbotMessage[];
       } = { status: "not_requested", results: [] };
       let plan: DiscordContextPlan = {
-        task: "general",
-        history: "local",
+        historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
         queries: [],
       };
       let identityMember: DiscordGuildMember | undefined;
       let identityCandidates: ChatbotIdentityCandidate[] = [];
-      const inferredIdentitySubject = inferIdentitySubject(request);
+      let identitySubject = inferIdentitySubject(request);
 
       if (message.guild_id) {
         const plannerJob: ChatbotJob = {
@@ -1376,52 +1390,43 @@ export async function handleChatbotMention({
           console.warn("Discord context planning unavailable.");
         }
 
-        if (inferredIdentitySubject) {
-          plan = {
-            ...plan,
-            task: "identity_resolution",
-            subject: inferredIdentitySubject,
-          };
-        }
-
-        if (plan.task === "identity_resolution" && plan.subject) {
+        if (identitySubject) {
           try {
             identityMember = await resolveGuildMember({
               guildId: message.guild_id,
-              memberQuery: plan.subject,
+              memberQuery: identitySubject,
               discordRequest,
             });
             const names = identityMember ? memberNames(identityMember) : [];
             if (names.length > 0) {
               identityCandidates = [{ names }];
-              plan = {
-                ...plan,
-                subject: identitySubjectName(plan.subject, identityMember),
-              };
+              identitySubject = identitySubjectName(
+                identitySubject,
+                identityMember,
+              );
             }
           } catch {
             console.warn("Discord member lookup unavailable.");
           }
         }
 
-        const searchQueries = identitySearchQueries(plan);
-
-        const historyLimit =
-          plan.history === "extended"
-            ? MESSAGE_LIMIT
-            : plan.history === "medium"
-              ? MEDIUM_CONTEXT_LIMIT
-              : LOCAL_CONTEXT_LIMIT;
+        const searchQueries = identitySubject
+          ? identitySearchQueries(identitySubject, plan.queries)
+          : plan.queries;
         const historyPromise =
-          plan.history !== "local"
+          plan.historyCount > CHATBOT_CONTEXT_LIMITS.nearbyMessages
             ? getRecentHumanMessages({
                 channelId: message.channel_id,
                 requestMessageId: message.id,
                 botUserId,
                 discordRequest,
-                messageLimit: historyLimit,
+                messageLimit: plan.historyCount,
               })
-            : Promise.resolve(messages);
+            : Promise.resolve(
+                plan.historyCount === 0
+                  ? []
+                  : messages.slice(-plan.historyCount),
+              );
         const searchPromise =
           searchQueries.length > 0
             ? searchGuildMessages({
@@ -1449,15 +1454,9 @@ export async function handleChatbotMention({
 
         [messages, search] = await Promise.all([historyPromise, searchPromise]);
         searchUnavailable = search.status === "unavailable";
-      } else if (inferredIdentitySubject) {
-        plan = {
-          ...plan,
-          task: "identity_resolution",
-          subject: inferredIdentitySubject,
-        };
       }
 
-      if (plan.task === "identity_resolution" && plan.subject) {
+      if (identitySubject) {
         const evidenceJob: ChatbotJob = {
           id: randomUUID(),
           requesterUserId,
@@ -1465,8 +1464,8 @@ export async function handleChatbotMention({
           executionMode,
           executionTarget,
           repository: selectedRepository,
-          task: plan.task,
-          subject: plan.subject,
+          task: "identity_resolution",
+          subject: identitySubject,
           channelId: message.channel_id,
           requestMessageId: message.id,
           request,
@@ -1490,13 +1489,13 @@ export async function handleChatbotMention({
         const resolution = evidenceResult.ok
           ? parseIdentityResolution(
               evidenceResult.content,
-              plan.subject,
+              identitySubject,
               search.results.length,
               identityCandidates,
             )
           : parseIdentityResolution(
               "",
-              plan.subject,
+              identitySubject,
               search.results.length,
               identityCandidates,
             );

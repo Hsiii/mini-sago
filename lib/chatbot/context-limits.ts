@@ -1,0 +1,18 @@
+export const CHATBOT_CONTEXT_LIMITS = {
+  nearbyMessages: 20,
+  nearbyFetchMessages: 25,
+  maximumHistoryMessages: 100,
+  historyPageMessages: 100,
+  historyWindowMs: 7 * 24 * 60 * 60 * 1_000,
+  maximumSearchQueries: 4,
+  maximumSearchFilters: 4,
+  maximumSearchAuthorCharacters: 64,
+  maximumSearchContentCharacters: 1_024,
+  maximumSearchHostnameCharacters: 256,
+  maximumSearchExtensionCharacters: 32,
+  memberSearchResults: 10,
+  searchResultsPerQuery: 10,
+  maximumSearchResults: 25,
+  maximumSearchChannels: 500,
+  searchRetryAttempts: 3,
+} as const;
