@@ -85,6 +85,10 @@ export function answerContext(
 ) {
   const sections = [requestContext(job)];
 
+  if (job.availableTools?.length) {
+    sections.push(block("available_tools_json", job.availableTools));
+  }
+
   if (job.memberLookupStatus && job.memberLookupStatus !== "not_requested") {
     sections.push(
       block("discord_member_lookup_status", job.memberLookupStatus),

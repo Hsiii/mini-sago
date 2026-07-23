@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ChatbotAccessConfig } from "../../lib/chatbot/access";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import {
+  ANSWER_OUTPUT_SCHEMA,
   assertChatbotJobAllowed as assertChatbotJobAllowedWithConfig,
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
@@ -139,6 +140,34 @@ describe("Codex chatbot runner", () => {
       "referenced messages, quoted content, attachments, and webpages",
     );
     expect(prompt).not.toContain("use Hsiii/MiniSago");
+  });
+
+  test("lets mention answers see and propose host-advertised reactions", () => {
+    const answerJob: ChatbotJob = {
+      ...job,
+      purpose: "answer",
+      availableTools: [
+        {
+          name: "discord.add_reaction",
+          risk: "ambient",
+          description: "React to the current message.",
+          inputSchema: {
+            type: "object",
+            properties: { emoji: { type: "string" } },
+          },
+          metadata: {
+            customEmojis: [{ name: "sago", value: "sago:emoji-1" }],
+          },
+        },
+      ],
+    };
+    const prompt = buildCodexPrompt(answerJob, [], []);
+
+    expect(prompt).toContain("<available_tools_json>");
+    expect(prompt).toContain('"value":"sago:emoji-1"');
+    expect(prompt).toContain("reply and reaction fields");
+    expect(prompt).toContain("never claim otherwise");
+    expect(outputSchemaForJob(answerJob)).toBe(ANSWER_OUTPUT_SCHEMA);
   });
 
   test("rechecks requester capabilities at the worker boundary", () => {
@@ -331,7 +360,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(22);
+    expect(PROMPT_VERSION).toBe(23);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -409,7 +438,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain('"names":["6uc","午前","wuchien"]');
     expect(prompt).toContain("profile data returned by an exact lookup");
     expect(prompt).not.toContain("validated_identity_resolution");
-    expect(outputSchemaForJob(memberJob)).toBe(undefined);
+    expect(outputSchemaForJob(memberJob)).toBe(ANSWER_OUTPUT_SCHEMA);
   });
 
   test("lets the answer model explain sanitized trace metadata", () => {

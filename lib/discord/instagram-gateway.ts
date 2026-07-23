@@ -9,6 +9,7 @@ import {
   getAmbientReactionPolicy,
   type AmbientReactionPolicy,
 } from "./social-reactions";
+import { DiscordReactionBroker } from "./reactions";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -158,10 +159,15 @@ class InstagramGatewayClient {
   private socket: WebSocket | null = null;
   private stopped = false;
   private botUserId: string | null = null;
+  private reactionBroker: DiscordReactionBroker;
 
   constructor(private readonly config: InstagramGatewayConfig) {
+    this.reactionBroker = new DiscordReactionBroker({
+      cacheMs: config.ambientReactionPolicy.capabilityCacheMs,
+    });
     this.ambientReactions = new AmbientReactionController({
       policy: config.ambientReactionPolicy,
+      reactionBroker: this.reactionBroker,
     });
   }
 
@@ -377,6 +383,7 @@ class InstagramGatewayClient {
           botUserId: this.botUserId,
           discordRequest: createDiscordRequest(this.config.botToken),
           accessConfig: this.config.chatbotAccess,
+          reactionBroker: this.reactionBroker,
         });
 
         if (handled) {

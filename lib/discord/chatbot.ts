@@ -13,6 +13,10 @@ import type {
   ChatbotMessage,
   ChatbotTraceContext,
 } from "../chatbot/protocol";
+import {
+  DiscordReactionBroker,
+  type DiscordReactionCapabilities,
+} from "./reactions";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
@@ -147,6 +151,79 @@ export type ApprovedMutation = {
   mutationScope: ChatbotMutationScope;
   repository: string;
 };
+
+export type ChatbotAnswerDecision = {
+  reply: string | null;
+  reactionEmoji?: string;
+};
+
+export function parseChatbotAnswerDecision(
+  content: string,
+): ChatbotAnswerDecision {
+  try {
+    const value = JSON.parse(content) as {
+      reply?: unknown;
+      reaction?: unknown;
+    };
+    const reply =
+      typeof value.reply === "string"
+        ? value.reply.trim()
+        : value.reply === null
+          ? null
+          : undefined;
+    const reaction =
+      value.reaction &&
+      typeof value.reaction === "object" &&
+      "emoji" in value.reaction &&
+      typeof value.reaction.emoji === "string"
+        ? value.reaction.emoji.trim()
+        : undefined;
+    if (
+      reply !== undefined &&
+      (value.reaction === null || reaction !== undefined) &&
+      (reply || reaction)
+    ) {
+      return {
+        reply: reply || null,
+        ...(reaction ? { reactionEmoji: reaction } : {}),
+      };
+    }
+    return { reply: null };
+  } catch {
+    return { reply: content.trim() || null };
+  }
+}
+
+export async function executeChatbotAnswerDecision({
+  content,
+  message,
+  reactionBroker,
+  reactionCapabilities,
+  discordRequest,
+}: {
+  content: string;
+  message: Pick<ChatbotMention, "id" | "channel_id">;
+  reactionBroker?: Pick<DiscordReactionBroker, "addReaction">;
+  reactionCapabilities?: DiscordReactionCapabilities;
+  discordRequest: DiscordRequest;
+}) {
+  const decision = parseChatbotAnswerDecision(content);
+  let reacted = false;
+  if (decision.reactionEmoji && reactionBroker && reactionCapabilities) {
+    try {
+      reacted = await reactionBroker.addReaction({
+        channelId: message.channel_id,
+        messageId: message.id,
+        emoji: decision.reactionEmoji,
+        capabilities: reactionCapabilities,
+        discordRequest,
+      });
+    } catch {
+      console.warn("Discord mention reaction failed.");
+    }
+  }
+  return { reply: decision.reply, reacted };
+}
 
 type PendingMutation = {
   message: ChatbotMention;
@@ -1187,12 +1264,14 @@ export async function handleChatbotMention({
   discordRequest,
   approvedMutation,
   accessConfig,
+  reactionBroker,
 }: {
   message: ChatbotMention;
   botUserId: string;
   discordRequest: DiscordRequest;
   approvedMutation?: ApprovedMutation;
   accessConfig: ChatbotAccessConfig;
+  reactionBroker?: DiscordReactionBroker;
 }) {
   const requesterUserId = message.author?.id;
 
@@ -1250,6 +1329,7 @@ export async function handleChatbotMention({
     | MacAgentJobResult
     | { ok: true; content: ""; awaitingApproval: true };
   let searchUnavailable = false;
+  let reactionCapabilities: DiscordReactionCapabilities | undefined;
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
       const requestMessage = toChatbotMessage(message, botUserId);
@@ -1527,6 +1607,21 @@ export async function handleChatbotMention({
         previousTraceStatus: previousTrace.status,
         previousTrace: previousTrace.trace,
       };
+      if (message.guild_id && reactionBroker) {
+        try {
+          reactionCapabilities = await reactionBroker.discover({
+            guildId: message.guild_id,
+            channelId: message.channel_id,
+            botUserId,
+            discordRequest,
+          });
+          if (reactionCapabilities.tools.length > 0) {
+            job.availableTools = reactionCapabilities.tools;
+          }
+        } catch {
+          console.warn("Discord reaction capabilities unavailable.");
+        }
+      }
       const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
@@ -1547,15 +1642,33 @@ export async function handleChatbotMention({
   }
   if ("awaitingApproval" in result) return true;
 
-  const contents = result.ok
-    ? formatDiscordAnswers(
-        searchUnavailable
-          ? `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${result.content}`
-          : result.content,
-      )
-    : ["我剛剛卡住了 晚點再叫我一次"];
+  let reacted = false;
+  let reply: string | null = null;
+  if (result.ok) {
+    ({ reply, reacted } = await executeChatbotAnswerDecision({
+      content: result.content,
+      message,
+      reactionBroker,
+      reactionCapabilities,
+      discordRequest,
+    }));
+  } else {
+    reply = "我剛剛卡住了 晚點再叫我一次";
+  }
 
-  await postChatbotResponse(message, contents, discordRequest);
+  if (searchUnavailable && reply) {
+    reply = `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${reply}`;
+  }
+  if (!reply && !reacted) {
+    reply = "我剛剛卡住了 晚點再叫我一次";
+  }
+  if (reply) {
+    await postChatbotResponse(
+      message,
+      formatDiscordAnswers(reply),
+      discordRequest,
+    );
+  }
 
   return true;
 }

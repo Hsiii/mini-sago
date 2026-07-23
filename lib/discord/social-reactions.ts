@@ -6,11 +6,7 @@ import {
   type DispatchResult,
   type MacAgentJobResult,
 } from "../chatbot/bridge";
-import type {
-  ChatbotJob,
-  ChatbotMessage,
-  ChatbotToolCapability,
-} from "../chatbot/protocol";
+import type { ChatbotJob, ChatbotMessage } from "../chatbot/protocol";
 import {
   getNearbyHumanMessages,
   isChatbotAuthorized,
@@ -19,13 +15,10 @@ import {
   type DiscordRequest,
 } from "./chatbot";
 import {
-  canAddDiscordReactions,
-  channelPermissions,
-  type DiscordPermissionOverwrite,
-  type DiscordPermissionRole,
-} from "./permissions";
+  DiscordReactionBroker,
+  type DiscordReactionCapabilities,
+} from "./reactions";
 
-const THREAD_CHANNEL_TYPES = new Set([10, 11, 12]);
 const HOUR_MS = 60 * 60_000;
 
 export type AmbientReactionPolicy = {
@@ -60,24 +53,6 @@ export const DEFAULT_AMBIENT_REACTION_POLICY: AmbientReactionPolicy = {
   capabilityCacheMs: 10 * 60_000,
 };
 
-type DiscordChannel = {
-  id: string;
-  type?: number;
-  parent_id?: string | null;
-  permission_overwrites?: DiscordPermissionOverwrite[];
-};
-
-type DiscordGuildMember = {
-  roles?: string[];
-};
-
-type DiscordEmoji = {
-  id: string;
-  name?: string | null;
-  animated?: boolean;
-  available?: boolean;
-};
-
 type SocialActionDecision =
   | { action: "ignore"; messageId: null; emoji: null }
   | {
@@ -85,12 +60,6 @@ type SocialActionDecision =
       messageId: string;
       emoji: string;
     };
-
-type CachedTools = {
-  expiresAt: number;
-  tools: ChatbotToolCapability[];
-  customEmojiValues: Set<string>;
-};
 
 type BufferedChannel = {
   messages: ChatbotMention[];
@@ -192,21 +161,6 @@ function parseSocialActionDecision(content: string): SocialActionDecision {
   return { action: "ignore", messageId: null, emoji: null };
 }
 
-function isStandardUnicodeEmoji(value: string) {
-  if (!value || value.length > 32 || /\s/u.test(value)) return false;
-  const segments = [
-    ...new Intl.Segmenter("en", { granularity: "grapheme" }).segment(value),
-  ];
-  return (
-    segments.length === 1 &&
-    /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20e3)/u.test(value)
-  );
-}
-
-function validReactionEmoji(value: string, customEmojiValues: Set<string>) {
-  return customEmojiValues.has(value) || isStandardUnicodeEmoji(value);
-}
-
 function freshHumanMessage(
   message: ChatbotMention,
   botUserId: string,
@@ -267,13 +221,13 @@ function mergeContext(nearby: ChatbotMessage[], candidates: ChatbotMessage[]) {
 export class AmbientReactionController {
   private attentionTimer: TimerHandle | undefined;
   private buffers = new Map<string, BufferedChannel>();
-  private capabilityCache = new Map<string, CachedTools>();
   private evaluationTimes: number[] = [];
   private globalAttentionAvailableAt = 0;
   private lastReactionByChannel = new Map<string, number>();
   private lastReactionByUser = new Map<string, number>();
   private missedUntilByChannel = new Map<string, number>();
   private reactionTimes: number[] = [];
+  private reactionBroker: DiscordReactionBroker;
   private scheduledChannelId: string | undefined;
 
   constructor(
@@ -283,10 +237,18 @@ export class AmbientReactionController {
       schedule?: (task: () => void, delayMs: number) => TimerHandle;
       cancel?: (handle: TimerHandle) => void;
       dispatch?: (job: ChatbotJob) => DispatchResult;
+      reactionBroker?: DiscordReactionBroker;
       policy?: AmbientReactionPolicy;
       log?: (event: Record<string, unknown>) => void;
     } = {},
-  ) {}
+  ) {
+    this.reactionBroker =
+      options.reactionBroker ??
+      new DiscordReactionBroker({
+        now: options.now,
+        cacheMs: options.policy?.capabilityCacheMs,
+      });
+  }
 
   private get now() {
     return this.options.now ?? Date.now;
@@ -334,9 +296,6 @@ export class AmbientReactionController {
     );
     pruneTimes(this.lastReactionByUser, now - policy.reactionUserCooldownMs);
     pruneDeadlines(this.missedUntilByChannel, now);
-    for (const [key, cached] of this.capabilityCache) {
-      if (cached.expiresAt <= now) this.capabilityCache.delete(key);
-    }
     for (const [channelId, buffer] of this.buffers) {
       buffer.messages = buffer.messages.filter((message) =>
         freshHumanMessage(
@@ -446,98 +405,6 @@ export class AmbientReactionController {
     return true;
   }
 
-  private async permissionChannel(
-    channel: DiscordChannel,
-    discordRequest: DiscordRequest,
-  ) {
-    if (THREAD_CHANNEL_TYPES.has(channel.type ?? -1) && channel.parent_id) {
-      return discordRequest<DiscordChannel>(`/channels/${channel.parent_id}`);
-    }
-    return channel;
-  }
-
-  private async discoverTools({
-    guildId,
-    channelId,
-    botUserId,
-    discordRequest,
-  }: {
-    guildId: string;
-    channelId: string;
-    botUserId: string;
-    discordRequest: DiscordRequest;
-  }) {
-    const now = this.now();
-    const cacheKey = `${guildId}:${channelId}:${botUserId}`;
-    const cached = this.capabilityCache.get(cacheKey);
-    if (cached && cached.expiresAt > now) return cached;
-
-    const [channel, member, roles, emojis] = await Promise.all([
-      discordRequest<DiscordChannel>(`/channels/${channelId}`),
-      discordRequest<DiscordGuildMember>(
-        `/guilds/${guildId}/members/${botUserId}`,
-      ),
-      discordRequest<DiscordPermissionRole[]>(`/guilds/${guildId}/roles`),
-      discordRequest<DiscordEmoji[]>(`/guilds/${guildId}/emojis`).catch(
-        () => [],
-      ),
-    ]);
-    const permissionChannel = await this.permissionChannel(
-      channel,
-      discordRequest,
-    );
-    const permissions = channelPermissions({
-      guildId,
-      botUserId,
-      memberRoleIds: member.roles ?? [],
-      roles,
-      overwrites: permissionChannel.permission_overwrites ?? [],
-    });
-    const customEmojis = emojis.flatMap((emoji) => {
-      const name = emoji.name?.trim();
-      if (!name || emoji.available === false) return [];
-      return [
-        {
-          value: `${name}:${emoji.id}`,
-          name,
-          ...(emoji.animated ? { animated: true } : {}),
-        },
-      ];
-    });
-    const customEmojiValues = new Set(customEmojis.map((emoji) => emoji.value));
-    const tools: ChatbotToolCapability[] = canAddDiscordReactions(permissions)
-      ? [
-          {
-            name: "discord.add_reaction",
-            risk: "ambient",
-            description:
-              "Add one reaction as MiniSago to one candidate Discord message.",
-            inputSchema: {
-              type: "object",
-              additionalProperties: false,
-              required: ["messageId", "emoji"],
-              properties: {
-                messageId: { type: "string" },
-                emoji: { type: "string" },
-              },
-            },
-            metadata: {
-              target: "candidate_message",
-              standardUnicodeEmoji: true,
-              customEmojis,
-            },
-          },
-        ]
-      : [];
-    const discovered = {
-      expiresAt: now + this.policy.capabilityCacheMs,
-      tools,
-      customEmojiValues,
-    };
-    this.capabilityCache.set(cacheKey, discovered);
-    return discovered;
-  }
-
   private async checkNotifications(channelId: string) {
     const startedAt = this.now();
     const policy = this.policy;
@@ -582,9 +449,9 @@ export class AmbientReactionController {
       return false;
     }
 
-    let discovered: CachedTools;
+    let discovered: DiscordReactionCapabilities;
     try {
-      discovered = await this.discoverTools({
+      discovered = await this.reactionBroker.discover({
         guildId: latest.guild_id,
         channelId,
         botUserId: buffer.botUserId,
@@ -629,8 +496,7 @@ export class AmbientReactionController {
     const decision = parseSocialActionDecision(result.content);
     if (
       decision.action !== "discord.add_reaction" ||
-      !candidateIds.includes(decision.messageId) ||
-      !validReactionEmoji(decision.emoji, discovered.customEmojiValues)
+      !candidateIds.includes(decision.messageId)
     ) {
       return false;
     }
@@ -663,10 +529,14 @@ export class AmbientReactionController {
       return false;
     }
 
-    await buffer.discordRequest(
-      `/channels/${channelId}/messages/${selected.id}/reactions/${encodeURIComponent(decision.emoji)}/@me`,
-      { method: "PUT" },
-    );
+    const reacted = await this.reactionBroker.addReaction({
+      channelId,
+      messageId: selected.id,
+      emoji: decision.emoji,
+      capabilities: discovered,
+      discordRequest: buffer.discordRequest,
+    });
+    if (!reacted) return false;
     this.reactionTimes.push(completedAt);
     this.lastReactionByChannel.set(channelId, completedAt);
     this.lastReactionByUser.set(selectedAuthorId, completedAt);
