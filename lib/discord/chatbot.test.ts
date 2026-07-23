@@ -546,6 +546,39 @@ describe("Discord chatbot", () => {
       target: "default",
       repository: "Hsiii/MiniSago",
     });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":null,"reason":"behavior change"}',
+        "change your reply behavior to send separate messages",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "code",
+      repository: "Hsiii/MiniSago",
+    });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":null,"reason":"chatbot fixes"}',
+        "- fix worker concurrency issue\n- when seeing two continuous linebreaks, send it in multiple messages sequentially instead\n- fix the image read issue above",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "code",
+      repository: "Hsiii/MiniSago",
+    });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"PR work"}',
+        "在 Hsiii/mini-sago 開 PR 讓 1521168712579682567 有 access",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "code",
+      repository: "Hsiii/mini-sago",
+    });
     for (const request of [
       "write me a poem",
       "release the balloons",
