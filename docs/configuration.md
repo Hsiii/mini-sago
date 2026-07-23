@@ -16,7 +16,7 @@ live in [operations.md](operations.md).
 `DISCORD_GUILD_ID` is the boundary between universal and server-specific
 behavior. Guilds other than this value cannot use the Wordle/Brawl Stars
 commands, channel access panel, or this deployment's scheduled posts. Chatbot
-access is governed separately by its two built-in allowed guilds and owner
+access is governed separately by its three built-in allowed guilds and owner
 fallback.
 
 ## Universal / cross-guild configuration

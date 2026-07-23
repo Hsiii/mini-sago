@@ -9,8 +9,9 @@ in [README.md](../README.md).
 - **Universal:** Instagram link replies run in every server and channel where
   MiniSago has the required message permissions. Hsi's chatbot mentions work in
   those locations and in direct messages when a Codex worker is available.
-- **Chatbot guilds:** every member of guilds `917436845187563610` and
-  `1282936453134815275` can mention MiniSago and use the chatbot.
+- **Chatbot guilds:** every member of guilds `917436845187563610`,
+  `1282936453134815275`, and `1439286996869713992` can mention MiniSago and use
+  the chatbot.
 - **Chatbot channel:** every member with access to channel
   `1517766866964316201` can mention MiniSago and use the chatbot there.
 - **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
