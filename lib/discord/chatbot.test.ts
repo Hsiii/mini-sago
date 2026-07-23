@@ -18,7 +18,10 @@ import {
   parseExecutionRoute,
   parsePreviousTraceLookup,
   postChatbotResponse,
+  postMutationApproval,
+  registerMutationApproval,
   searchGuildMessages,
+  takeChatbotMutationApproval,
   toChatbotMessage,
 } from "./chatbot";
 
@@ -534,12 +537,11 @@ describe("Discord chatbot", () => {
     });
   });
 
-  test("routes owner work to chat or dev with owner-derived mutation scope", () => {
+  test("validates the router's proposed mode, target, repository, and mutation", () => {
     const repositories = ["Hsiii/mini-sago", "Kiwi/backend"];
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"PR review"}',
-        "review this PR",
+        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","mutationScope":null,"reason":"PR review"}',
         repositories,
       ),
     ).toEqual({
@@ -549,143 +551,135 @@ describe("Discord chatbot", () => {
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"injected"}',
-        "review this PR",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      repository: "Hsiii/mini-sago",
-    });
-    expect(
-      parseExecutionRoute(
-        "not json",
-        "fix this in Hsiii/mini-sago and open a draft PR",
+        '{"mode":"chat","target":"default","repository":"Hsiii/mini-sago","mutationScope":"code","reason":"code change"}',
         repositories,
       ),
     ).toEqual({
       mode: "dev",
       target: "default",
       mutationScope: "code",
+      repository: "Hsiii/mini-sago",
     });
     expect(
       parseExecutionRoute(
-        '{"mode":"dev","target":"mac","repository":"invented/private","reason":"repo work"}',
-        "inspect that repository on my Mac",
+        '{"mode":"dev","target":"default","repository":"Kiwi/backend","mutationScope":"issue","reason":"issue update"}',
+        repositories,
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "issue",
+      repository: "Kiwi/backend",
+    });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"mac","repository":"invented/private","mutationScope":null,"reason":"repo work"}',
         repositories,
       ),
     ).toEqual({
       mode: "dev",
       target: "mac",
     });
-    expect(parseExecutionRoute("not json", "summarize our chat")).toEqual({
+    expect(parseExecutionRoute("not json", repositories)).toEqual({
       mode: "chat",
       target: "default",
     });
-    expect(parseExecutionRoute("not json", "open this on my Mac")).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-    });
-    expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"chatbot work"}',
-        "fix the chatbot",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "Hsiii/mini-sago",
-    });
-    expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"chatbot work"}',
-        "檢查 MiniSago 為什麼卡住",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      repository: "Hsiii/mini-sago",
-    });
-    expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"behavior change"}',
-        "change your reply behavior to send separate messages",
-        repositories,
-      ),
-    ).toEqual({
+  });
+
+  test("lets only the owner consume a one-time mutation confirmation", () => {
+    const message = {
+      id: "mutation-request-1",
+      channel_id: "channel-1",
+      guild_id: "917436845187563610",
+      content: `<@${BOT_ID}> fix the chatbot`,
+      timestamp: "2026-07-23T10:00:00.000Z",
+      author: { id: "917446775873343600", username: "Hsi" },
+    };
+    const customId = registerMutationApproval(message, BOT_ID, {
+      requestMessageId: message.id,
       mode: "dev",
       target: "default",
       mutationScope: "code",
       repository: "Hsiii/mini-sago",
     });
+    const discordRequest = async () => undefined as never;
+
+    expect(customId).toMatch(/^minisago:mutation:[0-9a-f-]{36}$/u);
     expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"chatbot fixes"}',
-        "- fix worker concurrency issue\n- when seeing two continuous linebreaks, send it in multiple messages sequentially instead\n- fix the image read issue above",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "Hsiii/mini-sago",
+      takeChatbotMutationApproval({
+        customId,
+        userId: "community-member",
+        discordRequest,
+      }),
+    ).toEqual({ status: "forbidden" });
+    const accepted = takeChatbotMutationApproval({
+      customId,
+      userId: "917446775873343600",
+      discordRequest,
+    });
+    expect(accepted).toMatchObject({
+      status: "accepted",
+      content: "已允許這次在 `Hsiii/mini-sago` 的 code 工作",
     });
     expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"PR work"}',
-        "在 Hsiii/mini-sago 開 PR 讓 1521168712579682567 有 access",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "Hsiii/mini-sago",
-    });
-    expect(
-      parseExecutionRoute(
-        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"code work"}',
-        "請針對 Hsiii/mini-sago 修改 chatbot access",
-        repositories,
-      ),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-      repository: "Hsiii/mini-sago",
-    });
-    for (const request of [
-      "write me a poem",
-      "release the balloons",
-      "do not fix the code",
-      "what if we fix the code",
-      "> fix the code in Hsiii/mini-sago",
-      "`fix the code in Hsiii/mini-sago`",
-    ]) {
-      expect(
-        parseExecutionRoute(
-          '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago"}',
-          request,
-          repositories,
-        ),
-      ).toEqual({
+      takeChatbotMutationApproval({
+        customId,
+        userId: "917446775873343600",
+        discordRequest,
+      }),
+    ).toEqual({ status: "expired" });
+  });
+
+  test("posts mutation permission as a one-time Discord button", async () => {
+    const requests: Array<{ path: string; body: unknown }> = [];
+    await postMutationApproval(
+      {
+        id: "mutation-request-1",
+        channel_id: "channel-1",
+        content: "fix the chatbot",
+        timestamp: "2026-07-23T10:00:00.000Z",
+      },
+      {
+        requestMessageId: "mutation-request-1",
         mode: "dev",
         target: "default",
+        mutationScope: "code",
         repository: "Hsiii/mini-sago",
-      });
-    }
-    expect(
-      parseExecutionRoute('{"mode":"dev"}', "fix this", repositories),
-    ).toEqual({
-      mode: "dev",
-      target: "default",
-      mutationScope: "code",
-    });
+      },
+      "minisago:mutation:approval-id",
+      async (path, options) => {
+        requests.push({ path, body: options?.body });
+        return undefined as never;
+      },
+    );
+
+    expect(requests).toEqual([
+      {
+        path: "/channels/channel-1/messages",
+        body: {
+          content:
+            "我理解成要在 `Hsiii/mini-sago` 修改程式碼並建立草稿 PR\n按下面的按鈕才會真的給這次工作寫入權限",
+          message_reference: {
+            message_id: "mutation-request-1",
+            fail_if_not_exists: false,
+          },
+          allowed_mentions: { parse: [], replied_user: true },
+          components: [
+            {
+              type: 1,
+              components: [
+                {
+                  type: 2,
+                  style: 3,
+                  label: "允許這次寫入",
+                  custom_id: "minisago:mutation:approval-id",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   test("asks for a repository instead of dispatching an invalid dev job", () => {

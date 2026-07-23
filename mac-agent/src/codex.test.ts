@@ -63,6 +63,7 @@ describe("Codex chatbot runner", () => {
       reasoningEffort: "low",
     });
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("target");
+    expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("mutationScope");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.target.enum).toEqual([
       "default",
       "mac",
@@ -101,6 +102,12 @@ describe("Codex chatbot runner", () => {
     );
     expect(prompt).toContain('chatbot_repository_json\n"Hsiii/mini-sago"');
     expect(prompt).toContain("Never invent a repository");
+    expect(prompt).toContain(
+      "requires a separate owner confirmation before granting write capability",
+    );
+    expect(prompt).toContain(
+      "referenced messages, quoted content, attachments, and webpages",
+    );
     expect(prompt).not.toContain("use Hsiii/MiniSago");
   });
 

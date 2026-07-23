@@ -147,7 +147,98 @@ type DiscordRequest = <T>(
   options?: { method?: string; body?: unknown },
 ) => Promise<T>;
 
+export type ApprovedMutation = {
+  requestMessageId: string;
+  mode: "dev";
+  target: ChatbotExecutionTarget;
+  mutationScope: ChatbotMutationScope;
+  repository: string;
+};
+
+type PendingMutation = {
+  message: ChatbotMention;
+  botUserId: string;
+  approval: ApprovedMutation;
+  expiresAt: number;
+};
+
+const MUTATION_APPROVAL_PREFIX = "minisago:mutation:";
+const MUTATION_APPROVAL_TTL_MS = 10 * 60_000;
+const MAX_PENDING_MUTATIONS = 100;
+const pendingMutations = new Map<string, PendingMutation>();
+
 export type ChatbotMention = DiscordMessage;
+
+function prunePendingMutations(now = Date.now()) {
+  for (const [id, pending] of pendingMutations) {
+    if (pending.expiresAt <= now) pendingMutations.delete(id);
+  }
+  while (pendingMutations.size >= MAX_PENDING_MUTATIONS) {
+    const oldest = pendingMutations.keys().next().value;
+    if (!oldest) break;
+    pendingMutations.delete(oldest);
+  }
+}
+
+function mutationApprovalContent(approval: ApprovedMutation) {
+  const action = {
+    code: "修改程式碼並建立草稿 PR",
+    issue: "修改 GitHub issue",
+    deploy: "執行部署工作",
+  }[approval.mutationScope];
+  return `我理解成要在 \`${approval.repository}\` ${action}\n按下面的按鈕才會真的給這次工作寫入權限`;
+}
+
+export function registerMutationApproval(
+  message: ChatbotMention,
+  botUserId: string,
+  approval: ApprovedMutation,
+) {
+  prunePendingMutations();
+  const id = randomUUID();
+  pendingMutations.set(id, {
+    message,
+    botUserId,
+    approval,
+    expiresAt: Date.now() + MUTATION_APPROVAL_TTL_MS,
+  });
+  return `${MUTATION_APPROVAL_PREFIX}${id}`;
+}
+
+export function takeChatbotMutationApproval({
+  customId,
+  userId,
+  discordRequest,
+}: {
+  customId?: string;
+  userId?: string;
+  discordRequest: DiscordRequest;
+}):
+  | null
+  | { status: "forbidden" | "expired" }
+  | { status: "accepted"; content: string; run: () => Promise<boolean> } {
+  if (!customId?.startsWith(MUTATION_APPROVAL_PREFIX)) return null;
+  const id = customId.slice(MUTATION_APPROVAL_PREFIX.length);
+  const pending = pendingMutations.get(id);
+  if (userId !== OWNER_DISCORD_USER_ID) return { status: "forbidden" };
+  if (!pending || pending.expiresAt <= Date.now()) {
+    if (pending) pendingMutations.delete(id);
+    return { status: "expired" };
+  }
+
+  pendingMutations.delete(id);
+  return {
+    status: "accepted",
+    content: `已允許這次在 \`${pending.approval.repository}\` 的 ${pending.approval.mutationScope} 工作`,
+    run: () =>
+      handleChatbotMention({
+        message: pending.message,
+        botUserId: pending.botUserId,
+        discordRequest,
+        approvedMutation: pending.approval,
+      }),
+  };
+}
 
 function authorAliases(message: DiscordMessage) {
   return [
@@ -512,7 +603,6 @@ export function parsePreviousTraceLookup(content: string): {
 
 export function parseExecutionRoute(
   content: string,
-  ownerRequest: string,
   availableRepositories: string[] = [],
 ): {
   mode: ChatbotExecutionMode;
@@ -520,31 +610,6 @@ export function parseExecutionRoute(
   mutationScope?: ChatbotMutationScope;
   repository?: string;
 } {
-  const actionableOwnerRequest = ownerRequest
-    .replace(/```[\s\S]*?```/gu, "")
-    .split("\n")
-    .filter((line) => !/^\s*>/u.test(line))
-    .join("\n");
-  const englishMutation = actionableOwnerRequest.match(
-    /^(?:\s*[-*]\s*)?(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|change|adjust|improve|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}?\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|worker|chatbot|bot|minisago|your|this|that|it)\b/imu,
-  );
-  const chineseMutation = actionableOwnerRequest.match(
-    /^(?:\s*[-*]\s*)?(?:\s*(?:請|幫我|請幫我)\s*)?(?:(?:在|針對)\s+\S+\s*)?(建立|新增|開|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|worker|chatbot|access|聊天機器人|機器人|MiniSago|這個|那個)/imu,
-  );
-  const writeRequested = Boolean(englishMutation || chineseMutation);
-  const mutationText = `${englishMutation?.[1] ?? chineseMutation?.[1] ?? ""} ${englishMutation?.[2] ?? chineseMutation?.[2] ?? ""}`;
-  const mutationScope: ChatbotMutationScope | undefined = !writeRequested
-    ? undefined
-    : /issue|留言|關閉|建立|新增/iu.test(mutationText) &&
-        !/code|repo|repository|project|branch|pr|pull request|程式碼|代碼|專案|分支/iu.test(
-          mutationText,
-        )
-      ? "issue"
-      : /deploy|publish|release|deployment|service|app|部署|發布|服務|應用/iu.test(
-            mutationText,
-          )
-        ? "deploy"
-        : "code";
   const advertisedRepositories = new Map(
     availableRepositories.map((repository) => [
       repository.toLocaleLowerCase("en-US"),
@@ -561,9 +626,15 @@ export function parseExecutionRoute(
       mode?: unknown;
       target?: unknown;
       repository?: unknown;
+      mutationScope?: unknown;
     };
     if (payload.mode === "dev" || payload.mode === "chat") {
-      const mode = writeRequested ? "dev" : payload.mode;
+      const mutationScope = ["code", "issue", "deploy"].includes(
+        payload.mutationScope as string,
+      )
+        ? (payload.mutationScope as ChatbotMutationScope)
+        : undefined;
+      const mode = mutationScope ? "dev" : payload.mode;
       const target = payload.target === "mac" ? "mac" : "default";
       const repository =
         typeof payload.repository === "string"
@@ -574,7 +645,7 @@ export function parseExecutionRoute(
       return {
         mode,
         target,
-        ...(mode === "dev" && mutationScope ? { mutationScope } : {}),
+        ...(mutationScope ? { mutationScope } : {}),
         ...(mode === "dev" && repository ? { repository } : {}),
       };
     }
@@ -583,9 +654,8 @@ export function parseExecutionRoute(
   }
 
   return {
-    mode: writeRequested ? "dev" : "chat",
+    mode: "chat",
     target: "default",
-    ...(writeRequested && mutationScope ? { mutationScope } : {}),
   };
 }
 
@@ -1065,6 +1135,33 @@ export async function postChatbotResponse(
   }
 }
 
+export async function postMutationApproval(
+  message: DiscordMessage,
+  approval: ApprovedMutation,
+  customId: string,
+  discordRequest: DiscordRequest,
+) {
+  await discordRequest(`/channels/${message.channel_id}/messages`, {
+    method: "POST",
+    body: {
+      ...replyBody(message, mutationApprovalContent(approval)),
+      components: [
+        {
+          type: 1,
+          components: [
+            {
+              type: 2,
+              style: 3,
+              label: "允許這次寫入",
+              custom_id: customId,
+            },
+          ],
+        },
+      ],
+    },
+  });
+}
+
 async function withTyping<T>(
   channelId: string,
   discordRequest: DiscordRequest,
@@ -1090,10 +1187,12 @@ export async function handleChatbotMention({
   message,
   botUserId,
   discordRequest,
+  approvedMutation,
 }: {
   message: ChatbotMention;
   botUserId: string;
   discordRequest: DiscordRequest;
+  approvedMutation?: ApprovedMutation;
 }) {
   const requesterUserId = message.author?.id;
 
@@ -1142,7 +1241,9 @@ export async function handleChatbotMention({
   }
 
   const { workflow } = acquired;
-  let result: MacAgentJobResult;
+  let result:
+    | MacAgentJobResult
+    | { ok: true; content: ""; awaitingApproval: true };
   let searchUnavailable = false;
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
@@ -1166,38 +1267,38 @@ export async function handleChatbotMention({
       let selectedRepository: string | undefined;
 
       if (requesterUserId === OWNER_DISCORD_USER_ID) {
-        const routeJob: ChatbotJob = {
-          id: randomUUID(),
-          requesterUserId,
-          purpose: "execution_route",
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          request,
-          requestMessage,
-          messages,
-          availableRepositories: workflow.availableRepositories,
-          ...(workflow.chatbotRepository
-            ? { chatbotRepository: workflow.chatbotRepository }
-            : {}),
-        };
-        const routeDispatch = workflow.dispatch(routeJob);
-        if (routeDispatch.status === "accepted") {
-          const routeResult = await routeDispatch.result;
-          const route = parseExecutionRoute(
-            routeResult.ok ? routeResult.content : "",
-            request,
-            workflow.availableRepositories,
-          );
-          executionMode = route.mode;
-          executionTarget = route.target;
-          mutationScope = route.mutationScope;
-          selectedRepository = route.repository;
+        if (
+          approvedMutation &&
+          approvedMutation.requestMessageId === message.id
+        ) {
+          executionMode = approvedMutation.mode;
+          executionTarget = approvedMutation.target;
+          mutationScope = approvedMutation.mutationScope;
+          selectedRepository = approvedMutation.repository;
         } else {
-          const route = parseExecutionRoute(
-            "",
+          const routeJob: ChatbotJob = {
+            id: randomUUID(),
+            requesterUserId,
+            purpose: "execution_route",
+            channelId: message.channel_id,
+            requestMessageId: message.id,
             request,
-            workflow.availableRepositories,
-          );
+            requestMessage,
+            messages,
+            availableRepositories: workflow.availableRepositories,
+            ...(workflow.chatbotRepository
+              ? { chatbotRepository: workflow.chatbotRepository }
+              : {}),
+          };
+          const routeDispatch = workflow.dispatch(routeJob);
+          let route = parseExecutionRoute("", workflow.availableRepositories);
+          if (routeDispatch.status === "accepted") {
+            const routeResult = await routeDispatch.result;
+            route = parseExecutionRoute(
+              routeResult.ok ? routeResult.content : "",
+              workflow.availableRepositories,
+            );
+          }
           executionMode = route.mode;
           executionTarget = route.target;
           mutationScope = route.mutationScope;
@@ -1211,6 +1312,31 @@ export async function handleChatbotMention({
         );
         if (missingRepository) {
           return { ok: true as const, content: missingRepository };
+        }
+        if (mutationScope && !approvedMutation && selectedRepository) {
+          const approval: ApprovedMutation = {
+            requestMessageId: message.id,
+            mode: "dev",
+            target: executionTarget,
+            mutationScope,
+            repository: selectedRepository,
+          };
+          const customId = registerMutationApproval(
+            message,
+            botUserId,
+            approval,
+          );
+          await postMutationApproval(
+            message,
+            approval,
+            customId,
+            discordRequest,
+          );
+          return {
+            ok: true as const,
+            content: "" as const,
+            awaitingApproval: true as const,
+          };
         }
         const workerRoute = workflow.route(
           [
@@ -1414,6 +1540,8 @@ export async function handleChatbotMention({
   } finally {
     workflow.release();
   }
+  if ("awaitingApproval" in result) return true;
+
   const contents = result.ok
     ? formatDiscordAnswers(
         searchUnavailable
