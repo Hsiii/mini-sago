@@ -10,8 +10,8 @@ in [README.md](../README.md).
   MiniSago has the required message permissions. Hsi's chatbot mentions work in
   those locations and in direct messages when a Codex worker is available.
 - **Chatbot guilds:** every member of guilds `917436845187563610`,
-  `1282936453134815275`, and `1439286996869713992` can mention MiniSago and use
-  the chatbot.
+  `1282936453134815275`, `1439286996869713992`, and `1521168712579682567` can
+  mention MiniSago and use the chatbot.
 - **Chatbot channel:** every member with access to channel
   `1517766866964316201` can mention MiniSago and use the chatbot there.
 - **Configured guild:** the channel access panel, Wordle/Brawl Stars commands,
