@@ -1,26 +1,12 @@
 import type { ChatbotJob } from "../../../lib/chatbot/protocol";
 import { answerContext } from "./context";
 
-export const PROMPT_VERSION = 23;
+export const PROMPT_VERSION = 24;
 
 export const ANSWER_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["reply", "reaction"],
-  anyOf: [
-    {
-      required: ["reply"],
-      properties: {
-        reply: { type: "string", minLength: 1 },
-      },
-    },
-    {
-      required: ["reaction"],
-      properties: {
-        reaction: { type: "object" },
-      },
-    },
-  ],
   properties: {
     reply: {
       type: ["string", "null"],

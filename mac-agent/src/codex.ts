@@ -205,6 +205,34 @@ function parseFinalResponse(output: string, allowDeveloperTools = false) {
   return finalResponse.trim();
 }
 
+export function codexFailureMessage(
+  stdout: string,
+  stderr: string,
+  exitCode: number,
+) {
+  for (const line of stdout.trim().split("\n").reverse()) {
+    try {
+      const event = JSON.parse(line) as {
+        message?: unknown;
+        error?: { message?: unknown };
+      };
+      const message =
+        typeof event.error?.message === "string"
+          ? event.error.message
+          : typeof event.message === "string"
+            ? event.message
+            : undefined;
+      if (message) return message.slice(0, 2_000);
+    } catch {
+      // Ignore non-event output and fall back to stderr.
+    }
+  }
+
+  return (
+    stderr.trim().split("\n").at(-1) || `Codex exited with status ${exitCode}.`
+  );
+}
+
 export async function checkCodexAuthentication({
   codexHome,
   codexPath,
@@ -365,8 +393,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
     }
 
     if (exitCode !== 0) {
-      const lastErrorLine = stderr.trim().split("\n").at(-1);
-      throw new Error(lastErrorLine || `Codex exited with status ${exitCode}.`);
+      throw new Error(codexFailureMessage(stdout, stderr, exitCode));
     }
 
     return parseFinalResponse(stdout, hasDeveloperAccess);

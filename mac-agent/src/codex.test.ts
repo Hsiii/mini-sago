@@ -9,6 +9,7 @@ import {
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
   canUseDeveloperTools as canUseDeveloperToolsWithConfig,
+  codexFailureMessage,
   codexEnvironment,
   codexProfileForJob as codexProfileForJobWithConfig,
   COMMUNITY_CHATBOT_PROFILE,
@@ -168,6 +169,20 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("reply and reaction fields");
     expect(prompt).toContain("never claim otherwise");
     expect(outputSchemaForJob(answerJob)).toBe(ANSWER_OUTPUT_SCHEMA);
+    expect(ANSWER_OUTPUT_SCHEMA).not.toHaveProperty("anyOf");
+  });
+
+  test("reports structured Codex failures before stderr warnings", () => {
+    expect(
+      codexFailureMessage(
+        [
+          '{"type":"error","message":"invalid schema"}',
+          '{"type":"turn.failed","error":{"message":"actual API failure"}}',
+        ].join("\n"),
+        "misleading warning",
+        1,
+      ),
+    ).toBe("actual API failure");
   });
 
   test("rechecks requester capabilities at the worker boundary", () => {
@@ -360,7 +375,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(23);
+    expect(PROMPT_VERSION).toBe(24);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
