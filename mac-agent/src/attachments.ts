@@ -39,10 +39,17 @@ const textExtensions = new Set([
   ".yml",
 ]);
 
-const imageContentTypes = new Set(["image/jpeg", "image/png"]);
+const imageContentTypes = new Set([
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const imageExtensions = new Set([".gif", ".jpeg", ".jpg", ".png", ".webp"]);
 
 type AttachmentCandidate = {
   attachment: ChatbotAttachment;
+  direct: boolean;
   surroundingText: string;
   order: number;
 };
@@ -68,6 +75,7 @@ function isSupported(attachment: ChatbotAttachment) {
 
   return (
     imageContentTypes.has(contentType) ||
+    imageExtensions.has(extension) ||
     contentType === "application/pdf" ||
     contentType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
@@ -88,20 +96,33 @@ function rankCandidates(job: ChatbotJob) {
     ...(job.searchResults ?? []),
   ];
 
+  const seen = new Set<string>();
   for (const [messageIndex, message] of contextMessages.entries()) {
-    for (const item of message.attachments) {
-      candidates.push({
-        attachment: item,
-        surroundingText:
-          `${message.content} ${item.filename}`.toLocaleLowerCase(),
-        order: messageIndex,
-      });
+    const direct = message === job.requestMessage;
+    for (const contextMessage of [
+      message,
+      ...(message.referencedMessage ? [message.referencedMessage] : []),
+    ]) {
+      for (const item of contextMessage.attachments) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        candidates.push({
+          attachment: item,
+          direct,
+          surroundingText:
+            `${contextMessage.content} ${item.filename}`.toLocaleLowerCase(),
+          order: messageIndex,
+        });
+      }
     }
   }
 
   return candidates
     .filter(({ attachment }) => isSupported(attachment))
     .sort((left, right) => {
+      if (left.direct !== right.direct) {
+        return Number(right.direct) - Number(left.direct);
+      }
       const score = (candidate: AttachmentCandidate) =>
         tokens.reduce(
           (total, token) =>
@@ -279,7 +300,11 @@ export async function prepareAttachments(
         downloadedBytes += bytes.byteLength;
         const contentType = attachment.contentType?.toLocaleLowerCase() ?? "";
 
-        if (imageContentTypes.has(contentType)) {
+        const extension = extname(attachment.filename).toLocaleLowerCase();
+        if (
+          imageContentTypes.has(contentType) ||
+          imageExtensions.has(extension)
+        ) {
           const path = join(
             directory,
             safeFilename(index, attachment.filename),

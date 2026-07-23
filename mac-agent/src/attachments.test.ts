@@ -159,6 +159,90 @@ describe("chatbot attachment limits", () => {
   });
 
   test.serial(
+    "includes replied-to images with missing or modern MIME types",
+    async () => {
+      const originalFetch = globalThis.fetch;
+      const job: ChatbotJob = {
+        id: "job-images",
+        requesterUserId: "test-user",
+        channelId: "channel-1",
+        requestMessageId: "message-2",
+        request: "read the image above",
+        requestMessage: {
+          id: "message-2",
+          author: "Hsi",
+          timestamp: "2026-07-20T10:00:00.000Z",
+          content: "read the image above",
+          attachments: [],
+          referencedMessage: {
+            id: "message-1",
+            author: "Hsi",
+            timestamp: "2026-07-20T09:59:00.000Z",
+            content: "screenshots",
+            attachments: [
+              {
+                id: "attachment-webp",
+                filename: "diagram.webp",
+                contentType: "image/webp",
+                size: 4,
+                url: "https://cdn.discordapp.com/diagram.webp",
+              },
+              {
+                id: "attachment-gif",
+                filename: "capture.gif",
+                size: 4,
+                url: "https://cdn.discordapp.com/capture.gif",
+              },
+            ],
+          },
+        },
+        messages: Array.from({ length: 10 }, (_, index) => ({
+          id: `history-${index}`,
+          author: "Someone",
+          timestamp: `2026-07-19T10:00:${String(index).padStart(2, "0")}.000Z`,
+          content: "older image",
+          attachments: [
+            {
+              id: `history-image-${index}`,
+              filename: `history-${index}.png`,
+              contentType: "image/png",
+              size: 4,
+              url: `https://cdn.discordapp.com/history-${index}.png`,
+            },
+          ],
+        })),
+      };
+
+      globalThis.fetch = (async () =>
+        new Response("data", {
+          headers: { "Content-Length": "4" },
+        })) as unknown as typeof fetch;
+
+      try {
+        const prepared = await prepareAttachments(job);
+        expect(
+          prepared.imagePaths.map((path) => path.split("/").at(-1)),
+        ).toEqual([
+          "0-diagram.webp",
+          "1-capture.gif",
+          "2-history-9.png",
+          "3-history-8.png",
+          "4-history-7.png",
+          "5-history-6.png",
+          "6-history-5.png",
+          "7-history-4.png",
+          "8-history-3.png",
+          "9-history-2.png",
+        ]);
+        expect(prepared.ignored).toEqual([]);
+        await prepared.cleanup();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
+
+  test.serial(
     "stops before downloading when the request is cancelled",
     async () => {
       const originalFetch = globalThis.fetch;

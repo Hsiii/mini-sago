@@ -350,7 +350,7 @@ function normalizeChineseChatProse(content: string) {
     .replace(/\n{3,}/gu, "\n\n");
 }
 
-export function formatDiscordAnswer(content: string) {
+function normalizeDiscordAnswer(content: string) {
   const trimmed = content.trim();
   let normalized = "";
   let previousEnd = 0;
@@ -368,11 +368,24 @@ export function formatDiscordAnswer(content: string) {
     return "我剛剛腦袋一片空白 再問我一次";
   }
 
-  if (normalized.length <= DISCORD_MESSAGE_LIMIT) {
-    return normalized;
-  }
+  return normalized;
+}
 
-  return `${normalized.slice(0, DISCORD_MESSAGE_LIMIT - 1).trimEnd()}…`;
+function limitDiscordMessage(content: string) {
+  return content.length <= DISCORD_MESSAGE_LIMIT
+    ? content
+    : `${content.slice(0, DISCORD_MESSAGE_LIMIT - 1).trimEnd()}…`;
+}
+
+export function formatDiscordAnswer(content: string) {
+  return limitDiscordMessage(normalizeDiscordAnswer(content));
+}
+
+export function formatDiscordAnswers(content: string) {
+  return normalizeDiscordAnswer(content)
+    .split(/\n{2,}/u)
+    .map((part) => limitDiscordMessage(part.trim()))
+    .filter(Boolean);
 }
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
@@ -1124,11 +1137,12 @@ function channelMessageBody(content: string) {
   };
 }
 
-async function postChatbotResponse(
+export async function postChatbotResponse(
   message: DiscordMessage,
-  content: string,
+  content: string | string[],
   discordRequest: DiscordRequest,
 ) {
+  const contents = Array.isArray(content) ? content : [content];
   let canPostDirectly = false;
 
   try {
@@ -1140,12 +1154,15 @@ async function postChatbotResponse(
     // A reply keeps the relationship clear when the latest message is unknown.
   }
 
-  await discordRequest(`/channels/${message.channel_id}/messages`, {
-    method: "POST",
-    body: canPostDirectly
-      ? channelMessageBody(content)
-      : replyBody(message, content),
-  });
+  for (const [index, content] of contents.entries()) {
+    await discordRequest(`/channels/${message.channel_id}/messages`, {
+      method: "POST",
+      body:
+        canPostDirectly || index > 0
+          ? channelMessageBody(content)
+          : replyBody(message, content),
+    });
+  }
 }
 
 async function withTyping<T>(
@@ -1561,15 +1578,15 @@ export async function handleChatbotMention({
   } finally {
     workflow.release();
   }
-  const content = result.ok
-    ? formatDiscordAnswer(
+  const contents = result.ok
+    ? formatDiscordAnswers(
         searchUnavailable
           ? `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${result.content}`
           : result.content,
       )
-    : "我剛剛卡住了 晚點再叫我一次";
+    : ["我剛剛卡住了 晚點再叫我一次"];
 
-  await postChatbotResponse(message, content, discordRequest);
+  await postChatbotResponse(message, contents, discordRequest);
 
   return true;
 }

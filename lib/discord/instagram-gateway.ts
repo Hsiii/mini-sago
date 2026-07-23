@@ -91,6 +91,28 @@ function readGatewayMessage(data: MessageEvent["data"]) {
   return String(data);
 }
 
+export class ChannelTaskQueue {
+  private tails = new Map<string, Promise<void>>();
+
+  async run<T>(channelId: string, task: () => Promise<T>) {
+    const previous = this.tails.get(channelId) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(task);
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.tails.set(channelId, tail);
+
+    try {
+      return await current;
+    } finally {
+      if (this.tails.get(channelId) === tail) {
+        this.tails.delete(channelId);
+      }
+    }
+  }
+}
+
 function getGatewayCloseReason(code: number) {
   if (code === 4004) {
     return "authentication failed; check DISCORD_BOT_TOKEN";
@@ -108,6 +130,7 @@ function getGatewayCloseReason(code: number) {
 }
 
 class InstagramGatewayClient {
+  private channelTasks = new ChannelTaskQueue();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
@@ -207,7 +230,10 @@ class InstagramGatewayClient {
     }
 
     if (payload.t === "MESSAGE_CREATE") {
-      await this.handleMessageCreate(payload.d as DiscordMessageCreate);
+      const message = payload.d as DiscordMessageCreate;
+      await this.channelTasks.run(message.channel_id, () =>
+        this.handleMessageCreate(message),
+      );
     }
   }
 
