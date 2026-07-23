@@ -11,6 +11,7 @@ import type {
   ChatbotJob,
   ChatbotMemberResult,
   ChatbotMessage,
+  ChatbotTraceContext,
 } from "../chatbot/protocol";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
@@ -136,6 +137,7 @@ export type DiscordSearchQuery = {
 
 export type DiscordContextPlan = {
   historyCount: number;
+  includePreviousTrace: boolean;
   memberQueries: string[];
   queries: DiscordSearchQuery[];
 };
@@ -363,6 +365,7 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
       .replace(/\s*```$/u, "");
     const payload = JSON.parse(normalized) as {
       historyCount?: unknown;
+      includePreviousTrace?: unknown;
       memberQueries?: unknown;
       queries?: unknown;
     };
@@ -387,8 +390,14 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
           ),
         ].slice(0, CHATBOT_CONTEXT_LIMITS.maximumMemberLookups)
       : [];
+    const includePreviousTrace = payload.includePreviousTrace === true;
     if (!Array.isArray(payload.queries)) {
-      return { historyCount, memberQueries, queries: [] };
+      return {
+        historyCount,
+        includePreviousTrace,
+        memberQueries,
+        queries: [],
+      };
     }
 
     const queries = payload.queries
@@ -466,13 +475,50 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
         ];
       });
 
-    return { historyCount, memberQueries, queries };
+    return { historyCount, includePreviousTrace, memberQueries, queries };
   } catch {
     return {
       historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
+      includePreviousTrace: false,
       memberQueries: [],
       queries: [],
     };
+  }
+}
+
+export function parsePreviousTraceLookup(content: string): {
+  status: "complete" | "not_found" | "unavailable";
+  trace?: ChatbotTraceContext;
+} {
+  try {
+    const payload = JSON.parse(content) as {
+      status?: unknown;
+      trace?: unknown;
+    };
+    if (payload.status === "not_found") return { status: "not_found" };
+    if (
+      payload.status !== "complete" ||
+      !payload.trace ||
+      typeof payload.trace !== "object"
+    ) {
+      return { status: "unavailable" };
+    }
+    const trace = payload.trace as Partial<ChatbotTraceContext>;
+    if (
+      typeof trace.contextMessageCount !== "number" ||
+      typeof trace.searchResultCount !== "number" ||
+      typeof trace.elapsedMs !== "number" ||
+      !Array.isArray(trace.searchQueries) ||
+      !Array.isArray(trace.memberQueries)
+    ) {
+      return { status: "unavailable" };
+    }
+    return {
+      status: "complete",
+      trace: trace as ChatbotTraceContext,
+    };
+  } catch {
+    return { status: "unavailable" };
   }
 }
 
@@ -566,17 +612,6 @@ export function missingDeveloperRepositoryResponse(
       ? `\n目前可用的有 ${availableRepositories.map((value) => `\`${value}\``).join(" ")}`
       : "";
   return `這題要碰程式碼 但我還不知道是哪個 GitHub repo${choices}\n告訴我是哪個 我就能繼續`;
-}
-
-export function isTraceExplanationRequest(request: string) {
-  const normalized = request.trim().toLocaleLowerCase();
-  return [
-    /(?:how|why) did (?:you|she|sago|minisago) (?:decide|answer|respond|choose|reach|come up)/u,
-    /(?:explain|show|tell me) (?:your|her|sago(?:'s)?) (?:decision|reasoning|trace|process)/u,
-    /(?:你|妳|她|sago|小莎).{0,8}(?:怎麼|為什麼).{0,8}(?:決定|回答|判斷|得出|選)/u,
-    /(?:怎麼|為什麼).{0,8}(?:這樣回答|這樣判斷|做這個決定)/u,
-    /(?:決策|判斷|回答).{0,4}(?:過程|紀錄|軌跡)/u,
-  ].some((pattern) => pattern.test(normalized));
 }
 
 function memberNames(member: DiscordGuildMember) {
@@ -1138,25 +1173,6 @@ export async function handleChatbotMention({
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
       const requestMessage = toChatbotMessage(message, botUserId);
-      if (isTraceExplanationRequest(request)) {
-        const traceDispatch = workflow.dispatch({
-          id: randomUUID(),
-          requesterUserId,
-          purpose: "trace_explanation",
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          request,
-          requestMessage,
-          messages: [],
-        });
-
-        if (traceDispatch.status !== "accepted") {
-          return { ok: false as const, error: "The worker disconnected." };
-        }
-
-        return traceDispatch.result;
-      }
-
       let messages = message.guild_id
         ? await getNearbyHumanMessages({
             channelId: message.channel_id,
@@ -1247,42 +1263,68 @@ export async function handleChatbotMention({
         status: "not_requested" | "complete" | "unavailable";
         results: ChatbotMemberResult[];
       } = { status: "not_requested", results: [] };
+      let previousTrace: {
+        status: "not_requested" | "complete" | "not_found" | "unavailable";
+        trace?: ChatbotTraceContext;
+      } = { status: "not_requested" };
       let plan: DiscordContextPlan = {
         historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
+        includePreviousTrace: false,
         memberQueries: [],
         queries: [],
       };
 
-      if (message.guild_id) {
-        const plannerJob: ChatbotJob = {
+      const plannerJob: ChatbotJob = {
+        id: randomUUID(),
+        requesterUserId,
+        purpose: "context_plan",
+        executionMode,
+        executionTarget,
+        mutationScope,
+        repository: selectedRepository,
+        channelId: message.channel_id,
+        requestMessageId: message.id,
+        request,
+        requestMessage,
+        messages,
+      };
+      const plannerDispatch = workflow.dispatch(plannerJob);
+
+      if (plannerDispatch.status === "accepted") {
+        const plannerResult = await plannerDispatch.result;
+        if (!plannerResult.ok) {
+          console.warn(
+            `Discord context planning unavailable: ${plannerResult.error}`,
+          );
+        } else {
+          plan = parseDiscordContextPlan(plannerResult.content);
+        }
+      } else {
+        console.warn("Discord context planning unavailable.");
+      }
+
+      if (plan.includePreviousTrace) {
+        const traceDispatch = workflow.dispatch({
           id: randomUUID(),
           requesterUserId,
-          purpose: "context_plan",
-          executionMode,
-          executionTarget,
-          mutationScope,
-          repository: selectedRepository,
+          purpose: "trace_lookup",
           channelId: message.channel_id,
           requestMessageId: message.id,
           request,
           requestMessage,
-          messages,
-        };
-        const plannerDispatch = workflow.dispatch(plannerJob);
-
-        if (plannerDispatch.status === "accepted") {
-          const plannerResult = await plannerDispatch.result;
-          if (!plannerResult.ok) {
-            console.warn(
-              `Discord context planning unavailable: ${plannerResult.error}`,
-            );
-          } else {
-            plan = parseDiscordContextPlan(plannerResult.content);
-          }
+          messages: [],
+        });
+        if (traceDispatch.status === "accepted") {
+          const traceResult = await traceDispatch.result;
+          previousTrace = traceResult.ok
+            ? parsePreviousTraceLookup(traceResult.content)
+            : { status: "unavailable" };
         } else {
-          console.warn("Discord context planning unavailable.");
+          previousTrace = { status: "unavailable" };
         }
+      }
 
+      if (message.guild_id) {
         const historyPromise =
           plan.historyCount > CHATBOT_CONTEXT_LIMITS.nearbyMessages
             ? getRecentHumanMessages({
@@ -1346,6 +1388,18 @@ export async function handleChatbotMention({
           memberLookupPromise,
         ]);
         searchUnavailable = search.status === "unavailable";
+      } else if (plan.historyCount === 0) {
+        messages = [];
+      } else if (plan.historyCount <= CHATBOT_CONTEXT_LIMITS.nearbyMessages) {
+        messages = messages.slice(-plan.historyCount);
+      } else {
+        messages = await getRecentHumanMessages({
+          channelId: message.channel_id,
+          requestMessageId: message.id,
+          botUserId,
+          discordRequest,
+          messageLimit: plan.historyCount,
+        });
       }
 
       const job: ChatbotJob = {
@@ -1365,6 +1419,8 @@ export async function handleChatbotMention({
         searchResults: search.results,
         memberLookupStatus: memberLookup.status,
         memberResults: memberLookup.results,
+        previousTraceStatus: previousTrace.status,
+        previousTrace: previousTrace.trace,
       };
       const dispatch = workflow.dispatch(job);
 

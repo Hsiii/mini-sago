@@ -105,6 +105,13 @@ export function answerContext(
     );
   }
 
+  if (job.previousTraceStatus && job.previousTraceStatus !== "not_requested") {
+    sections.push(
+      block("previous_trace_status", job.previousTraceStatus),
+      block("previous_trace_json", job.previousTrace ?? null),
+    );
+  }
+
   if (attachmentText.length > 0) {
     sections.push(block("extracted_attachments", attachmentText.join("\n\n")));
   }

@@ -163,6 +163,7 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Do not answer");
     expect(prompt).toContain("Nearby messages are already supplied");
     expect(prompt).toContain("Set historyCount");
+    expect(prompt).toContain("Set includePreviousTrace true");
     expect(prompt).toContain("from 0 to 100");
     expect(prompt).toContain("up to 4 exact Discord member lookups");
     expect(prompt).toContain("and 4 permission-checked guild searches");
@@ -180,6 +181,9 @@ describe("Codex chatbot runner", () => {
     );
     expect(CONTEXT_PLAN_OUTPUT_SCHEMA.properties.queries.maxItems).toBe(4);
     expect(CONTEXT_PLAN_OUTPUT_SCHEMA.required).toContain("historyCount");
+    expect(CONTEXT_PLAN_OUTPUT_SCHEMA.required).toContain(
+      "includePreviousTrace",
+    );
     expect(CONTEXT_PLAN_OUTPUT_SCHEMA.required).toContain("memberQueries");
     expect(
       CONTEXT_PLAN_OUTPUT_SCHEMA.properties.queries.items.required,
@@ -241,7 +245,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(19);
+    expect(PROMPT_VERSION).toBe(20);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -320,6 +324,35 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("profile data returned by an exact lookup");
     expect(prompt).not.toContain("validated_identity_resolution");
     expect(outputSchemaForJob(memberJob)).toBe(undefined);
+  });
+
+  test("lets the answer model explain sanitized trace metadata", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        purpose: "answer",
+        request: "你剛剛怎麼回答出來的",
+        previousTraceStatus: "complete",
+        previousTrace: {
+          historyCount: 50,
+          contextMessageCount: 42,
+          searchQueries: [{ content: "launch", author: "Daniel" }],
+          searchResultCount: 1,
+          memberQueries: [],
+          elapsedMs: 2_000,
+          model: "owner-model",
+          promptVersion: 20,
+        },
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain("<previous_trace_status>\ncomplete");
+    expect(prompt).toContain("<previous_trace_json>");
+    expect(prompt).toContain('"contextMessageCount":42');
+    expect(prompt).toContain("not private reasoning");
+    expect(prompt).toContain("never claim access to hidden reasoning");
   });
 
   test("keeps the fixed answer instructions compact and omits empty context", () => {

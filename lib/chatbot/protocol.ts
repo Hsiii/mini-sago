@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 17;
+export const CHATBOT_PROTOCOL_VERSION = 18;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -29,6 +29,17 @@ export type ChatbotMemberResult = {
   names: string[];
 };
 
+export type ChatbotTraceContext = {
+  historyCount?: number;
+  contextMessageCount: number;
+  searchQueries: Array<Record<string, unknown>>;
+  searchResultCount: number;
+  memberQueries: string[];
+  elapsedMs: number;
+  model?: string;
+  promptVersion?: number;
+};
+
 export type ChatbotMessage = {
   id: string;
   role?: "user" | "assistant";
@@ -47,7 +58,7 @@ export type ChatbotMessage = {
 export type ChatbotJob = {
   id: string;
   requesterUserId: string;
-  purpose?: "answer" | "execution_route" | "context_plan" | "trace_explanation";
+  purpose?: "answer" | "execution_route" | "context_plan" | "trace_lookup";
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
@@ -63,6 +74,12 @@ export type ChatbotJob = {
   searchResults?: ChatbotMessage[];
   memberLookupStatus?: "not_requested" | "complete" | "unavailable";
   memberResults?: ChatbotMemberResult[];
+  previousTraceStatus?:
+    | "not_requested"
+    | "complete"
+    | "not_found"
+    | "unavailable";
+  previousTrace?: ChatbotTraceContext;
 };
 
 export type MacAgentClientMessage =

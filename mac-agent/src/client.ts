@@ -210,8 +210,16 @@ export class MacAgentClient {
 
     try {
       const content =
-        job.purpose === "trace_explanation"
-          ? this.traceStore.explainPrevious(job.channelId, job.requestMessageId)
+        job.purpose === "trace_lookup"
+          ? (() => {
+              const trace = this.traceStore.previousTrace(
+                job.channelId,
+                job.requestMessageId,
+              );
+              return JSON.stringify(
+                trace ? { status: "complete", trace } : { status: "not_found" },
+              );
+            })()
           : await (async () => {
               this.traceStore.start(job, startedAt, {
                 model: codexProfileForJob(job).model,
@@ -230,7 +238,7 @@ export class MacAgentClient {
       }
       console.log(`Job ${job.id} finished in ${Date.now() - startedAt} ms.`);
     } catch (error) {
-      if (job.purpose !== "trace_explanation") {
+      if (job.purpose !== "trace_lookup") {
         this.traceStore.fail(
           job.id,
           error instanceof Error ? error.message : "Codex failed.",
