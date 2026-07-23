@@ -1,8 +1,8 @@
 import { dirname, join } from "node:path";
 
 import {
-  canRunChatbotRequest,
   chatbotAccessTier,
+  canUseChatbotCapability,
 } from "../../lib/chatbot/access";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
@@ -50,25 +50,27 @@ export function codexProfileForJob(job: ChatbotJob) {
     : COMMUNITY_CHATBOT_PROFILE;
 }
 
-function privilegedJobContext(job: ChatbotJob) {
-  return [
-    job.request,
-    job.requestMessage?.content,
-    job.requestMessage?.referencedMessage?.content,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 export function assertChatbotJobAllowed(job: ChatbotJob) {
-  if (!canRunChatbotRequest(job.requesterUserId, privilegedJobContext(job))) {
-    throw new Error("Community users cannot dispatch privileged Codex work.");
+  const capabilities = [
+    job.executionMode === "dev" || job.repository || job.mutationScope
+      ? ("dev" as const)
+      : ("chat" as const),
+    ...(job.executionTarget === "mac" ? (["mac"] as const) : []),
+    ...(job.purpose === "execution_route"
+      ? (["execution_route"] as const)
+      : []),
+  ];
+  const denied = capabilities.find(
+    (capability) => !canUseChatbotCapability(job.requesterUserId, capability),
+  );
+  if (denied) {
+    throw new Error(`Requester cannot use the ${denied} capability.`);
   }
 }
 
 export function canUseDeveloperTools(job: ChatbotJob) {
   return (
-    chatbotAccessTier(job.requesterUserId) === "owner" &&
+    canUseChatbotCapability(job.requesterUserId, "dev") &&
     job.executionMode === "dev" &&
     (job.purpose === undefined || job.purpose === "answer")
   );

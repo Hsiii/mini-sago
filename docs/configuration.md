@@ -129,10 +129,11 @@ chain-of-thought.
 
 ## Owner development and GitHub
 
-The Discord owner ID is enforced before privileged work reaches a worker and
-again before Codex runs. Community jobs and ordinary chat cannot execute
-developer commands. Owner development jobs receive only a selected disposable
-repository checkout.
+Only owner requests enter the development and Mac execution router. The worker
+then rechecks the requester's declared capabilities before Codex runs;
+authorization does not depend on matching request phrases. Community jobs and
+ordinary chat cannot execute developer commands. Owner development jobs receive
+only a selected disposable repository checkout.
 
 GitHub access uses a dedicated persistent `gh` login; MiniSago does not accept,
 copy, or inject its token through environment variables. A worker may accept a
