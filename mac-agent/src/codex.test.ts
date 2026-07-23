@@ -375,7 +375,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(24);
+    expect(PROMPT_VERSION).toBe(25);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -396,11 +396,15 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("proportionate reactions");
     expect(prompt).toContain("have a real lean");
     expect(prompt).toContain(
-      "use spaces like short pauses and line breaks between distinct sentences",
+      "Chinese replies must use one punctuation style, never a mix",
     );
-    expect(prompt).toContain("instead of commas, question marks, colons");
+    expect(prompt).toContain("Casual: no commas or periods (，、。,.)");
+    expect(prompt).toContain("Use spaces for pauses and line breaks");
     expect(prompt).toContain(
-      "Exclamation marks, parentheses, or ellipses may appear",
+      "Formal or structured: use conventional punctuation throughout, never chat-style spacing within prose",
+    );
+    expect(prompt).toContain(
+      "Exclamation marks, parentheses, and ellipses only when expressive",
     );
     expect(prompt).toContain("Avoid canned acknowledgements");
     expect(prompt).toContain("routine offers to do more");
