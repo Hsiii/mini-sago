@@ -24,13 +24,13 @@ async function options() {
   };
 }
 
-function job(mode: "dev-read" | "dev-write"): ChatbotJob {
+function job(mutationScope?: "code" | "issue"): ChatbotJob {
   return {
     id: "job-123",
     requesterUserId: "917446775873343600",
     purpose: "answer",
-    executionMode: mode,
-    ...(mode === "dev-write" ? { mutationScope: "code" as const } : {}),
+    executionMode: "dev",
+    ...(mutationScope ? { mutationScope } : {}),
     repository: "Hsiii/mini-sago",
     channelId: "channel-1",
     requestMessageId: "message-1",
@@ -46,7 +46,7 @@ describe("developer workspace", () => {
       environment: Record<string, string>;
     }> = [];
     const workspace = await prepareDeveloperWorkspace(
-      job("dev-read"),
+      job(),
       await options(),
       async (command, environment) => {
         commands.push({ command, environment });
@@ -71,7 +71,7 @@ describe("developer workspace", () => {
       environment: Record<string, string>;
     }> = [];
     await prepareDeveloperWorkspace(
-      job("dev-write"),
+      job("code"),
       await options(),
       async (command, environment) => {
         commands.push({ command, environment });
@@ -87,19 +87,9 @@ describe("developer workspace", () => {
     expect(commands[1]!.command.at(-1)).toBe("minisago/job-123");
   });
 
-  test("requires an externally enforced mutation scope for write jobs", async () => {
-    await expect(
-      prepareDeveloperWorkspace(
-        { ...job("dev-write"), mutationScope: undefined },
-        await options(),
-        async () => undefined,
-      ),
-    ).rejects.toThrow("requires an enforced mutation scope");
-  });
-
   test("blocks GitHub mutations outside the selected scope", async () => {
     const workspace = await prepareDeveloperWorkspace(
-      { ...job("dev-write"), mutationScope: "issue" },
+      job("issue"),
       await options(),
       async () => undefined,
     );
@@ -129,7 +119,7 @@ describe("developer workspace", () => {
   test("rejects a repository outside the worker advertisement", async () => {
     await expect(
       prepareDeveloperWorkspace(
-        { ...job("dev-read"), repository: "Hsiii/other" },
+        { ...job(), repository: "Hsiii/other" },
         await options(),
         async () => {
           throw new Error("command should not run");

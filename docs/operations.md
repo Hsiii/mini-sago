@@ -117,7 +117,7 @@ sequenceDiagram
     opt Owner request
         H->>W: Execution routing job
         M->>C: Luna low classification
-        C-->>M: chat, dev-read, or dev-write + independent target
+        C-->>M: chat or dev + independent target
     end
     H->>W: Context planning job
     W->>M: Authenticated job
@@ -209,7 +209,7 @@ into spaces and line breaks while technical syntax and links remain available.
 
 The worker runs chat jobs on `gpt-5.6-luna` with high reasoning and live public
 web search. Hsi's requests first pass through a Luna-low execution router;
-`dev-read` and `dev-write` jobs then run on `gpt-5.6-sol` with medium reasoning. Each run is
+`dev` jobs then run on `gpt-5.6-sol` with medium reasoning. Each run is
 ephemeral. Codex receives only the current transcript and
 up to 10 relevant supported attachments of at most 20 MB each and 40 MB total.
 Images, PDFs, DOCX, and common text formats are supported. Downloads accept
@@ -219,8 +219,8 @@ files are removed after the run, and output is shortened to one Discord message.
 Chat mode uses an isolated workspace and Codex home, a restrictive permission
 profile, and—on macOS—a process sandbox that prevents Codex from launching
 child processes. Normal Codex configuration, memories, MCP servers, plugins,
-and private browser sessions remain unavailable. Owner `dev-read` and
-`dev-write` modes enable developer tools and network access only inside the
+and private browser sessions remain unavailable. Owner `dev` mode enables
+developer tools and network access only inside the
 selected disposable repository checkout; on Oracle, the container remains the
 outer security boundary.
 
@@ -228,15 +228,15 @@ Each worker advertises a bounded concurrency value, defaulting to two. The
 hosted bridge can reserve that many independent Discord workflows per worker
 while still keeping each workflow's planning and answer stages sequential.
 Workers also register a stable ID, capabilities, and priority. The bridge
-prefers Oracle for `chat`, `dev-read`, and `dev-write`, falls back to another compatible worker
+prefers Oracle for `chat` and `dev`, falls back to another compatible worker
 when Oracle is full or offline, and pins the remaining stages after Luna picks
 the execution target. A request that explicitly needs a Mac resource is moved
 to a connected worker advertising `mac`.
 
 For owner dev answers, GitHub access uses one dedicated persistent `gh` login.
-`dev-read` remains the behavioral default for reviews; `dev-write` is selected
-only for explicit owner mutations. Router, planner, community, and chat
-processes cannot execute developer commands. Each dev job clones only the
+Remote mutation defaults off and is enabled only by an explicit owner request.
+Router, planner, community, and chat processes cannot execute developer
+commands. Each dev job clones only the
 selected repository under `MINISAGO_GITHUB_WORKTREE_ROOT` and removes the
 checkout afterward. GitHub rulesets must prevent direct and force pushes to
 protected branches; provider and production credentials are not mounted, and
@@ -259,11 +259,9 @@ cloned repositories stay outside the image.
 
 Recommended split:
 
-- Oracle runs separate `chat,dev-read` and `dev-write` containers with distinct
-  broker secrets, state, and workspace volumes. They share one dedicated
-  repository-scoped GitHub login. Enable the write container after its repo
-  scope and protected-branch ruleset are configured.
-- Mac advertises `chat,dev-read,dev-write,mac` at a lower priority. It remains connected as a
+- Oracle runs one `chat,dev` container with one broker secret, state volume,
+  workspace volume, and dedicated repository-scoped GitHub login.
+- Mac advertises `chat,dev,mac` at a lower priority. It remains connected as a
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
 
@@ -272,7 +270,7 @@ On the current VM, or after provisioning an Ubuntu AArch64
 this repository, then run:
 
 ```bash
-cp .env.worker.example .env.worker.read
+cp .env.worker.example .env.worker
 cp .env.worker.example .env.worker.write
 chmod 600 .env.worker.read .env.worker.write
 docker compose -f compose.worker.yaml build
@@ -297,15 +295,13 @@ docker compose -f compose.worker.yaml exec worker gh auth status
 ```
 
 The dedicated GitHub CLI login and Codex login use separate persistent volumes.
-Both capability workers mount the same GitHub volume. See
+The worker mounts its GitHub login as a persistent volume. See
 [Configuration](configuration.md#owner-github-automation) for the runtime
 boundary.
 
-Put the production bridge URL in both worker files and give
-`.env.worker.read` and `.env.worker.write` different 32-byte-or-longer bridge
-secrets before login. Configure the matching values as
-`MINISAGO_WORKER_READ_BRIDGE_SECRET` and
-`MINISAGO_WORKER_WRITE_BRIDGE_SECRET` on the hosted broker. Device auth writes only to the persistent
+Put the production bridge URL and a 32-byte-or-longer bridge secret in
+`.env.worker`. Configure the same secret as
+`MINISAGO_WORKER_BRIDGE_SECRET` on the hosted broker. Device auth writes only to the persistent
 `minisago-codex` volume; never copy it into the image or repository. OpenAI
 supports ChatGPT sign-in and device auth for headless Codex, but recommends API
 keys for unattended automation. A Pro login therefore works as the requested

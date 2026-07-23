@@ -137,19 +137,10 @@ function configuredSecret(name: string) {
 function workerPolicy(secret: string): WorkerPolicy | null {
   const policies: Array<{ secret?: string; policy: WorkerPolicy }> = [
     {
-      secret: configuredSecret("MINISAGO_WORKER_READ_BRIDGE_SECRET"),
+      secret: configuredSecret("MINISAGO_WORKER_BRIDGE_SECRET"),
       policy: {
-        workerId: process.env.MINISAGO_WORKER_READ_ID?.trim() || "oracle-read",
-        capabilities: new Set(["chat", "dev-read"]),
-        requireMac: false,
-      },
-    },
-    {
-      secret: configuredSecret("MINISAGO_WORKER_WRITE_BRIDGE_SECRET"),
-      policy: {
-        workerId:
-          process.env.MINISAGO_WORKER_WRITE_ID?.trim() || "oracle-write",
-        capabilities: new Set(["dev-write"]),
+        workerId: process.env.MINISAGO_WORKER_ID?.trim() || "oracle",
+        capabilities: new Set(["chat", "dev"]),
         requireMac: false,
       },
     },
@@ -183,8 +174,7 @@ export class MacAgentBridge {
   isConfigured() {
     return Boolean(
       configuredSecret("MINISAGO_MAC_BRIDGE_SECRET") ||
-      configuredSecret("MINISAGO_WORKER_READ_BRIDGE_SECRET") ||
-      configuredSecret("MINISAGO_WORKER_WRITE_BRIDGE_SECRET"),
+      configuredSecret("MINISAGO_WORKER_BRIDGE_SECRET"),
     );
   }
 
@@ -220,9 +210,7 @@ export class MacAgentBridge {
   dispatch(
     job: ChatbotJob,
     capabilities: ChatbotWorkerCapability[] = [
-      job.executionMode === "dev-read" || job.executionMode === "dev-write"
-        ? job.executionMode
-        : "chat",
+      job.executionMode === "dev" ? "dev" : "chat",
     ],
   ): DispatchResult {
     const selected = this.selectWorker(capabilities, undefined, job.repository);
@@ -338,7 +326,7 @@ export class MacAgentBridge {
     const worker = this.workers.get(workerId);
     if (!worker?.available) return { status: "offline" };
     if (
-      (job.executionMode === "dev-read" || job.executionMode === "dev-write") &&
+      job.executionMode === "dev" &&
       (!job.repository ||
         !worker.repositories.has(repositoryKey(job.repository)))
     ) {
@@ -351,9 +339,7 @@ export class MacAgentBridge {
 
     const result = new Promise<MacAgentJobResult>((resolve) => {
       const timeoutMs =
-        (job.executionMode === "dev-read" ||
-          job.executionMode === "dev-write") &&
-        job.purpose === "answer"
+        job.executionMode === "dev" && job.purpose === "answer"
           ? CHATBOT_DEV_JOB_TIMEOUT_MS
           : CHATBOT_JOB_TIMEOUT_MS;
       const timer = setTimeout(() => {

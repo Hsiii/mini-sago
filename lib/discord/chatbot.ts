@@ -554,21 +554,12 @@ export function parseExecutionRoute(
       target?: unknown;
       repository?: unknown;
     };
-    if (
-      payload.mode === "dev-read" ||
-      payload.mode === "dev-write" ||
-      payload.mode === "chat"
-    ) {
-      const requestedMode =
-        payload.mode === "dev-write" && !writeRequested
-          ? "dev-read"
-          : payload.mode;
+    if (payload.mode === "dev" || payload.mode === "chat") {
+      const mode = writeRequested ? "dev" : payload.mode;
       return {
-        mode: requestedMode,
+        mode,
         target,
-        ...(requestedMode === "dev-write" && mutationScope
-          ? { mutationScope }
-          : {}),
+        ...(mode === "dev" && mutationScope ? { mutationScope } : {}),
         ...(repository ? { repository } : {}),
       };
     }
@@ -577,10 +568,9 @@ export function parseExecutionRoute(
   }
 
   return {
-    mode: writeRequested
-      ? "dev-write"
-      : isPrivilegedChatbotRequest(ownerRequest)
-        ? "dev-read"
+    mode:
+      writeRequested || isPrivilegedChatbotRequest(ownerRequest)
+        ? "dev"
         : "chat",
     target,
     ...(writeRequested && mutationScope ? { mutationScope } : {}),

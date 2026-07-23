@@ -73,7 +73,7 @@ describe("Codex chatbot runner", () => {
       codexProfileForJob({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev-read",
+        executionMode: "dev",
       }),
     ).toBe(OWNER_CHATBOT_PROFILE);
     expect(
@@ -103,7 +103,7 @@ describe("Codex chatbot runner", () => {
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev-read",
+        executionMode: "dev",
         repository: "Hsiii/mini-sago",
         request: "review this PR",
       },
@@ -112,7 +112,9 @@ describe("Codex chatbot runner", () => {
     );
     const chatPrompt = buildCodexPrompt(job, [], []);
 
-    expect(devPrompt).toContain("owner-authorized read-only development task");
+    expect(devPrompt).toContain(
+      "owner-authorized development task without mutation scope",
+    );
     expect(devPrompt).toContain("never intentionally modify remote state");
     expect(devPrompt).not.toContain("read-only chat task");
     expect(chatPrompt).toContain("read-only chat task");
@@ -380,7 +382,7 @@ describe("Codex chatbot runner", () => {
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev-read",
+        executionMode: "dev",
         purpose: "answer",
       }),
     ).toBe(true);
@@ -388,14 +390,14 @@ describe("Codex chatbot runner", () => {
       canUseDeveloperTools({
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev-read",
+        executionMode: "dev",
         purpose: "context_plan",
       }),
     ).toBe(false);
     expect(
       canUseDeveloperTools({
         ...job,
-        executionMode: "dev-read",
+        executionMode: "dev",
         purpose: "answer",
       }),
     ).toBe(false);
@@ -405,14 +407,14 @@ describe("Codex chatbot runner", () => {
     const policy = buildGithubDeveloperPolicy({
       ...job,
       id: "job-123",
-      executionMode: "dev-read",
+      executionMode: "dev",
       repository: "Hsiii/mini-sago",
     });
     const devPrompt = buildCodexPrompt(
       {
         ...job,
         requesterUserId: "917446775873343600",
-        executionMode: "dev-read",
+        executionMode: "dev",
         repository: "Hsiii/mini-sago",
       },
       [],
@@ -422,7 +424,7 @@ describe("Codex chatbot runner", () => {
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
     expect(policy).toContain("Hsiii/mini-sago");
-    expect(policy).toContain("routed as dev-read");
+    expect(policy).toContain("routed as dev");
     expect(policy).toContain("must remain read-only on GitHub");
     expect(policy).toContain("dedicated repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");

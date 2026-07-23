@@ -5,36 +5,18 @@ services:
       dockerfile: Dockerfile.worker
     restart: unless-stopped
     init: true
-    env_file: .env.worker.read
+    env_file: .env.worker
     environment:
-      MINISAGO_WORKER_ID: oracle-read
-      MINISAGO_WORKER_CAPABILITIES: chat,dev-read
+      MINISAGO_WORKER_ID: oracle
+      MINISAGO_WORKER_CAPABILITIES: chat,dev
     volumes:
       - minisago-codex:/home/bun/.codex
       - minisago-github:/home/bun/.config/gh
-      - minisago-state-read:/var/lib/minisago
-      - minisago-workspace-read:/workspace
-
-  worker-write:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    restart: unless-stopped
-    init: true
-    env_file: .env.worker.write
-    environment:
-      MINISAGO_WORKER_ID: oracle-write
-      MINISAGO_WORKER_CAPABILITIES: dev-write
-    volumes:
-      - minisago-codex:/home/bun/.codex
-      - minisago-github:/home/bun/.config/gh
-      - minisago-state-write:/var/lib/minisago
-      - minisago-workspace-write:/workspace
+      - minisago-state:/var/lib/minisago
+      - minisago-workspace:/workspace
 
 volumes:
   minisago-codex:
   minisago-github:
-  minisago-state-read:
-  minisago-state-write:
-  minisago-workspace-read:
-  minisago-workspace-write:
+  minisago-state:
+  minisago-workspace:
