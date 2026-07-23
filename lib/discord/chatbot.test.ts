@@ -501,26 +501,22 @@ describe("Discord chatbot", () => {
   test("validates and limits Codex Discord context plans", () => {
     expect(
       parseDiscordContextPlan(`\`\`\`json
-{"task":"identity_resolution","subject":"6uc","history":"extended","queries":[{"purpose":"direct_mention","author":"self","content":"new app"},{"purpose":"context","has":["link","file","invalid"]},{"purpose":"context","embedType":"gif"},{"purpose":"context","attachmentExtension":".pdf"},{"purpose":"context","content":"ignored"}]}
+{"historyCount":73,"queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
 \`\`\``),
     ).toEqual({
-      task: "identity_resolution",
-      subject: "6uc",
-      history: "extended",
+      historyCount: 73,
       queries: [
         {
-          purpose: "direct_mention",
           author: "self",
           content: "new app",
         },
-        { purpose: "context", has: ["link", "file"] },
-        { purpose: "context", embedType: "gif" },
-        { purpose: "context", attachmentExtension: "pdf" },
+        { has: ["link", "file"] },
+        { embedType: "gif" },
+        { attachmentExtension: "pdf" },
       ],
     });
     expect(parseDiscordContextPlan("not json")).toEqual({
-      task: "general",
-      history: "local",
+      historyCount: 20,
       queries: [],
     });
   });
@@ -684,28 +680,23 @@ describe("Discord chatbot", () => {
   });
 
   test("always searches messages by and mentioning an identity subject", () => {
-    expect(
-      identitySearchQueries({
-        task: "identity_resolution",
-        subject: "kiseki",
-        history: "local",
-        queries: [{ purpose: "context", content: "old alias" }],
-      }),
-    ).toEqual([
-      {
-        purpose: "candidate_check",
-        author: "kiseki",
-        sortBy: "timestamp",
-        sortOrder: "desc",
-      },
-      {
-        purpose: "direct_mention",
-        mentions: "kiseki",
-        sortBy: "timestamp",
-        sortOrder: "desc",
-      },
-      { purpose: "context", content: "old alias" },
-    ]);
+    expect(identitySearchQueries("kiseki", [{ content: "old alias" }])).toEqual(
+      [
+        {
+          purpose: "candidate_check",
+          author: "kiseki",
+          sortBy: "timestamp",
+          sortOrder: "desc",
+        },
+        {
+          purpose: "direct_mention",
+          mentions: "kiseki",
+          sortBy: "timestamp",
+          sortOrder: "desc",
+        },
+        { purpose: "context", content: "old alias" },
+      ],
+    );
   });
 
   test("turns an actual Discord user mention into its displayed member name", () => {

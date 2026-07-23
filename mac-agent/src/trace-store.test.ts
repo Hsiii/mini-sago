@@ -64,8 +64,7 @@ describe("chatbot trace store", () => {
     traces.finish(
       planner.id,
       JSON.stringify({
-        task: "general",
-        history: "medium",
+        historyCount: 50,
         queries: [{ content: "launch", author: "Daniel" }],
       }),
       1_500,

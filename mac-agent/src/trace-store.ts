@@ -26,8 +26,7 @@ type TraceStoreMetadata = {
 };
 
 type ContextPlan = {
-  task?: string;
-  subject?: string;
+  historyCount?: number;
   history?: "local" | "medium" | "extended";
   queries?: Array<Record<string, unknown>>;
 };
@@ -216,13 +215,16 @@ export class ChatbotTraceStore {
       .find((row) => ["answer", "identity_resolution"].includes(row.purpose));
     const plan = safeJson<ContextPlan>(planner?.output ?? null);
     const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
-    const historyLabel = !plan
-      ? "直接讀取這個對話最近的訊息"
-      : plan.history === "extended"
-        ? "擴大到最多 100 則同頻道訊息"
-        : plan.history === "medium"
-          ? "擴大到最多 50 則同頻道訊息"
-          : "使用附近最多 20 則訊息";
+    const historyLabel =
+      typeof plan?.historyCount === "number"
+        ? `讀取最多 ${plan.historyCount} 則同頻道訊息`
+        : !plan
+          ? "直接讀取這個對話最近的訊息"
+          : plan.history === "extended"
+            ? "擴大到最多 100 則同頻道訊息"
+            : plan.history === "medium"
+              ? "擴大到最多 50 則同頻道訊息"
+              : "使用附近最多 20 則訊息";
     const contextCount = answerJob?.messages.length ?? 0;
     const searchCount = answerJob?.searchResults?.length ?? 0;
     const queries = plan?.queries ?? [];

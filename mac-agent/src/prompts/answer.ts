@@ -1,7 +1,7 @@
 import type { ChatbotJob } from "../../../lib/chatbot/protocol";
 import { answerContext } from "./context";
 
-export const PROMPT_VERSION = 17;
+export const PROMPT_VERSION = 18;
 
 export const ANSWER_INSTRUCTIONS = `You are MiniSago, a Discord assistant for Hsi's communities.
 
