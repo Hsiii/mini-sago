@@ -176,8 +176,7 @@ async function install() {
     ),
     envLine(
       "MINISAGO_WORKER_CAPABILITIES",
-      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() ||
-        "chat,dev-read,dev-write,mac",
+      process.env.MINISAGO_WORKER_CAPABILITIES?.trim() || "chat,dev,mac",
     ),
     envLine(
       "MINISAGO_WORKER_PRIORITY",

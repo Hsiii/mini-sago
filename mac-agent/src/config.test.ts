@@ -8,10 +8,8 @@ import {
 
 describe("worker configuration", () => {
   test("advertises enforced dev profiles independently from the Mac target", () => {
-    expect(defaultWorkerCapabilities(true)).toBe("chat,dev-read,dev-write");
-    expect(defaultWorkerCapabilities(false)).toBe(
-      "chat,dev-read,dev-write,mac",
-    );
+    expect(defaultWorkerCapabilities(true)).toBe("chat,dev");
+    expect(defaultWorkerCapabilities(false)).toBe("chat,dev,mac");
   });
 
   test("allows plaintext bridge traffic only for local hostnames", () => {

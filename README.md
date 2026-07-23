@@ -62,12 +62,10 @@ Requests received while every compatible worker is unavailable are not queued.
 Hsi can route owner-only development requests to Sol for GitHub issue creation,
 PR review, repository changes, tests, and draft-PR delivery. GitHub credentials
 use one dedicated repo-scoped `gh` login; community and ordinary chat runs
-cannot execute GitHub tooling. PR review defaults to `dev-read`. Only an
-explicit owner mutation selects `dev-write`, and each job receives only its
-selected disposable repository checkout. The cloud Compose stack shares the
-dedicated login between capability-specific containers while keeping their
-broker secrets, state, and workspaces separate. Write jobs also receive an
-owner-derived issue/code/deploy operation scope. See
+cannot execute GitHub tooling. Owner development runs in `dev`; each job
+receives only its selected disposable repository checkout. Remote mutation
+remains disabled unless the owner's own request grants an issue/code/deploy
+operation scope. Oracle runs one worker and one dedicated login. See
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12) for credential and
 GitHub ruleset setup.
 

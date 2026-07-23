@@ -17,18 +17,14 @@ export type DeveloperWorkspace = {
 };
 
 function developerMode(job: ChatbotJob) {
-  if (job.executionMode === "dev-read" || job.executionMode === "dev-write") {
+  if (job.executionMode === "dev") {
     return job.executionMode;
   }
   throw new Error("Developer workspace requested for a non-development job.");
 }
 
 function mutationScope(job: ChatbotJob) {
-  if (job.executionMode !== "dev-write") return "none";
-  if (!job.mutationScope) {
-    throw new Error("A dev-write job requires an enforced mutation scope.");
-  }
-  return job.mutationScope;
+  return job.executionMode === "dev" ? (job.mutationScope ?? "none") : "none";
 }
 
 const GH_WRAPPER = `#!/bin/sh
@@ -189,7 +185,7 @@ export async function prepareDeveloperWorkspace(
       preparationEnvironment,
       options.signal,
     );
-    if (mode === "dev-write") {
+    if (mode === "dev" && scope === "code") {
       await runCommand(
         ["git", "-C", directory, "switch", "-c", branch],
         preparationEnvironment,

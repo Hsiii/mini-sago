@@ -21,12 +21,11 @@ fallback.
 
 ## Universal / cross-guild configuration
 
-| Name                                  | Required     | Description                                                                                                    |
-| ------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_GATEWAY_DISABLED`            | No           | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions           |
-| `MINISAGO_MAC_BRIDGE_SECRET`          | Chatbot      | High-entropy secret for the trusted Mac worker; leaving all bridge secrets blank disables the WebSocket bridge |
-| `MINISAGO_WORKER_READ_BRIDGE_SECRET`  | Cloud worker | Separate high-entropy secret bound by the broker to `oracle-read` and `chat,dev-read`                          |
-| `MINISAGO_WORKER_WRITE_BRIDGE_SECRET` | Cloud worker | Separate high-entropy secret bound by the broker to `oracle-write` and `dev-write`                             |
+| Name                            | Required     | Description                                                                                                    |
+| ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_GATEWAY_DISABLED`      | No           | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions           |
+| `MINISAGO_MAC_BRIDGE_SECRET`    | Chatbot      | High-entropy secret for the trusted Mac worker; leaving all bridge secrets blank disables the WebSocket bridge |
+| `MINISAGO_WORKER_BRIDGE_SECRET` | Cloud worker | High-entropy secret bound by the broker to the unified `oracle` worker and `chat,dev`                          |
 
 Gateway features are enabled by default whenever `DISCORD_BOT_TOKEN` is set and
 `DISCORD_GATEWAY_DISABLED` is not `true`. They work in every server and channel
@@ -55,7 +54,7 @@ the bridge secret must also be present in production.
 | `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`         |
 | `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                                |
 | `MINISAGO_WORKER_ID`            | No       | Stable worker identity; defaults from the host, while the container image uses `oracle`                   |
-| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev-read`, `dev-write`, and `mac`; only a Mac worker should advertise `mac`      |
+| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac`; only a Mac worker should advertise `mac`                        |
 | `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing       |
 | `MINISAGO_GITHUB_REPOSITORIES`  | For dev  | Exact `owner/repository` scopes advertised to the bridge; the credential must be scoped to the same repos |
 | `MINISAGO_GITHUB_CONFIG_DIR`    | For dev  | Dedicated GitHub CLI config used for owner development jobs                                               |
@@ -68,19 +67,17 @@ The trace database is readable only by the local user and is automatically
 pruned after 14 days or when it exceeds 250 MB.
 
 The Discord owner ID is a code-level security boundary. Owner requests first
-use GPT-5.6 Luna with low reasoning to choose `chat`, `dev-read`, or
-`dev-write`; Mac targeting is independent. Chat requests use Luna with high
-reasoning; both dev profiles use GPT-5.6 Sol with medium reasoning and receive
-only the selected per-job checkout. Other authorized
+use GPT-5.6 Luna with low reasoning to choose `chat` or `dev`; Mac targeting is
+independent. Chat requests use Luna with high reasoning; dev uses GPT-5.6 Sol
+with medium reasoning and receives only the selected per-job checkout. Other authorized
 community members use Luna with high reasoning and are limited to conversational,
 summarization, and public-information requests. GitHub pull-request reviews,
 issue mutations, code changes, command execution, and similar privileged
 requests are rejected before they reach the worker, then checked again by the
 worker before Codex runs.
 
-Cloud profiles must not share bridge secrets. The broker binds the read and
-write secrets to their server-owned worker IDs and capability sets; the Mac
-secret is accepted only from a worker that advertises `mac`. The bridge prefers the highest-priority compatible
+The broker binds the cloud secret to its server-owned worker ID and capability
+set; the Mac secret is accepted only from a worker that advertises `mac`. The bridge prefers the highest-priority compatible
 worker, falls back when it is full or offline, and keeps every multi-stage
 workflow on one worker after routing. Luna selects the `mac` target only when
 the request explicitly needs a resource on Hsi's Mac.
@@ -88,22 +85,19 @@ the request explicitly needs a resource on Hsi's Mac.
 ## Owner GitHub automation
 
 The worker image includes `gh` and uses one dedicated GitHub CLI login from a
-host secret directory or Docker volume. The checked-in Compose stack shares
-that login between its read and write worker containers while retaining
-separate broker secrets, state, workspaces, and advertised capabilities.
-`dev-read` remains the default for PR review, and `dev-write` is selected only
-when the owner's own request explicitly requires mutation. MiniSago does not
-accept, copy, or inject a GitHub token through its own environment.
+host secret directory or Docker volume. The checked-in Compose stack runs one
+`chat,dev` worker. MiniSago does not accept, copy, or inject a GitHub token
+through its own environment.
 
 Only the final owner-authorized dev answer receives developer command and
 network permissions. Luna routing, Discord context planning, identity
 resolution, community jobs, and ordinary owner chat cannot execute `gh`. The
 bridge rejects a dev job unless the worker advertised its exact repository;
 the worker then clones only that repository into a disposable job checkout.
-Untrusted PR content can influence analysis but cannot upgrade `dev-read` to
-`dev-write` because the deterministic mutation check uses only the owner's
-request. A `dev-write` job also carries an owner-derived `issue`, `code`, or
-`deploy` scope. Per-job `gh` and `git` wrappers guard that scope, require draft
+Untrusted PR content can influence analysis but cannot grant mutation because
+the deterministic mutation check uses only the owner's request. A mutating
+`dev` job carries an owner-derived `issue`, `code`, or `deploy` scope. Per-job
+`gh` and `git` wrappers guard that scope, require draft
 PR creation, and reject merge, ready, protected-branch, and force-push
 operations through the normal command paths.
 

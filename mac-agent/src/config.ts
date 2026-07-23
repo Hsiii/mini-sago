@@ -16,15 +16,15 @@ export type MacAgentConfig = {
   sessionMonitorPath: string;
   traceDatabasePath: string;
   workspaceRoot: string;
-  workerCapabilities: Array<"chat" | "dev-read" | "dev-write" | "mac">;
+  workerCapabilities: Array<"chat" | "dev" | "mac">;
   workerId: string;
   workerPriority: number;
 };
 
-const workerCapabilityNames = ["chat", "dev-read", "dev-write", "mac"] as const;
+const workerCapabilityNames = ["chat", "dev", "mac"] as const;
 
 export const defaultWorkerCapabilities = (headless: boolean) =>
-  headless ? "chat,dev-read,dev-write" : "chat,dev-read,dev-write,mac";
+  headless ? "chat,dev" : "chat,dev,mac";
 
 const bundledCodexPath = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const defaultApplicationSupport =
@@ -125,7 +125,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     workerCapabilities.length !== new Set(configuredCapabilities).size
   ) {
     throw new Error(
-      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev-read, dev-write, and mac.",
+      "MINISAGO_WORKER_CAPABILITIES must contain only chat, dev, and mac.",
     );
   }
   const githubRepositories = (process.env.MINISAGO_GITHUB_REPOSITORIES || "")
@@ -141,12 +141,9 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       "MINISAGO_GITHUB_REPOSITORIES must contain owner/repository names.",
     );
   }
-  if (
-    githubRepositories.length === 0 &&
-    workerCapabilities.some((capability) => capability.startsWith("dev-"))
-  ) {
+  if (githubRepositories.length === 0 && workerCapabilities.includes("dev")) {
     throw new Error(
-      "MINISAGO_GITHUB_REPOSITORIES is required for dev-read or dev-write workers.",
+      "MINISAGO_GITHUB_REPOSITORIES is required for dev workers.",
     );
   }
   const workspaceRoot =
