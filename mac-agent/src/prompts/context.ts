@@ -30,9 +30,6 @@ function promptMessage(message: ChatbotMessage): Record<string, unknown> {
     ...(message.reactions?.length ? { reactions: message.reactions } : {}),
     ...(message.channelName ? { channelName: message.channelName } : {}),
     ...(message.jumpUrl ? { jumpUrl: message.jumpUrl } : {}),
-    ...(message.searchPurposes?.length
-      ? { searchPurposes: message.searchPurposes }
-      : {}),
     ...(message.referencedMessage
       ? { referencedMessage: promptMessage(message.referencedMessage) }
       : {}),
@@ -88,15 +85,10 @@ export function answerContext(
 ) {
   const sections = [requestContext(job)];
 
-  if (job.identityCandidates?.length) {
+  if (job.memberLookupStatus && job.memberLookupStatus !== "not_requested") {
     sections.push(
-      block("discord_identity_candidates_json", job.identityCandidates),
-    );
-  }
-
-  if (job.identityResolution) {
-    sections.push(
-      block("validated_identity_resolution_json", job.identityResolution),
+      block("discord_member_lookup_status", job.memberLookupStatus),
+      block("discord_member_results_json", job.memberResults ?? []),
     );
   }
 

@@ -12,7 +12,6 @@ import {
   COMMUNITY_CHATBOT_PROFILE,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
-  IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
@@ -145,8 +144,10 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("Nearby messages are already supplied");
     expect(prompt).toContain("Set historyCount");
     expect(prompt).toContain("from 0 to 100");
-    expect(prompt).toContain("up to 4 permission-checked guild searches");
-    expect(prompt).toContain("do not add default searches");
+    expect(prompt).toContain("up to 4 exact Discord member lookups");
+    expect(prompt).toContain("and 4 permission-checked guild searches");
+    expect(prompt).toContain("Direct self-identification is useful evidence");
+    expect(prompt).toContain("do not add default lookups or searches");
     expect(prompt).not.toContain("identity_resolution");
     expect(prompt).toContain("我在哪裡分享新 app 的");
     expect(prompt).toContain("nearby_messages_json");
@@ -159,6 +160,7 @@ describe("Codex chatbot runner", () => {
     );
     expect(CONTEXT_PLAN_OUTPUT_SCHEMA.properties.queries.maxItems).toBe(4);
     expect(CONTEXT_PLAN_OUTPUT_SCHEMA.required).toContain("historyCount");
+    expect(CONTEXT_PLAN_OUTPUT_SCHEMA.required).toContain("memberQueries");
     expect(
       CONTEXT_PLAN_OUTPUT_SCHEMA.properties.queries.items.required,
     ).toContain("sortOrder");
@@ -219,7 +221,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(18);
+    expect(PROMPT_VERSION).toBe(19);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
@@ -272,58 +274,32 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("archive.zip: unsupported");
   });
 
-  test("resolves identity evidence separately from answer writing", () => {
-    const identityJob: ChatbotJob = {
+  test("lets the answer model reason from generic member and message results", () => {
+    const memberJob: ChatbotJob = {
       ...job,
-      purpose: "identity_resolution",
-      task: "identity_resolution",
-      subject: "6uc",
-      identityCandidates: [{ names: ["6uc", "午前", "wuchien"] }],
-      request: "重新挑戰 6uc 是誰",
+      purpose: "answer",
+      request: "大家說的 6uc 到底是哪一位",
+      memberLookupStatus: "complete",
+      memberResults: [{ query: "6uc", names: ["6uc", "午前", "wuchien"] }],
+      searchStatus: "complete",
       searchResults: [
         {
           ...job.searchResults![0]!,
           content: "6uc 是午前",
-          searchPurposes: ["direct_mention"],
         },
       ],
     };
-    const prompt = buildCodexPrompt(identityJob, [], []);
+    const prompt = buildCodexPrompt(memberJob, [], []);
 
-    expect(prompt).toContain("Do not write a user-facing answer");
-    expect(prompt).toContain("One third-party statement is weak evidence");
+    expect(prompt).toContain("When asked to identify someone");
+    expect(prompt).toContain("one third-party statement");
     expect(prompt).toContain('"sourceIndex":0');
-    expect(prompt).toContain('"searchPurposes":["direct_mention"]');
-    expect(prompt).toContain("<discord_identity_candidates_json>");
+    expect(prompt).toContain("<discord_member_lookup_status>\ncomplete");
+    expect(prompt).toContain("<discord_member_results_json>");
     expect(prompt).toContain('"names":["6uc","午前","wuchien"]');
-    expect(outputSchemaForJob(identityJob)).toBe(
-      IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
-    );
-
-    const answerPrompt = buildCodexPrompt(
-      {
-        ...identityJob,
-        purpose: "answer",
-        identityResolution: {
-          subject: "6uc",
-          candidate: "午前",
-          confidence: "weak",
-          basis: "third_party_only",
-          sourceIndexes: [0],
-        },
-      },
-      [],
-      [],
-    );
-    expect(answerPrompt).toContain("Write the final reply naturally");
-    expect(answerPrompt).toContain(
-      "clearly say it is only a third-party claim",
-    );
-    expect(answerPrompt).toContain("<validated_identity_resolution_json>");
-    expect(answerPrompt).toContain('"confidence":"weak"');
-    expect(outputSchemaForJob({ ...identityJob, purpose: "answer" })).toBe(
-      undefined,
-    );
+    expect(prompt).toContain("profile data returned by an exact lookup");
+    expect(prompt).not.toContain("validated_identity_resolution");
+    expect(outputSchemaForJob(memberJob)).toBe(undefined);
   });
 
   test("keeps the fixed answer instructions compact and omits empty context", () => {

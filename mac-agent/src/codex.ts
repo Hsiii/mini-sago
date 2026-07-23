@@ -13,7 +13,6 @@ export {
   buildCodexPrompt,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
-  IDENTITY_RESOLUTION_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
 } from "./prompts";
@@ -73,16 +72,6 @@ export function canUseDeveloperTools(job: ChatbotJob) {
     job.executionMode === "dev" &&
     (job.purpose === undefined || job.purpose === "answer")
   );
-}
-
-function withoutAttachments(message: ChatbotJob["messages"][number]) {
-  return {
-    ...message,
-    attachments: [],
-    referencedMessage: message.referencedMessage
-      ? { ...message.referencedMessage, attachments: [] }
-      : undefined,
-  };
 }
 
 function escapeSeatbeltLiteral(value: string) {
@@ -234,16 +223,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
             messages: [],
             searchResults: [],
           }
-        : job.purpose === "identity_resolution"
-          ? {
-              ...job,
-              requestMessage: job.requestMessage
-                ? withoutAttachments(job.requestMessage)
-                : undefined,
-              messages: job.messages.map(withoutAttachments),
-              searchResults: (job.searchResults ?? []).map(withoutAttachments),
-            }
-          : job;
+        : job;
     prepared = await prepareAttachments(
       preparationJob,
       timeoutController.signal,

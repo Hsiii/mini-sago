@@ -28,6 +28,7 @@ type TraceStoreMetadata = {
 type ContextPlan = {
   historyCount?: number;
   history?: "local" | "medium" | "extended";
+  memberQueries?: string[];
   queries?: Array<Record<string, unknown>>;
 };
 
@@ -78,6 +79,8 @@ function queryDescription(query: Record<string, unknown>) {
   if (typeof query.content === "string")
     details.push(`關鍵字「${query.content}」`);
   if (typeof query.author === "string") details.push(`作者 ${query.author}`);
+  if (typeof query.mentions === "string")
+    details.push(`提及 ${query.mentions}`);
   if (Array.isArray(query.has) && query.has.length > 0) {
     details.push(`類型 ${query.has.join("、")}`);
   }
@@ -187,7 +190,7 @@ export class ChatbotTraceStore {
         `SELECT request_message_id
          FROM chatbot_trace_jobs
          WHERE channel_id = ? AND request_message_id != ?
-           AND purpose IN ('answer', 'identity_resolution')
+           AND purpose = 'answer'
            AND status = 'complete'
          ORDER BY finished_at DESC
          LIMIT 1`,
@@ -212,7 +215,7 @@ export class ChatbotTraceStore {
     const planner = rows.find((row) => row.purpose === "context_plan");
     const terminal = [...rows]
       .reverse()
-      .find((row) => ["answer", "identity_resolution"].includes(row.purpose));
+      .find((row) => row.purpose === "answer");
     const plan = safeJson<ContextPlan>(planner?.output ?? null);
     const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
     const historyLabel =
@@ -227,6 +230,7 @@ export class ChatbotTraceStore {
               : "使用附近最多 20 則訊息";
     const contextCount = answerJob?.messages.length ?? 0;
     const searchCount = answerJob?.searchResults?.length ?? 0;
+    const memberQueries = plan?.memberQueries ?? [];
     const queries = plan?.queries ?? [];
     const parts = [
       `我剛剛先${historyLabel} 實際交給回答階段的是 ${contextCount} 則`,
@@ -241,14 +245,13 @@ export class ChatbotTraceStore {
       parts.push("規劃後判斷不用另外搜尋伺服器舊訊息");
     }
 
-    if (answerJob?.identityResolution) {
-      const verdict = answerJob.identityResolution;
+    if (memberQueries.length > 0) {
       parts.push(
-        `這題走的是身分證據判定 結果信心是 ${verdict?.confidence ?? "unknown"} 依據類型是 ${verdict?.basis ?? "none"}`,
+        `另外查了 ${memberQueries.length} 個 Discord 成員名稱 包含 ${memberQueries.slice(0, 2).join("、")}`,
       );
-    } else {
-      parts.push("接著模型只根據這批內容和當次問題整理成回答");
     }
+
+    parts.push("接著模型只根據這批內容和當次問題整理成回答");
 
     parts.push(`整個可觀察到的流程花了${elapsedDescription(rows)}`);
     if (terminal) {
