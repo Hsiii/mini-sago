@@ -14,30 +14,32 @@ live in [operations.md](operations.md).
 
 ## Hosted service variables
 
-| Name                                 | Required  | Purpose                                                                 |
-| ------------------------------------ | --------- | ----------------------------------------------------------------------- |
-| `DISCORD_APPLICATION_ID`             | Yes       | Discord application ID                                                  |
-| `DISCORD_PUBLIC_KEY`                 | Yes       | Verifies interaction signatures                                         |
-| `DISCORD_BOT_TOKEN`                  | Yes       | Discord REST and Gateway authentication                                 |
-| `DISCORD_GUILD_ID`                   | No        | Guild allowed to use configured-guild features; defaults to WM31        |
-| `DISCORD_GATEWAY_DISABLED`           | No        | Set to `true` for HTTP-only instances                                   |
-| `MINISAGO_CHATBOT_OWNER_USER_ID`     | Yes       | Sole owner allowed to route privileged work and approve mutations       |
-| `MINISAGO_CHATBOT_GUILD_IDS`         | No        | Comma-separated guilds whose members may use chatbot features           |
-| `MINISAGO_CHATBOT_CHANNEL_IDS`       | No        | Comma-separated channel exceptions; blank allows none                   |
-| `MINISAGO_AMBIENT_REACTIONS_ENABLED` | No        | Set to `true` to let MiniSago consider occasional reactions             |
-| `MINISAGO_MAC_BRIDGE_SECRET`         | Chatbot   | Authenticates the trusted Mac worker profile                            |
-| `MINISAGO_WORKER_BRIDGE_SECRET`      | Chatbot   | Authenticates the server-owned cloud worker profile                     |
-| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`  | No        | Default destination for `bun run publish:panel`                         |
-| `SELF_ASSIGNABLE_ROLES`              | No        | JSON role definitions; the built-in fallback targets WM31               |
-| `GITHUB_WEBHOOK_SECRET`              | PR bridge | Verifies GitHub's `X-Hub-Signature-256`; blank disables the endpoint    |
-| `GITHUB_PR_THREAD_CHANNEL_ID`        | No        | Discord destination for PR review threads                               |
-| `GITHUB_PR_THREAD_STATE_FILE`        | No        | Persistent PR-to-thread mapping                                         |
-| `TOEFL_VOCAB_CHANNEL_ID`             | No        | Daily vocabulary destination; blank disables posting                    |
-| `TOEFL_VOCAB_TIME`                   | No        | Local `HH:MM` posting time                                              |
-| `TOEFL_VOCAB_TIMEZONE`               | No        | IANA timezone for vocabulary posting                                    |
-| `TOEFL_VOCAB_STATE_FILE`             | No        | Persistent daily-send state                                             |
-| `GAMER_FORUM_*`                      | No        | Forum source, destination, schedule, reader, state, and disable switch  |
-| `X_POST_*`                           | No        | X handle/feed, destination, polling interval, state, and disable switch |
+| Name                                   | Required  | Purpose                                                                 |
+| -------------------------------------- | --------- | ----------------------------------------------------------------------- |
+| `DISCORD_APPLICATION_ID`               | Yes       | Discord application ID                                                  |
+| `DISCORD_PUBLIC_KEY`                   | Yes       | Verifies interaction signatures                                         |
+| `DISCORD_BOT_TOKEN`                    | Yes       | Discord REST and Gateway authentication                                 |
+| `DISCORD_GUILD_ID`                     | No        | Guild allowed to use configured-guild features; defaults to WM31        |
+| `DISCORD_GATEWAY_DISABLED`             | No        | Set to `true` for HTTP-only instances                                   |
+| `MINISAGO_CHATBOT_OWNER_USER_ID`       | Yes       | Sole owner allowed to route privileged work and approve mutations       |
+| `MINISAGO_CHATBOT_GUILD_IDS`           | No        | Comma-separated guilds whose members may use chatbot features           |
+| `MINISAGO_CHATBOT_CHANNEL_IDS`         | No        | Comma-separated channel exceptions; blank allows none                   |
+| `MINISAGO_AMBIENT_REACTIONS_ENABLED`   | No        | Set to `true` to let MiniSago consider occasional reactions             |
+| `MINISAGO_AMBIENT_ATTENTION_CHANCE`    | No        | Chance from 0–1 that a notification burst schedules an ambient check    |
+| `MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR` | No        | Global hourly ceiling for ambient model calls; defaults to 4            |
+| `MINISAGO_MAC_BRIDGE_SECRET`           | Chatbot   | Authenticates the trusted Mac worker profile                            |
+| `MINISAGO_WORKER_BRIDGE_SECRET`        | Chatbot   | Authenticates the server-owned cloud worker profile                     |
+| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID`    | No        | Default destination for `bun run publish:panel`                         |
+| `SELF_ASSIGNABLE_ROLES`                | No        | JSON role definitions; the built-in fallback targets WM31               |
+| `GITHUB_WEBHOOK_SECRET`                | PR bridge | Verifies GitHub's `X-Hub-Signature-256`; blank disables the endpoint    |
+| `GITHUB_PR_THREAD_CHANNEL_ID`          | No        | Discord destination for PR review threads                               |
+| `GITHUB_PR_THREAD_STATE_FILE`          | No        | Persistent PR-to-thread mapping                                         |
+| `TOEFL_VOCAB_CHANNEL_ID`               | No        | Daily vocabulary destination; blank disables posting                    |
+| `TOEFL_VOCAB_TIME`                     | No        | Local `HH:MM` posting time                                              |
+| `TOEFL_VOCAB_TIMEZONE`                 | No        | IANA timezone for vocabulary posting                                    |
+| `TOEFL_VOCAB_STATE_FILE`               | No        | Persistent daily-send state                                             |
+| `GAMER_FORUM_*`                        | No        | Forum source, destination, schedule, reader, state, and disable switch  |
+| `X_POST_*`                             | No        | X handle/feed, destination, polling interval, state, and disable switch |
 
 See `.env.production.example` for production state paths and the complete
 scheduled-monitor variable names.
@@ -84,12 +86,18 @@ community access. The hosted service and every worker must use the same owner
 ID.
 
 Ambient reactions are opt-in and use the same guild/channel community
-boundaries. MiniSago evaluates only fresh human messages and can either ignore
-them or add one reaction; unsolicited replies remain disabled. The hosted
-service verifies the bot's effective channel permissions, advertises available
-custom emoji to the planner, validates its choice, and applies channel, member,
-and hourly cooldowns before calling Discord. The Discord token never leaves the
-hosted service.
+boundaries. Fresh human messages first enter an in-memory notification buffer
+without calling a model. MiniSago occasionally schedules one delayed attention
+check for a conversation burst, then either ignores the batch or reacts to at
+most one candidate message. The probability and hard hourly model-call ceiling
+are configurable; the defaults notice 25% of eligible bursts and permit at most
+four checks per hour. Unsolicited replies remain disabled.
+
+The hosted service verifies the bot's effective channel permissions, advertises
+available custom emoji to the planner, validates the selected message and emoji,
+and applies channel, member, and hourly reaction cooldowns before calling
+Discord. Ambient planning does not download attachments. The Discord token
+never leaves the hosted service.
 
 The checked-in deployment still hardcodes:
 

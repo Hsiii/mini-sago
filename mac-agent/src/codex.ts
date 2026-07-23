@@ -236,7 +236,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
   try {
     const preparationJob =
-      job.purpose === "context_plan"
+      job.purpose === "context_plan" || job.purpose === "social_action"
         ? {
             ...job,
             requestMessage: undefined,

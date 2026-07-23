@@ -51,7 +51,9 @@ days.
 
 Chatbot access is limited to selected guilds and channels. The configured owner
 can also use it in other visible servers, threads, and direct messages.
-Ambient reactions are disabled by default and never enable unsolicited replies.
+Ambient reactions are disabled by default. When enabled, fresh messages are
+buffered without model calls and MiniSago only occasionally checks a
+conversation burst; this never enables unsolicited replies.
 
 > [!TIP]
 > In Discord's mention picker, choose MiniSago under **Members/Apps**, not a

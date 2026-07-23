@@ -6,7 +6,11 @@ import {
   type DispatchResult,
   type MacAgentJobResult,
 } from "../chatbot/bridge";
-import type { ChatbotJob, ChatbotToolCapability } from "../chatbot/protocol";
+import type {
+  ChatbotJob,
+  ChatbotMessage,
+  ChatbotToolCapability,
+} from "../chatbot/protocol";
 import {
   getNearbyHumanMessages,
   isChatbotAuthorized,
@@ -22,19 +26,38 @@ import {
 } from "./permissions";
 
 const THREAD_CHANNEL_TYPES = new Set([10, 11, 12]);
+const HOUR_MS = 60 * 60_000;
 
-export const DEFAULT_AMBIENT_REACTION_POLICY = {
-  maximumMessageAgeMs: 2 * 60_000,
-  evaluationChannelCooldownMs: 2 * 60_000,
-  reactionChannelCooldownMs: 10 * 60_000,
+export type AmbientReactionPolicy = {
+  attentionProbability: number;
+  minimumAttentionDelayMs: number;
+  maximumAttentionDelayMs: number;
+  missedNotificationCooldownMs: number;
+  globalAttentionCooldownMs: number;
+  maximumMessageAgeMs: number;
+  reactionChannelCooldownMs: number;
+  reactionUserCooldownMs: number;
+  maximumEvaluationsPerHour: number;
+  maximumReactionsPerHour: number;
+  maximumBufferedChannels: number;
+  maximumBufferedMessagesPerChannel: number;
+  capabilityCacheMs: number;
+};
+
+export const DEFAULT_AMBIENT_REACTION_POLICY: AmbientReactionPolicy = {
+  attentionProbability: 0.25,
+  minimumAttentionDelayMs: 20_000,
+  maximumAttentionDelayMs: 90_000,
+  missedNotificationCooldownMs: 5 * 60_000,
+  globalAttentionCooldownMs: 5 * 60_000,
+  maximumMessageAgeMs: 10 * 60_000,
+  reactionChannelCooldownMs: 15 * 60_000,
   reactionUserCooldownMs: 30 * 60_000,
-  maximumEvaluationsPerHour: 30,
-  maximumReactionsPerHour: 6,
+  maximumEvaluationsPerHour: 4,
+  maximumReactionsPerHour: 3,
+  maximumBufferedChannels: 20,
+  maximumBufferedMessagesPerChannel: 12,
   capabilityCacheMs: 10 * 60_000,
-} as const;
-
-type AmbientReactionPolicy = {
-  [Key in keyof typeof DEFAULT_AMBIENT_REACTION_POLICY]: number;
 };
 
 type DiscordChannel = {
@@ -56,8 +79,12 @@ type DiscordEmoji = {
 };
 
 type SocialActionDecision =
-  | { action: "ignore"; emoji: null }
-  | { action: "discord.add_reaction"; emoji: string };
+  | { action: "ignore"; messageId: null; emoji: null }
+  | {
+      action: "discord.add_reaction";
+      messageId: string;
+      emoji: string;
+    };
 
 type CachedTools = {
   expiresAt: number;
@@ -65,32 +92,104 @@ type CachedTools = {
   customEmojiValues: Set<string>;
 };
 
-type ConsiderAmbientReactionOptions = {
+type BufferedChannel = {
+  messages: ChatbotMention[];
+  botUserId: string;
+  discordRequest: DiscordRequest;
+};
+
+type ObserveAmbientMessageOptions = {
   message: ChatbotMention;
   botUserId: string;
   accessConfig: ChatbotAccessConfig;
   discordRequest: DiscordRequest;
 };
 
+type TimerHandle = unknown;
+
+function configuredNumber({
+  environment,
+  name,
+  fallback,
+  minimum,
+  maximum,
+  integer = false,
+}: {
+  environment: NodeJS.ProcessEnv;
+  name: string;
+  fallback: number;
+  minimum: number;
+  maximum: number;
+  integer?: boolean;
+}) {
+  const raw = environment[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (
+    !Number.isFinite(value) ||
+    value < minimum ||
+    value > maximum ||
+    (integer && !Number.isInteger(value))
+  ) {
+    throw new Error(
+      `${name} must be ${integer ? "an integer" : "a number"} from ${minimum} to ${maximum}.`,
+    );
+  }
+  return value;
+}
+
+export function getAmbientReactionPolicy(
+  environment: NodeJS.ProcessEnv = process.env,
+): AmbientReactionPolicy {
+  return {
+    ...DEFAULT_AMBIENT_REACTION_POLICY,
+    attentionProbability: configuredNumber({
+      environment,
+      name: "MINISAGO_AMBIENT_ATTENTION_CHANCE",
+      fallback: DEFAULT_AMBIENT_REACTION_POLICY.attentionProbability,
+      minimum: 0,
+      maximum: 1,
+    }),
+    maximumEvaluationsPerHour: configuredNumber({
+      environment,
+      name: "MINISAGO_AMBIENT_MAX_CHECKS_PER_HOUR",
+      fallback: DEFAULT_AMBIENT_REACTION_POLICY.maximumEvaluationsPerHour,
+      minimum: 0,
+      maximum: 60,
+      integer: true,
+    }),
+  };
+}
+
 function parseSocialActionDecision(content: string): SocialActionDecision {
   try {
     const value = JSON.parse(content) as {
       action?: unknown;
+      messageId?: unknown;
       emoji?: unknown;
     };
-    if (value.action === "ignore" && value.emoji === null) {
-      return { action: "ignore", emoji: null };
+    if (
+      value.action === "ignore" &&
+      value.messageId === null &&
+      value.emoji === null
+    ) {
+      return { action: "ignore", messageId: null, emoji: null };
     }
     if (
       value.action === "discord.add_reaction" &&
+      typeof value.messageId === "string" &&
       typeof value.emoji === "string"
     ) {
-      return { action: value.action, emoji: value.emoji.trim() };
+      return {
+        action: value.action,
+        messageId: value.messageId,
+        emoji: value.emoji.trim(),
+      };
     }
   } catch {
     // Invalid model output is always a no-op.
   }
-  return { action: "ignore", emoji: null };
+  return { action: "ignore", messageId: null, emoji: null };
 }
 
 function isStandardUnicodeEmoji(value: string) {
@@ -149,18 +248,40 @@ function pruneTimes(values: Map<string, number>, cutoff: number) {
   }
 }
 
+function pruneDeadlines(values: Map<string, number>, now: number) {
+  for (const [key, deadline] of values) {
+    if (deadline <= now) values.delete(key);
+  }
+}
+
+function mergeContext(nearby: ChatbotMessage[], candidates: ChatbotMessage[]) {
+  const messages = new Map<string, ChatbotMessage>();
+  for (const message of [...nearby, ...candidates]) {
+    messages.set(message.id, message);
+  }
+  return [...messages.values()]
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+    .slice(-20);
+}
+
 export class AmbientReactionController {
+  private attentionTimer: TimerHandle | undefined;
+  private buffers = new Map<string, BufferedChannel>();
   private capabilityCache = new Map<string, CachedTools>();
   private evaluationTimes: number[] = [];
-  private lastEvaluationByChannel = new Map<string, number>();
-  private lastEvaluationByUser = new Map<string, number>();
+  private globalAttentionAvailableAt = 0;
   private lastReactionByChannel = new Map<string, number>();
   private lastReactionByUser = new Map<string, number>();
+  private missedUntilByChannel = new Map<string, number>();
   private reactionTimes: number[] = [];
+  private scheduledChannelId: string | undefined;
 
   constructor(
     private readonly options: {
       now?: () => number;
+      random?: () => number;
+      schedule?: (task: () => void, delayMs: number) => TimerHandle;
+      cancel?: (handle: TimerHandle) => void;
       dispatch?: (job: ChatbotJob) => DispatchResult;
       policy?: AmbientReactionPolicy;
       log?: (event: Record<string, unknown>) => void;
@@ -173,6 +294,156 @@ export class AmbientReactionController {
 
   private get policy() {
     return this.options.policy ?? DEFAULT_AMBIENT_REACTION_POLICY;
+  }
+
+  private get random() {
+    return this.options.random ?? Math.random;
+  }
+
+  private schedule(task: () => void, delayMs: number) {
+    return (this.options.schedule ?? setTimeout)(task, delayMs);
+  }
+
+  private log(event: Record<string, unknown>) {
+    (
+      this.options.log ??
+      ((value) =>
+        console.log("MiniSago ambient attention:", JSON.stringify(value)))
+    )(event);
+  }
+
+  stop() {
+    if (this.attentionTimer !== undefined) {
+      (
+        this.options.cancel ??
+        ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
+      )(this.attentionTimer);
+    }
+    this.attentionTimer = undefined;
+    this.scheduledChannelId = undefined;
+    this.buffers.clear();
+  }
+
+  private prune(now: number) {
+    const policy = this.policy;
+    pruneWindow(this.evaluationTimes, now - HOUR_MS);
+    pruneWindow(this.reactionTimes, now - HOUR_MS);
+    pruneTimes(
+      this.lastReactionByChannel,
+      now - policy.reactionChannelCooldownMs,
+    );
+    pruneTimes(this.lastReactionByUser, now - policy.reactionUserCooldownMs);
+    pruneDeadlines(this.missedUntilByChannel, now);
+    for (const [key, cached] of this.capabilityCache) {
+      if (cached.expiresAt <= now) this.capabilityCache.delete(key);
+    }
+    for (const [channelId, buffer] of this.buffers) {
+      buffer.messages = buffer.messages.filter((message) =>
+        freshHumanMessage(
+          message,
+          buffer.botUserId,
+          now,
+          policy.maximumMessageAgeMs,
+        ),
+      );
+      if (buffer.messages.length === 0) this.buffers.delete(channelId);
+    }
+  }
+
+  private bufferMessage(
+    message: ChatbotMention,
+    botUserId: string,
+    discordRequest: DiscordRequest,
+  ) {
+    const current = this.buffers.get(message.channel_id);
+    const messages = current?.messages ?? [];
+    messages.push(message);
+    this.buffers.delete(message.channel_id);
+    this.buffers.set(message.channel_id, {
+      messages: messages.slice(-this.policy.maximumBufferedMessagesPerChannel),
+      botUserId,
+      discordRequest,
+    });
+    while (this.buffers.size > this.policy.maximumBufferedChannels) {
+      const oldest = this.buffers.keys().next().value;
+      if (!oldest) break;
+      this.buffers.delete(oldest);
+    }
+  }
+
+  observe({
+    message,
+    botUserId,
+    accessConfig,
+    discordRequest,
+  }: ObserveAmbientMessageOptions) {
+    const now = this.now();
+    const policy = this.policy;
+    const authorId = message.author?.id;
+    this.prune(now);
+    if (
+      !authorId ||
+      !freshHumanMessage(message, botUserId, now, policy.maximumMessageAgeMs) ||
+      !message.guild_id ||
+      !(
+        accessConfig.guildIds.has(message.guild_id) ||
+        accessConfig.channelIds.has(message.channel_id)
+      ) ||
+      !isChatbotAuthorized(
+        authorId,
+        accessConfig,
+        message.guild_id,
+        message.channel_id,
+      )
+    ) {
+      return false;
+    }
+
+    this.bufferMessage(message, botUserId, discordRequest);
+    if (
+      this.attentionTimer !== undefined ||
+      now < this.globalAttentionAvailableAt ||
+      now < (this.missedUntilByChannel.get(message.channel_id) ?? 0) ||
+      this.evaluationTimes.length >= policy.maximumEvaluationsPerHour ||
+      this.reactionTimes.length >= policy.maximumReactionsPerHour
+    ) {
+      return false;
+    }
+
+    if (this.random() >= policy.attentionProbability) {
+      this.missedUntilByChannel.set(
+        message.channel_id,
+        now + policy.missedNotificationCooldownMs,
+      );
+      return false;
+    }
+
+    const delayRange =
+      policy.maximumAttentionDelayMs - policy.minimumAttentionDelayMs;
+    const delay =
+      policy.minimumAttentionDelayMs +
+      Math.floor(this.random() * (delayRange + 1));
+    this.scheduledChannelId = message.channel_id;
+    this.attentionTimer = this.schedule(() => {
+      const channelId = this.scheduledChannelId;
+      this.attentionTimer = undefined;
+      this.scheduledChannelId = undefined;
+      if (!channelId) return;
+      void this.checkNotifications(channelId).catch((error) => {
+        this.log({
+          action: "attention_failed",
+          channelId,
+          error: error instanceof Error ? error.message : "unknown error",
+        });
+      });
+    }, delay);
+    this.log({
+      action: "attention_scheduled",
+      channelId: message.channel_id,
+      unreadCount: this.buffers.get(message.channel_id)?.messages.length ?? 0,
+      delayMs: delay,
+    });
+    return true;
   }
 
   private async permissionChannel(
@@ -240,17 +511,18 @@ export class AmbientReactionController {
             name: "discord.add_reaction",
             risk: "ambient",
             description:
-              "Add one reaction as MiniSago to the current Discord message.",
+              "Add one reaction as MiniSago to one candidate Discord message.",
             inputSchema: {
               type: "object",
               additionalProperties: false,
-              required: ["emoji"],
+              required: ["messageId", "emoji"],
               properties: {
+                messageId: { type: "string" },
                 emoji: { type: "string" },
               },
             },
             metadata: {
-              target: "current_message",
+              target: "candidate_message",
               standardUnicodeEmoji: true,
               customEmojis,
             },
@@ -266,104 +538,83 @@ export class AmbientReactionController {
     return discovered;
   }
 
-  async consider({
-    message,
-    botUserId,
-    accessConfig,
-    discordRequest,
-  }: ConsiderAmbientReactionOptions) {
-    const now = this.now();
+  private async checkNotifications(channelId: string) {
+    const startedAt = this.now();
     const policy = this.policy;
-    const authorId = message.author?.id;
-    pruneTimes(
-      this.lastEvaluationByChannel,
-      now - policy.evaluationChannelCooldownMs,
-    );
-    pruneTimes(
-      this.lastEvaluationByUser,
-      now - policy.evaluationChannelCooldownMs,
-    );
-    pruneTimes(
-      this.lastReactionByChannel,
-      now - policy.reactionChannelCooldownMs,
-    );
-    pruneTimes(this.lastReactionByUser, now - policy.reactionUserCooldownMs);
-    for (const [key, cached] of this.capabilityCache) {
-      if (cached.expiresAt <= now) this.capabilityCache.delete(key);
-    }
+    this.prune(startedAt);
+    this.globalAttentionAvailableAt =
+      startedAt + policy.globalAttentionCooldownMs;
+    const buffer = this.buffers.get(channelId);
+    this.buffers.delete(channelId);
     if (
-      !authorId ||
-      !freshHumanMessage(message, botUserId, now, policy.maximumMessageAgeMs) ||
-      !message.guild_id ||
-      !(
-        accessConfig.guildIds.has(message.guild_id) ||
-        accessConfig.channelIds.has(message.channel_id)
-      ) ||
-      !isChatbotAuthorized(
-        authorId,
-        accessConfig,
-        message.guild_id,
-        message.channel_id,
-      )
-    ) {
-      return false;
-    }
-
-    pruneWindow(this.evaluationTimes, now - 60 * 60_000);
-    pruneWindow(this.reactionTimes, now - 60 * 60_000);
-    if (
+      !buffer ||
       this.evaluationTimes.length >= policy.maximumEvaluationsPerHour ||
-      this.reactionTimes.length >= policy.maximumReactionsPerHour ||
-      now -
-        (this.lastEvaluationByChannel.get(message.channel_id) ??
-          Number.NEGATIVE_INFINITY) <
-        policy.evaluationChannelCooldownMs ||
-      now -
-        (this.lastEvaluationByUser.get(authorId) ?? Number.NEGATIVE_INFINITY) <
-        policy.evaluationChannelCooldownMs ||
-      now -
-        (this.lastReactionByChannel.get(message.channel_id) ??
-          Number.NEGATIVE_INFINITY) <
-        policy.reactionChannelCooldownMs ||
-      now -
-        (this.lastReactionByUser.get(authorId) ?? Number.NEGATIVE_INFINITY) <
-        policy.reactionUserCooldownMs
+      this.reactionTimes.length >= policy.maximumReactionsPerHour
     ) {
       return false;
     }
 
-    this.lastEvaluationByChannel.set(message.channel_id, now);
-    this.lastEvaluationByUser.set(authorId, now);
-    this.evaluationTimes.push(now);
+    const candidates = buffer.messages.filter((message) => {
+      const authorId = message.author?.id;
+      return (
+        authorId &&
+        freshHumanMessage(
+          message,
+          buffer.botUserId,
+          startedAt,
+          policy.maximumMessageAgeMs,
+        ) &&
+        startedAt -
+          (this.lastReactionByUser.get(authorId) ?? Number.NEGATIVE_INFINITY) >=
+          policy.reactionUserCooldownMs
+      );
+    });
+    const latest = candidates.at(-1);
+    const requesterUserId = latest?.author?.id;
+    if (
+      !latest?.guild_id ||
+      !requesterUserId ||
+      startedAt -
+        (this.lastReactionByChannel.get(channelId) ??
+          Number.NEGATIVE_INFINITY) <
+        policy.reactionChannelCooldownMs
+    ) {
+      return false;
+    }
 
     let discovered: CachedTools;
     try {
       discovered = await this.discoverTools({
-        guildId: message.guild_id,
-        channelId: message.channel_id,
-        botUserId,
-        discordRequest,
+        guildId: latest.guild_id,
+        channelId,
+        botUserId: buffer.botUserId,
+        discordRequest: buffer.discordRequest,
       });
     } catch {
       return false;
     }
     if (discovered.tools.length === 0) return false;
 
-    const messages = await getNearbyHumanMessages({
-      channelId: message.channel_id,
-      requestMessageId: message.id,
-      botUserId,
-      discordRequest,
+    const nearby = await getNearbyHumanMessages({
+      channelId,
+      requestMessageId: latest.id,
+      botUserId: buffer.botUserId,
+      discordRequest: buffer.discordRequest,
     }).catch(() => []);
+    const candidateMessages = candidates.map((message) =>
+      toChatbotMessage(message, buffer.botUserId),
+    );
+    const candidateIds = candidateMessages.map((message) => message.id);
     const job: ChatbotJob = {
       id: randomUUID(),
-      requesterUserId: authorId,
+      requesterUserId,
       purpose: "social_action",
-      channelId: message.channel_id,
-      requestMessageId: message.id,
-      request: message.content?.trim() ?? "",
-      requestMessage: toChatbotMessage(message, botUserId),
-      messages,
+      channelId,
+      requestMessageId: latest.id,
+      request: "",
+      requestMessage: toChatbotMessage(latest, buffer.botUserId),
+      messages: mergeContext(nearby, candidateMessages),
+      socialActionCandidateMessageIds: candidateIds,
       availableTools: discovered.tools,
     };
     const dispatch = (
@@ -371,41 +622,59 @@ export class AmbientReactionController {
       ((candidate) => macAgentBridge.dispatch(candidate, ["chat"]))
     )(job);
     if (dispatch.status !== "accepted") return false;
+    this.evaluationTimes.push(startedAt);
 
     const result: MacAgentJobResult = await dispatch.result;
     if (!result.ok) return false;
     const decision = parseSocialActionDecision(result.content);
     if (
       decision.action !== "discord.add_reaction" ||
+      !candidateIds.includes(decision.messageId) ||
       !validReactionEmoji(decision.emoji, discovered.customEmojiValues)
     ) {
       return false;
     }
 
+    const selected = candidates.find(
+      (message) => message.id === decision.messageId,
+    );
     const completedAt = this.now();
+    const selectedAuthorId = selected?.author?.id;
+    this.prune(completedAt);
     if (
-      completedAt - Date.parse(message.timestamp) >
-        policy.maximumMessageAgeMs ||
-      this.reactionTimes.length >= policy.maximumReactionsPerHour
+      !selected ||
+      !selectedAuthorId ||
+      !freshHumanMessage(
+        selected,
+        buffer.botUserId,
+        completedAt,
+        policy.maximumMessageAgeMs,
+      ) ||
+      this.reactionTimes.length >= policy.maximumReactionsPerHour ||
+      completedAt -
+        (this.lastReactionByChannel.get(channelId) ??
+          Number.NEGATIVE_INFINITY) <
+        policy.reactionChannelCooldownMs ||
+      completedAt -
+        (this.lastReactionByUser.get(selectedAuthorId) ??
+          Number.NEGATIVE_INFINITY) <
+        policy.reactionUserCooldownMs
     ) {
       return false;
     }
 
-    await discordRequest(
-      `/channels/${message.channel_id}/messages/${message.id}/reactions/${encodeURIComponent(decision.emoji)}/@me`,
+    await buffer.discordRequest(
+      `/channels/${channelId}/messages/${selected.id}/reactions/${encodeURIComponent(decision.emoji)}/@me`,
       { method: "PUT" },
     );
     this.reactionTimes.push(completedAt);
-    this.lastReactionByChannel.set(message.channel_id, completedAt);
-    this.lastReactionByUser.set(authorId, completedAt);
-    (
-      this.options.log ??
-      ((event) => console.log("MiniSago social action:", JSON.stringify(event)))
-    )({
+    this.lastReactionByChannel.set(channelId, completedAt);
+    this.lastReactionByUser.set(selectedAuthorId, completedAt);
+    this.log({
       action: decision.action,
-      guildId: message.guild_id,
-      channelId: message.channel_id,
-      messageId: message.id,
+      guildId: selected.guild_id,
+      channelId,
+      messageId: selected.id,
       emoji: decision.emoji,
     });
     return true;
