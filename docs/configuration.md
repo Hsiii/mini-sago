@@ -148,12 +148,15 @@ repository contents, issues, and pull-request write access, with read access to
 checks and Actions when needed. Do not grant administration, secrets,
 environments, deployments, organization, or unrelated-repository access.
 
-Remote mutation is derived only from the owner's request and is restricted to
-an `issue`, `code`, or `deploy` scope. Per-job wrappers enforce that scope,
-require draft pull requests, and reject merge, ready, protected-branch, and
-force-push operations through normal command paths. GitHub rulesets must also
-block direct and force pushes to protected branches; Hsi remains responsible
-for merging. Repository content and command output remain untrusted data.
+The router may propose an `issue`, `code`, or `deploy` mutation only from the
+owner's current request. It does not grant permission. MiniSago posts a
+single-use confirmation button that expires after ten minutes and accepts only
+Hsi's Discord account; pressing it binds the selected repository and scope to
+the resumed job. Per-job wrappers enforce that scope, require draft pull
+requests, and reject merge, ready, protected-branch, and force-push operations
+through normal command paths. GitHub rulesets must also block direct and force
+pushes to protected branches; Hsi remains responsible for merging. Repository
+content and command output remain untrusted data.
 Credential and ruleset setup is tracked in
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12).
 
