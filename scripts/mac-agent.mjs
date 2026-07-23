@@ -165,6 +165,10 @@ async function install() {
         "wss://bot.hsichen.dev/api/mac-agent/ws",
     ),
     envLine("MINISAGO_MAC_BRIDGE_SECRET", bridgeSecret),
+    envLine(
+      "MINISAGO_CHATBOT_OWNER_USER_ID",
+      process.env.MINISAGO_CHATBOT_OWNER_USER_ID?.trim() || "",
+    ),
     envLine("MINISAGO_CODEX_HOME", codexHome),
     envLine(
       "MINISAGO_MAX_CONCURRENT_JOBS",

@@ -21,6 +21,9 @@ live in [operations.md](operations.md).
 | `DISCORD_BOT_TOKEN`                 | Yes       | Discord REST and Gateway authentication                                 |
 | `DISCORD_GUILD_ID`                  | No        | Guild allowed to use configured-guild features; defaults to WM31        |
 | `DISCORD_GATEWAY_DISABLED`          | No        | Set to `true` for HTTP-only instances                                   |
+| `MINISAGO_CHATBOT_OWNER_USER_ID`    | Yes       | Sole owner allowed to route privileged work and approve mutations       |
+| `MINISAGO_CHATBOT_GUILD_IDS`        | No        | Comma-separated guilds whose members may use chatbot features           |
+| `MINISAGO_CHATBOT_CHANNEL_IDS`      | No        | Comma-separated channel exceptions; blank allows none                   |
 | `MINISAGO_MAC_BRIDGE_SECRET`        | Chatbot   | Authenticates the trusted Mac worker profile                            |
 | `MINISAGO_WORKER_BRIDGE_SECRET`     | Chatbot   | Authenticates the server-owned cloud worker profile                     |
 | `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No        | Default destination for `bun run publish:panel`                         |
@@ -40,24 +43,25 @@ scheduled-monitor variable names.
 
 ## Worker variables
 
-| Name                            | Required | Purpose                                                                                 |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets  |
-| `MINISAGO_MAC_BRIDGE_SECRET`    | Mac      | Must match the hosted Mac-profile secret                                                |
-| `MINISAGO_CODEX_PATH`           | No       | Codex executable                                                                        |
-| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state                                                                   |
-| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled macOS lock monitor                                                             |
-| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database                                                           |
-| `MINISAGO_WORKSPACE_ROOT`       | Dev      | Parent directory for isolated repository work                                           |
-| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Advertised capacity, from 1 to 16                                                       |
-| `MINISAGO_HEADLESS`             | Linux    | Keeps a non-macOS worker connected without a session monitor                            |
-| `MINISAGO_WORKER_ID`            | No       | Stable worker identity                                                                  |
-| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                   |
-| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from 0 to 1000                                                       |
-| `MINISAGO_GITHUB_REPOSITORIES`  | Dev      | Exact `owner/repository` allowlist                                                      |
-| `MINISAGO_CHATBOT_REPOSITORY`   | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed |
-| `MINISAGO_GITHUB_CONFIG_DIR`    | Dev      | Dedicated GitHub CLI state                                                              |
-| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Disposable per-job checkout root                                                        |
+| Name                             | Required | Purpose                                                                                 |
+| -------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `MINISAGO_BRIDGE_URL`            | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets  |
+| `MINISAGO_MAC_BRIDGE_SECRET`     | Mac      | Must match the hosted Mac-profile secret                                                |
+| `MINISAGO_CODEX_PATH`            | No       | Codex executable                                                                        |
+| `MINISAGO_CODEX_HOME`            | No       | Isolated helper state                                                                   |
+| `MINISAGO_SESSION_MONITOR_PATH`  | No       | Compiled macOS lock monitor                                                             |
+| `MINISAGO_TRACE_DATABASE_PATH`   | No       | Local response-trace database                                                           |
+| `MINISAGO_WORKSPACE_ROOT`        | Dev      | Parent directory for isolated repository work                                           |
+| `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Advertised capacity, from 1 to 16                                                       |
+| `MINISAGO_HEADLESS`              | Linux    | Keeps a non-macOS worker connected without a session monitor                            |
+| `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                                                  |
+| `MINISAGO_WORKER_CAPABILITIES`   | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                   |
+| `MINISAGO_WORKER_PRIORITY`       | No       | Scheduler priority from 0 to 1000                                                       |
+| `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                                                      |
+| `MINISAGO_CHATBOT_REPOSITORY`    | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed |
+| `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner Discord ID configured on the hosted service                                  |
+| `MINISAGO_GITHUB_CONFIG_DIR`     | Dev      | Dedicated GitHub CLI state                                                              |
+| `MINISAGO_GITHUB_WORKTREE_ROOT`  | No       | Disposable per-job checkout root                                                        |
 
 The Mac installer reads `.env.local`; the headless worker reads `.env.worker`.
 Image and installer defaults are shown in the corresponding example files.
@@ -71,24 +75,23 @@ not portable examples. Change both values together when moving or repurposing
 those features. Every scheduled-post destination must belong to the configured
 guild.
 
-Chatbot authorization is independent. The allowed guilds, allowed channel, and
-owner fallback are code-level security boundaries rather than environment
-configuration.
+Chatbot authorization is independent. Configure its sole owner, allowed guilds,
+and optional channel exceptions with the `MINISAGO_CHATBOT_*` variables. Every
+value is validated as a Discord snowflake. The service and workers fail closed
+when the owner is missing or malformed; empty guild and channel lists grant no
+community access. The hosted service and every worker must use the same owner
+ID.
 
-The checked-in deployment currently hardcodes:
+The checked-in deployment still hardcodes:
 
-- owner identity in `lib/chatbot/access.ts`;
-- chatbot guilds `917436845187563610`, `1282936453134815275`,
-  `1439286996869713992`, and `1521168712579682567`;
-- chatbot channel `1517766866964316201`;
 - configured-guild fallback `1282936453134815275`;
 - WM31 Wordle role `1451976411152781466` and Brawl Stars role
   `1450774352386719775`; and
 - PR review repository and reviewer mapping for `Hsiii/health-check-system`.
 
-A general self-host must change these source-level boundaries or disable the
-corresponding features. Installing the bot in another guild does not expose the
-WM31 controls or scheduled feeds there.
+A general self-host must change these remaining source-level boundaries or
+disable the corresponding features. Installing the bot in another guild does
+not expose the WM31 controls or scheduled feeds there.
 
 Gateway features are enabled when a bot token is present unless
 `DISCORD_GATEWAY_DISABLED=true`. Run only one Gateway-enabled instance per bot

@@ -1,5 +1,6 @@
 import type { Server } from "bun";
 
+import { getChatbotAccessConfig } from "../lib/chatbot/access";
 import { getPublicDiscordSummary } from "../lib/discord/env";
 import {
   macAgentBridge,
@@ -73,6 +74,7 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
 
 const port = Number(process.env.PORT ?? 3000);
 const hostname = process.env.HOSTNAME || "0.0.0.0";
+getChatbotAccessConfig();
 const server = Bun.serve({
   port,
   hostname,

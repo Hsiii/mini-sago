@@ -1,5 +1,9 @@
 import { getInstagramReplyUrls } from "./instagram-links";
 import { createDiscordRequest, handleChatbotMention } from "./chatbot";
+import {
+  getChatbotAccessConfig,
+  type ChatbotAccessConfig,
+} from "../chatbot/access";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -60,6 +64,7 @@ type DiscordMessageCreate = {
 
 type InstagramGatewayConfig = {
   botToken: string;
+  chatbotAccess: ChatbotAccessConfig;
 };
 
 function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
@@ -72,6 +77,7 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
 
   return {
     botToken,
+    chatbotAccess: getChatbotAccessConfig(),
   };
 }
 
@@ -353,6 +359,7 @@ class InstagramGatewayClient {
           message,
           botUserId: this.botUserId,
           discordRequest: createDiscordRequest(this.config.botToken),
+          accessConfig: this.config.chatbotAccess,
         });
 
         if (handled) {

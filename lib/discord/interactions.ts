@@ -278,6 +278,7 @@ export async function handleDiscordInteractionRequest(request: Request) {
       customId,
       userId,
       discordRequest: createDiscordRequest(config.botToken),
+      accessConfig: config.chatbotAccess,
     });
     if (approval?.status === "forbidden") {
       return jsonResponse(

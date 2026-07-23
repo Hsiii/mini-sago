@@ -222,7 +222,7 @@ export class MacAgentClient {
             })()
           : await (async () => {
               this.traceStore.start(job, startedAt, {
-                model: codexProfileForJob(job).model,
+                model: codexProfileForJob(job, this.config.chatbotAccess).model,
               });
               const answer = await runCodexJob(job, {
                 ...this.config,

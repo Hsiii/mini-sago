@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { OWNER_DISCORD_USER_ID } from "../chatbot/access";
+import type { ChatbotAccessConfig } from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
 import type {
@@ -15,13 +15,6 @@ import type {
 } from "../chatbot/protocol";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
-const AUTHORIZED_GUILD_IDS = new Set([
-  "917436845187563610",
-  "1282936453134815275",
-  "1439286996869713992",
-  "1521168712579682567",
-]);
-const AUTHORIZED_CHANNEL_IDS = new Set(["1517766866964316201"]);
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
 
@@ -209,10 +202,12 @@ export function takeChatbotMutationApproval({
   customId,
   userId,
   discordRequest,
+  accessConfig,
 }: {
   customId?: string;
   userId?: string;
   discordRequest: DiscordRequest;
+  accessConfig: ChatbotAccessConfig;
 }):
   | null
   | { status: "forbidden" | "expired" }
@@ -220,7 +215,7 @@ export function takeChatbotMutationApproval({
   if (!customId?.startsWith(MUTATION_APPROVAL_PREFIX)) return null;
   const id = customId.slice(MUTATION_APPROVAL_PREFIX.length);
   const pending = pendingMutations.get(id);
-  if (userId !== OWNER_DISCORD_USER_ID) return { status: "forbidden" };
+  if (userId !== accessConfig.ownerUserId) return { status: "forbidden" };
   if (!pending || pending.expiresAt <= Date.now()) {
     if (pending) pendingMutations.delete(id);
     return { status: "expired" };
@@ -236,6 +231,7 @@ export function takeChatbotMutationApproval({
         botUserId: pending.botUserId,
         discordRequest,
         approvedMutation: pending.approval,
+        accessConfig,
       }),
   };
 }
@@ -372,6 +368,7 @@ export function extractMentionRequest(content: string, botUserId: string) {
 export function extractChatbotRequest(
   message: ChatbotMention,
   botUserId: string,
+  accessConfig: ChatbotAccessConfig,
 ) {
   const content = message.content ?? "";
   const mentionRequest = extractMentionRequest(content, botUserId);
@@ -380,7 +377,7 @@ export function extractChatbotRequest(
     return mentionRequest;
   }
 
-  if (!message.guild_id && message.author?.id === OWNER_DISCORD_USER_ID) {
+  if (!message.guild_id && message.author?.id === accessConfig.ownerUserId) {
     return content.trim();
   }
 
@@ -391,13 +388,14 @@ export function extractChatbotRequest(
 
 export function isChatbotAuthorized(
   userId: string,
+  accessConfig: ChatbotAccessConfig,
   guildId?: string,
   channelId?: string,
 ) {
   return (
-    userId === OWNER_DISCORD_USER_ID ||
-    (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId)) ||
-    (channelId !== undefined && AUTHORIZED_CHANNEL_IDS.has(channelId))
+    userId === accessConfig.ownerUserId ||
+    (guildId !== undefined && accessConfig.guildIds.has(guildId)) ||
+    (channelId !== undefined && accessConfig.channelIds.has(channelId))
   );
 }
 
@@ -1188,11 +1186,13 @@ export async function handleChatbotMention({
   botUserId,
   discordRequest,
   approvedMutation,
+  accessConfig,
 }: {
   message: ChatbotMention;
   botUserId: string;
   discordRequest: DiscordRequest;
   approvedMutation?: ApprovedMutation;
+  accessConfig: ChatbotAccessConfig;
 }) {
   const requesterUserId = message.author?.id;
 
@@ -1200,13 +1200,18 @@ export async function handleChatbotMention({
     return false;
   }
 
-  const request = extractChatbotRequest(message, botUserId);
+  const request = extractChatbotRequest(message, botUserId, accessConfig);
   if (request === null) {
     return false;
   }
 
   if (
-    !isChatbotAuthorized(requesterUserId, message.guild_id, message.channel_id)
+    !isChatbotAuthorized(
+      requesterUserId,
+      accessConfig,
+      message.guild_id,
+      message.channel_id,
+    )
   ) {
     if (!message.guild_id) {
       return false;
@@ -1214,7 +1219,7 @@ export async function handleChatbotMention({
 
     await postChatbotResponse(
       message,
-      `在這個伺服器裡我暫時只聽 <@${OWNER_DISCORD_USER_ID}> 的 抱歉啦`,
+      `在這個伺服器裡我暫時只聽 <@${accessConfig.ownerUserId}> 的 抱歉啦`,
       discordRequest,
     );
     return true;
@@ -1266,7 +1271,7 @@ export async function handleChatbotMention({
       let mutationScope: ChatbotMutationScope | undefined;
       let selectedRepository: string | undefined;
 
-      if (requesterUserId === OWNER_DISCORD_USER_ID) {
+      if (requesterUserId === accessConfig.ownerUserId) {
         if (
           approvedMutation &&
           approvedMutation.requestMessageId === message.id
