@@ -138,7 +138,7 @@ describe("Discord chatbot", () => {
     expect(isChatbotAuthorized("917446775873343600")).toBe(true);
   });
 
-  test("rejects community PR reviews before dispatching to the Mac", async () => {
+  test("allows community code questions into the read-only chat path", async () => {
     const requests: Array<{ path: string; body: unknown }> = [];
     const handled = await handleChatbotMention({
       message: {
@@ -163,8 +163,7 @@ describe("Discord chatbot", () => {
     expect(requests.at(-1)).toEqual({
       path: "/channels/channel-1/messages",
       body: {
-        content:
-          "這種會碰 GitHub 或程式碼的重工作目前只有曦可以叫我做 你可以叫我整理聊天或網址內容",
+        content: "我現在沒接上工作機 晚點再叫我一次 💤",
         allowed_mentions: { parse: [] },
       },
     });

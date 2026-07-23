@@ -35,12 +35,12 @@ MiniSago can:
 - explain the observable sources and retrieval choices behind her previous
   answer.
 
-Community members can use these conversational and summarization features, but
-GitHub reviews, code changes, command execution, and other privileged work are
-owner-only. Community and owner chat requests run on GPT-5.6 Luna; owner
-requests first use Luna to decide whether development work should switch to
-GPT-5.6 Sol with medium reasoning. The same boundary is checked by both the
-Discord service and the Codex worker before Codex starts.
+Community members can discuss code and links through the read-only chat path,
+but repository checkout, developer commands, GitHub mutations, Mac access, and
+other privileged capabilities are owner-only. Community and owner chat requests
+run on GPT-5.6 Luna; owner requests first use Luna to decide whether development
+work should switch to GPT-5.6 Sol with medium reasoning. The worker checks
+requester capabilities rather than trying to infer authorization from wording.
 
 She only searches channels that the person asking can access. Member roles,
 join dates, and presence are not sent to Codex. Temporary attachment downloads

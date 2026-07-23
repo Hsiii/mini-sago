@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  canRunChatbotRequest,
   chatbotAccessTier,
-  isPrivilegedChatbotRequest,
+  canUseChatbotCapability,
   OWNER_DISCORD_USER_ID,
 } from "./access";
 
@@ -13,27 +12,17 @@ describe("chatbot access policy", () => {
     expect(chatbotAccessTier("community-member")).toBe("community");
   });
 
-  test("keeps trivial community requests available", () => {
-    expect(isPrivilegedChatbotRequest("summarize this conversation")).toBe(
+  test("grants capabilities by requester instead of request wording", () => {
+    expect(canUseChatbotCapability("community-member", "chat")).toBe(true);
+    expect(canUseChatbotCapability("community-member", "dev")).toBe(false);
+    expect(canUseChatbotCapability("community-member", "mac")).toBe(false);
+    expect(canUseChatbotCapability("community-member", "execution_route")).toBe(
       false,
     );
-    expect(isPrivilegedChatbotRequest("這篇網址在講什麼")).toBe(false);
-    expect(canRunChatbotRequest("community-member", "幫我整理聊天")).toBe(true);
-  });
-
-  test("blocks GitHub and coding work for community users", () => {
-    const requests = [
-      "review this PR",
-      "https://github.com/Hsiii/health-check-system/pull/42",
-      "幫我審查這個 PR",
-      "create a GitHub issue from this discussion",
-      "幫我執行這個專案的測試",
-    ];
-
-    for (const request of requests) {
-      expect(isPrivilegedChatbotRequest(request)).toBe(true);
-      expect(canRunChatbotRequest("community-member", request)).toBe(false);
-      expect(canRunChatbotRequest(OWNER_DISCORD_USER_ID, request)).toBe(true);
-    }
+    expect(canUseChatbotCapability(OWNER_DISCORD_USER_ID, "dev")).toBe(true);
+    expect(canUseChatbotCapability(OWNER_DISCORD_USER_ID, "mac")).toBe(true);
+    expect(
+      canUseChatbotCapability(OWNER_DISCORD_USER_ID, "execution_route"),
+    ).toBe(true);
   });
 });

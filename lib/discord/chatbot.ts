@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { canRunChatbotRequest, OWNER_DISCORD_USER_ID } from "../chatbot/access";
+import { OWNER_DISCORD_USER_ID } from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
 import type {
@@ -308,18 +308,6 @@ export function isChatbotAuthorized(
     (guildId !== undefined && AUTHORIZED_GUILD_IDS.has(guildId)) ||
     (channelId !== undefined && AUTHORIZED_CHANNEL_IDS.has(channelId))
   );
-}
-
-function privilegedRequestContext(request: string, message: DiscordMessage) {
-  return [
-    request,
-    messageContent(message),
-    message.referenced_message
-      ? messageContent(message.referenced_message)
-      : undefined,
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 function normalizeDiscordAnswer(content: string) {
@@ -1128,20 +1116,6 @@ export async function handleChatbotMention({
     await postChatbotResponse(
       message,
       `在這個伺服器裡我暫時只聽 <@${OWNER_DISCORD_USER_ID}> 的 抱歉啦`,
-      discordRequest,
-    );
-    return true;
-  }
-
-  if (
-    !canRunChatbotRequest(
-      requesterUserId,
-      privilegedRequestContext(request, message),
-    )
-  ) {
-    await postChatbotResponse(
-      message,
-      "這種會碰 GitHub 或程式碼的重工作目前只有曦可以叫我做 你可以叫我整理聊天或網址內容",
       discordRequest,
     );
     return true;

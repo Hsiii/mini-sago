@@ -104,15 +104,29 @@ describe("Codex chatbot runner", () => {
     expect(prompt).not.toContain("use Hsiii/MiniSago");
   });
 
-  test("rechecks privileged work at the Mac boundary", () => {
+  test("rechecks requester capabilities at the worker boundary", () => {
     expect(() =>
       assertChatbotJobAllowed({ ...job, request: "review this PR" }),
-    ).toThrow("Community users cannot dispatch privileged Codex work.");
+    ).not.toThrow();
+    expect(() =>
+      assertChatbotJobAllowed({
+        ...job,
+        executionMode: "dev",
+        repository: "Hsiii/mini-sago",
+      }),
+    ).toThrow("Requester cannot use the dev capability.");
+    expect(() =>
+      assertChatbotJobAllowed({ ...job, executionTarget: "mac" }),
+    ).toThrow("Requester cannot use the mac capability.");
+    expect(() =>
+      assertChatbotJobAllowed({ ...job, purpose: "execution_route" }),
+    ).toThrow("Requester cannot use the execution_route capability.");
     expect(() =>
       assertChatbotJobAllowed({
         ...job,
         requesterUserId: "917446775873343600",
-        request: "review this PR",
+        executionMode: "dev",
+        repository: "Hsiii/mini-sago",
       }),
     ).not.toThrow();
   });
