@@ -9,17 +9,14 @@ import {
   getNearbyHumanMessages,
   getRecentHumanMessages,
   handleChatbotMention,
-  identitySearchQueries,
-  identitySubjectName,
   isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
-  inferIdentitySubject,
   isTraceExplanationRequest,
+  lookupGuildMembers,
   missingDeveloperRepositoryResponse,
   parseDiscordContextPlan,
   parseExecutionRoute,
-  parseIdentityResolution,
   postChatbotResponse,
   searchGuildMessages,
   toChatbotMessage,
@@ -501,13 +498,15 @@ describe("Discord chatbot", () => {
   test("validates and limits Codex Discord context plans", () => {
     expect(
       parseDiscordContextPlan(`\`\`\`json
-{"historyCount":73,"queries":[{"author":"self","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
+{"historyCount":73,"memberQueries":["Daniel","Daniel","午前"],"queries":[{"author":"self","mentions":"Daniel","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
 \`\`\``),
     ).toEqual({
       historyCount: 73,
+      memberQueries: ["Daniel", "午前"],
       queries: [
         {
           author: "self",
+          mentions: "Daniel",
           content: "new app",
         },
         { has: ["link", "file"] },
@@ -517,6 +516,7 @@ describe("Discord chatbot", () => {
     });
     expect(parseDiscordContextPlan("not json")).toEqual({
       historyCount: 20,
+      memberQueries: [],
       queries: [],
     });
   });
@@ -673,89 +673,37 @@ describe("Discord chatbot", () => {
     expect(missingDeveloperRepositoryResponse("chat")).toBeUndefined();
   });
 
-  test("recognizes direct identity questions", () => {
-    expect(inferIdentitySubject("重新挑戰 6uc 是誰")).toBe("6uc");
-    expect(inferIdentitySubject("who is kiseki?")).toBe("kiseki");
-    expect(inferIdentitySubject("6uc 最近說了什麼")).toBeUndefined();
-  });
-
-  test("always searches messages by and mentioning an identity subject", () => {
-    expect(identitySearchQueries("kiseki", [{ content: "old alias" }])).toEqual(
-      [
-        {
-          purpose: "candidate_check",
-          author: "kiseki",
-          sortBy: "timestamp",
-          sortOrder: "desc",
-        },
-        {
-          purpose: "direct_mention",
-          mentions: "kiseki",
-          sortBy: "timestamp",
-          sortOrder: "desc",
-        },
-        { purpose: "context", content: "old alias" },
-      ],
-    );
-  });
-
-  test("turns an actual Discord user mention into its displayed member name", () => {
-    expect(
-      identitySubjectName("<@123456789012345678>", {
-        nick: "Kiseki",
-        user: {
-          id: "123456789012345678",
-          username: "kiseki_account",
-          global_name: "Daniel",
-        },
-      }),
-    ).toBe("Kiseki");
-    expect(identitySubjectName("kiseki")).toBe("kiseki");
-  });
-
-  test("downgrades unsupported identity claims before answer writing", () => {
-    const resolution = parseIdentityResolution(
-      JSON.stringify({
-        subject: "6uc",
-        candidate: "午前",
-        confidence: "strong",
-        basis: "third_party_only",
-        sourceIndexes: [0, 99],
-      }),
-      "6uc",
-      1,
-    );
-
-    expect(resolution).toEqual({
-      subject: "6uc",
-      candidate: "午前",
-      confidence: "weak",
-      basis: "third_party_only",
-      sourceIndexes: [0],
+  test("looks up Discord member aliases without classifying the request", async () => {
+    const paths: string[] = [];
+    const results = await lookupGuildMembers({
+      guildId: "guild-1",
+      queries: ["kiseki", "<@123456789012345678>"],
+      discordRequest: async (path) => {
+        paths.push(path);
+        const member = {
+          nick: "Kiseki",
+          user: {
+            id: "123456789012345678",
+            username: "kiseki_account",
+            global_name: "Daniel",
+          },
+        };
+        return (path.includes("/members/search?") ? [member] : member) as never;
+      },
     });
-  });
 
-  test("accepts a Discord member profile only when it links both names", () => {
-    const content = JSON.stringify({
-      subject: "kiseki",
-      candidate: "Daniel",
-      confidence: "strong",
-      basis: "discord_member_profile",
-      sourceIndexes: [],
-    });
-    const candidate = { names: ["Kiseki", "Daniel", "daniel_account"] };
-
-    expect(parseIdentityResolution(content, "kiseki", 0, [candidate])).toEqual({
-      subject: "kiseki",
-      candidate: "Daniel",
-      confidence: "strong",
-      basis: "discord_member_profile",
-      sourceIndexes: [],
-    });
-    expect(parseIdentityResolution(content, "kiseki", 0)).toMatchObject({
-      confidence: "unknown",
-      basis: "none",
-    });
+    expect(paths[0]).toContain("/members/search?query=kiseki");
+    expect(paths[1]).toBe("/guilds/guild-1/members/123456789012345678");
+    expect(results).toEqual([
+      {
+        query: "kiseki",
+        names: ["Kiseki", "Daniel", "kiseki_account"],
+      },
+      {
+        query: "<@123456789012345678>",
+        names: ["Kiseki", "Daniel", "kiseki_account"],
+      },
+    ]);
   });
 
   test("preserves the model's punctuation and line breaks", () => {
@@ -775,7 +723,6 @@ describe("Discord chatbot", () => {
       requestMessageId: "request-1",
       queries: [
         {
-          purpose: "direct_mention",
           author: "Daniel",
           mentions: "Daniel",
           has: ["image"],
@@ -848,7 +795,6 @@ describe("Discord chatbot", () => {
     expect(results[0]?.jumpUrl).toBe(
       "https://discord.com/channels/guild-1/channel-1/message-1",
     );
-    expect(results[0]?.searchPurposes).toEqual(["direct_mention"]);
   });
 
   test("uses the requester directly for Chinese self-reference", async () => {

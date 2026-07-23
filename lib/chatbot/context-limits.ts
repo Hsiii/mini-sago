@@ -10,6 +10,8 @@ export const CHATBOT_CONTEXT_LIMITS = {
   maximumSearchContentCharacters: 1_024,
   maximumSearchHostnameCharacters: 256,
   maximumSearchExtensionCharacters: 32,
+  maximumMemberLookups: 4,
+  maximumMemberQueryCharacters: 64,
   memberSearchResults: 10,
   searchResultsPerQuery: 10,
   maximumSearchResults: 25,

@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 15;
+export const CHATBOT_PROTOCOL_VERSION = 16;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -20,33 +20,13 @@ export type ChatbotReaction = {
   me?: boolean;
 };
 
-export type ChatbotSearchPurpose =
-  | "context"
-  | "direct_mention"
-  | "self_claim"
-  | "candidate_check";
-
-export type ChatbotTask = "general" | "identity_resolution";
 export type ChatbotExecutionMode = "chat" | "dev";
 export type ChatbotExecutionTarget = "default" | "mac";
 export type ChatbotMutationScope = "code" | "issue" | "deploy";
 
-export type ChatbotIdentityCandidate = {
+export type ChatbotMemberResult = {
+  query: string;
   names: string[];
-};
-
-export type ChatbotIdentityResolution = {
-  subject: string;
-  candidate?: string;
-  confidence: "strong" | "moderate" | "weak" | "unknown";
-  basis:
-    | "direct_self_link"
-    | "discord_member_profile"
-    | "independent_corroboration"
-    | "third_party_only"
-    | "conflicting"
-    | "none";
-  sourceIndexes: number[];
 };
 
 export type ChatbotMessage = {
@@ -61,27 +41,17 @@ export type ChatbotMessage = {
   channelId?: string;
   channelName?: string;
   jumpUrl?: string;
-  searchPurposes?: ChatbotSearchPurpose[];
   referencedMessage?: Omit<ChatbotMessage, "referencedMessage">;
 };
 
 export type ChatbotJob = {
   id: string;
   requesterUserId: string;
-  purpose?:
-    | "answer"
-    | "execution_route"
-    | "context_plan"
-    | "identity_resolution"
-    | "trace_explanation";
-  task?: ChatbotTask;
+  purpose?: "answer" | "execution_route" | "context_plan" | "trace_explanation";
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
-  subject?: string;
-  identityCandidates?: ChatbotIdentityCandidate[];
-  identityResolution?: ChatbotIdentityResolution;
   channelId: string;
   requestMessageId: string;
   request: string;
@@ -89,6 +59,8 @@ export type ChatbotJob = {
   messages: ChatbotMessage[];
   searchStatus?: "not_requested" | "complete" | "unavailable";
   searchResults?: ChatbotMessage[];
+  memberLookupStatus?: "not_requested" | "complete" | "unavailable";
+  memberResults?: ChatbotMemberResult[];
 };
 
 export type MacAgentClientMessage =
