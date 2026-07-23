@@ -15,6 +15,7 @@ import {
   isHumanContextMessage,
   inferIdentitySubject,
   isTraceExplanationRequest,
+  missingDeveloperRepositoryResponse,
   parseDiscordContextPlan,
   parseExecutionRoute,
   parseIdentityResolution,
@@ -524,6 +525,27 @@ describe("Discord chatbot", () => {
       target: "mac",
       mutationScope: "code",
     });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":null,"reason":"chatbot work"}',
+        "fix the chatbot",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "code",
+      repository: "Hsiii/MiniSago",
+    });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":null,"reason":"chatbot work"}',
+        "檢查 MiniSago 為什麼卡住",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      repository: "Hsiii/MiniSago",
+    });
     for (const request of [
       "write me a poem",
       "release the balloons",
@@ -555,6 +577,16 @@ describe("Discord chatbot", () => {
       target: "default",
       mutationScope: "code",
     });
+  });
+
+  test("asks for a repository instead of dispatching an invalid dev job", () => {
+    expect(missingDeveloperRepositoryResponse("dev")).toBe(
+      "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n丟我 `owner/repo` 或 GitHub 連結 我就能繼續",
+    );
+    expect(
+      missingDeveloperRepositoryResponse("dev", "Hsiii/mini-sago"),
+    ).toBeUndefined();
+    expect(missingDeveloperRepositoryResponse("chat")).toBeUndefined();
   });
 
   test("recognizes direct identity questions", () => {

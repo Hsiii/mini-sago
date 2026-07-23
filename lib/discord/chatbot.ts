@@ -514,10 +514,10 @@ export function parseExecutionRoute(
     .filter((line) => !/^\s*>/u.test(line))
     .join("\n");
   const englishMutation = actionableOwnerRequest.match(
-    /^(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|this|that|it)\b/imu,
+    /^(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|chatbot|bot|minisago|this|that|it)\b/imu,
   );
   const chineseMutation = actionableOwnerRequest.match(
-    /^(?:\s*(?:請|幫我|請幫我)\s*)?(建立|新增|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|這個|那個)/imu,
+    /^(?:\s*(?:請|幫我|請幫我)\s*)?(建立|新增|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|聊天機器人|機器人|MiniSago|這個|那個)/imu,
   );
   const writeRequested = Boolean(englishMutation || chineseMutation);
   const mutationText = `${englishMutation?.[1] ?? chineseMutation?.[1] ?? ""} ${englishMutation?.[2] ?? chineseMutation?.[2] ?? ""}`;
@@ -536,6 +536,13 @@ export function parseExecutionRoute(
   const repository = writeRequested
     ? ownerRepository
     : (ownerRepository ?? referencedRepository);
+  const selectedRepository =
+    repository ??
+    (/\bminisago\b|\b(?:the|this)\s+chatbot\b|(?:這個|這隻)?聊天機器人/iu.test(
+      ownerRequest,
+    )
+      ? "Hsiii/MiniSago"
+      : undefined);
   const target =
     /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
       ownerRequest,
@@ -559,7 +566,7 @@ export function parseExecutionRoute(
         mode,
         target,
         ...(mode === "dev" && mutationScope ? { mutationScope } : {}),
-        ...(repository ? { repository } : {}),
+        ...(selectedRepository ? { repository: selectedRepository } : {}),
       };
     }
   } catch {
@@ -573,8 +580,16 @@ export function parseExecutionRoute(
         : "chat",
     target,
     ...(writeRequested && mutationScope ? { mutationScope } : {}),
-    ...(repository ? { repository } : {}),
+    ...(selectedRepository ? { repository: selectedRepository } : {}),
   };
+}
+
+export function missingDeveloperRepositoryResponse(
+  mode: ChatbotExecutionMode,
+  repository?: string,
+) {
+  if (mode !== "dev" || repository) return undefined;
+  return "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n丟我 `owner/repo` 或 GitHub 連結 我就能繼續";
 }
 
 export function inferIdentitySubject(request: string) {
@@ -1300,6 +1315,13 @@ export async function handleChatbotMention({
           selectedRepository = route.repository;
         }
 
+        const missingRepository = missingDeveloperRepositoryResponse(
+          executionMode,
+          selectedRepository,
+        );
+        if (missingRepository) {
+          return { ok: true as const, content: missingRepository };
+        }
         const workerRoute = workflow.route(
           [
             executionMode === "chat" ? "chat" : executionMode,
