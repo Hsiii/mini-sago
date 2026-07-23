@@ -64,6 +64,7 @@ type DiscordMessageCreate = {
   }>;
   sticker_items?: Array<{ name?: string }>;
   referenced_message?: DiscordMessageCreate | null;
+  mentions?: DiscordUser[];
   webhook_id?: string;
   author?: DiscordUser;
 };

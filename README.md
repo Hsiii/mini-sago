@@ -23,7 +23,9 @@ replaces the original message.
 ### Answers questions about the conversation
 
 Mention the **MiniSago bot account** and ask a question. You can also reply to
-one of her answers to continue the conversation without mentioning her again.
+one of her answers with Discord's reply ping enabled to continue the
+conversation without typing another mention. Turn off the reply ping when you
+only want to quote or refer to something she said; MiniSago will stay quiet.
 When Discord permits reactions, a mention answer may be a reply, a reaction to
 your message, or both.
 

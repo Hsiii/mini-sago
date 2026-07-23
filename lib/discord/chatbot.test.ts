@@ -106,13 +106,14 @@ describe("Discord chatbot", () => {
     expect(extractMentionRequest("summarize this", BOT_ID)).toBeNull();
   });
 
-  test("treats replies to MiniSago as chatbot requests", () => {
+  test("treats replies that ping MiniSago as chatbot requests", () => {
     const message = {
       id: "reply-1",
       channel_id: "channel-1",
       content: "再找一次",
       timestamp: "2026-07-20T11:00:00.000Z",
       author: { id: "user-1", username: "Hsi" },
+      mentions: [{ id: BOT_ID }],
       referenced_message: {
         id: "bot-message-1",
         channel_id: "channel-1",
@@ -141,6 +142,13 @@ describe("Discord chatbot", () => {
             author: { id: "other-user", username: "Other" },
           },
         },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
+    ).toBeNull();
+    expect(
+      extractChatbotRequest(
+        { ...message, mentions: [] },
         BOT_ID,
         ACCESS_CONFIG,
       ),
@@ -324,6 +332,7 @@ describe("Discord chatbot", () => {
         content: "再找一次",
         timestamp: "2026-07-20T11:00:00.000Z",
         author: { id: "member-1", username: "Member" },
+        mentions: [{ id: BOT_ID }],
         referenced_message: {
           id: "bot-message-1",
           channel_id: "channel-1",

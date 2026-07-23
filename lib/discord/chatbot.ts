@@ -43,6 +43,9 @@ type DiscordMessage = {
     global_name?: string | null;
     bot?: boolean;
   };
+  mentions?: Array<{
+    id?: string;
+  }>;
   member?: {
     nick?: string | null;
     roles?: string[];
@@ -458,7 +461,8 @@ export function extractChatbotRequest(
     return content.trim();
   }
 
-  return message.referenced_message?.author?.id === botUserId
+  return message.referenced_message?.author?.id === botUserId &&
+    message.mentions?.some((user) => user.id === botUserId)
     ? content.trim()
     : null;
 }
