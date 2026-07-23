@@ -340,15 +340,14 @@ function privilegedRequestContext(request: string, message: DiscordMessage) {
 const PROTECTED_CHAT_SEGMENT =
   /```[\s\S]*?```|`[^`\n]*`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s，。！？；：]+/gu;
 
-function normalizeChineseProse(content: string) {
+function normalizeChineseChatProse(content: string) {
   return content
-    .replace(/[，、：；]/gu, " ")
-    .replace(/[。！](?=\n)/gu, "")
-    .replace(/[。！]/gu, "\n")
-    .replace(/[「」『』]/gu, "")
+    .replace(/[，、：；？]/gu, " ")
+    .replace(/。(?=[」』）)]?(?:\n|$))/gu, "")
+    .replace(/。/gu, "\n")
     .replace(/[ \t]+/gu, " ")
     .replace(/ *\n */gu, "\n")
-    .replace(/\n{2,}/gu, "\n");
+    .replace(/\n{3,}/gu, "\n\n");
 }
 
 export function formatDiscordAnswer(content: string) {
@@ -358,11 +357,11 @@ export function formatDiscordAnswer(content: string) {
 
   for (const match of trimmed.matchAll(PROTECTED_CHAT_SEGMENT)) {
     const start = match.index;
-    normalized += normalizeChineseProse(trimmed.slice(previousEnd, start));
+    normalized += normalizeChineseChatProse(trimmed.slice(previousEnd, start));
     normalized += match[0];
     previousEnd = start + match[0].length;
   }
-  normalized += normalizeChineseProse(trimmed.slice(previousEnd));
+  normalized += normalizeChineseChatProse(trimmed.slice(previousEnd));
   normalized = normalized.trim();
 
   if (!normalized) {
