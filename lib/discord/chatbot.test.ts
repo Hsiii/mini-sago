@@ -133,14 +133,15 @@ describe("Discord chatbot", () => {
   test("authorizes configured guilds, channels, and the owner", () => {
     expect(isChatbotAuthorized("member-1", "917436845187563610")).toBe(true);
     expect(isChatbotAuthorized("member-2", "1282936453134815275")).toBe(true);
+    expect(isChatbotAuthorized("member-3", "1439286996869713992")).toBe(true);
     expect(
-      isChatbotAuthorized("member-3", "other-guild", "1517766866964316201"),
+      isChatbotAuthorized("member-4", "other-guild", "1517766866964316201"),
     ).toBe(true);
     expect(
-      isChatbotAuthorized("member-3", "other-guild", "other-channel"),
+      isChatbotAuthorized("member-4", "other-guild", "other-channel"),
     ).toBe(false);
-    expect(isChatbotAuthorized("member-3", "other-guild")).toBe(false);
-    expect(isChatbotAuthorized("member-3")).toBe(false);
+    expect(isChatbotAuthorized("member-4", "other-guild")).toBe(false);
+    expect(isChatbotAuthorized("member-4")).toBe(false);
     expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);
     expect(isChatbotAuthorized("917446775873343600")).toBe(true);
   });
