@@ -82,7 +82,8 @@ describe("Mac agent bridge", () => {
         secret: bridgeSecret,
         workerId: "oracle",
         capabilities: ["chat", "dev"],
-        repositories: ["Hsiii/mini-sago"],
+        repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
+        chatbotRepository: "Hsiii/mini-sago",
         priority: 100,
       }),
     );
@@ -179,7 +180,8 @@ describe("Mac agent bridge", () => {
         secret: bridgeSecret,
         workerId: "oracle",
         capabilities: ["chat", "dev"],
-        repositories: ["Hsiii/mini-sago"],
+        repositories: ["Hsiii/mini-sago", "Kiwi/backend"],
+        chatbotRepository: "Hsiii/mini-sago",
         priority: 100,
       }),
     );
@@ -193,6 +195,11 @@ describe("Mac agent bridge", () => {
     expect(bridge.getStatus()).toBe("busy");
     expect(bridge.acquireWorkflow().status).toBe("busy");
     if (acquired.status !== "accepted") throw new Error("Expected workflow");
+    expect(acquired.workflow.availableRepositories).toEqual([
+      "Hsiii/mini-sago",
+      "Kiwi/backend",
+    ]);
+    expect(acquired.workflow.chatbotRepository).toBe("Hsiii/mini-sago");
 
     const planning = acquired.workflow.dispatch(job);
     expect(planning.status).toBe("accepted");

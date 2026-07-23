@@ -127,6 +127,9 @@ export class MacAgentClient {
         workerId: this.config.workerId,
         capabilities: this.config.workerCapabilities,
         repositories: this.config.githubRepositories,
+        ...(this.config.chatbotRepository
+          ? { chatbotRepository: this.config.chatbotRepository }
+          : {}),
         priority: this.config.workerPriority,
       });
     });

@@ -40,23 +40,24 @@ scheduled-monitor variable names.
 
 ## Worker variables
 
-| Name                            | Required | Purpose                                                                                |
-| ------------------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets |
-| `MINISAGO_MAC_BRIDGE_SECRET`    | Mac      | Must match the hosted Mac-profile secret                                               |
-| `MINISAGO_CODEX_PATH`           | No       | Codex executable                                                                       |
-| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state                                                                  |
-| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled macOS lock monitor                                                            |
-| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database                                                          |
-| `MINISAGO_WORKSPACE_ROOT`       | Dev      | Parent directory for isolated repository work                                          |
-| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Advertised capacity, from 1 to 16                                                      |
-| `MINISAGO_HEADLESS`             | Linux    | Keeps a non-macOS worker connected without a session monitor                           |
-| `MINISAGO_WORKER_ID`            | No       | Stable worker identity                                                                 |
-| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                  |
-| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from 0 to 1000                                                      |
-| `MINISAGO_GITHUB_REPOSITORIES`  | Dev      | Exact `owner/repository` allowlist                                                     |
-| `MINISAGO_GITHUB_CONFIG_DIR`    | Dev      | Dedicated GitHub CLI state                                                             |
-| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Disposable per-job checkout root                                                       |
+| Name                            | Required | Purpose                                                                                 |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets  |
+| `MINISAGO_MAC_BRIDGE_SECRET`    | Mac      | Must match the hosted Mac-profile secret                                                |
+| `MINISAGO_CODEX_PATH`           | No       | Codex executable                                                                        |
+| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state                                                                   |
+| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled macOS lock monitor                                                             |
+| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database                                                           |
+| `MINISAGO_WORKSPACE_ROOT`       | Dev      | Parent directory for isolated repository work                                           |
+| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Advertised capacity, from 1 to 16                                                       |
+| `MINISAGO_HEADLESS`             | Linux    | Keeps a non-macOS worker connected without a session monitor                            |
+| `MINISAGO_WORKER_ID`            | No       | Stable worker identity                                                                  |
+| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                   |
+| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from 0 to 1000                                                       |
+| `MINISAGO_GITHUB_REPOSITORIES`  | Dev      | Exact `owner/repository` allowlist                                                      |
+| `MINISAGO_CHATBOT_REPOSITORY`   | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed |
+| `MINISAGO_GITHUB_CONFIG_DIR`    | Dev      | Dedicated GitHub CLI state                                                              |
+| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Disposable per-job checkout root                                                        |
 
 The Mac installer reads `.env.local`; the headless worker reads `.env.worker`.
 Image and installer defaults are shown in the corresponding example files.
@@ -133,7 +134,10 @@ repository checkout.
 GitHub access uses a dedicated persistent `gh` login; MiniSago does not accept,
 copy, or inject its token through environment variables. A worker may accept a
 development job only for an exact repository advertised in
-`MINISAGO_GITHUB_REPOSITORIES`.
+`MINISAGO_GITHUB_REPOSITORIES`. Advertisement means the worker may clone or
+reuse that repository on demand; it does not need to be cloned in advance.
+Set `MINISAGO_CHATBOT_REPOSITORY` when a worker advertises multiple repositories
+so behavioral-change requests can be routed without repository-name heuristics.
 
 Use one fine-grained credential limited to those repositories. It may receive
 repository contents, issues, and pull-request write access, with read access to

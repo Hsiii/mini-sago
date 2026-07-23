@@ -10,6 +10,7 @@ export type MacAgentConfig = {
   codexPath: string;
   githubConfigDir: string;
   githubRepositories: string[];
+  chatbotRepository?: string;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
   headless: boolean;
@@ -146,6 +147,23 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       "MINISAGO_GITHUB_REPOSITORIES is required for dev workers.",
     );
   }
+  const configuredChatbotRepository =
+    process.env.MINISAGO_CHATBOT_REPOSITORY?.trim();
+  if (
+    configuredChatbotRepository &&
+    !githubRepositories.some(
+      (repository) =>
+        repository.toLocaleLowerCase("en-US") ===
+        configuredChatbotRepository.toLocaleLowerCase("en-US"),
+    )
+  ) {
+    throw new Error(
+      "MINISAGO_CHATBOT_REPOSITORY must name a repository in MINISAGO_GITHUB_REPOSITORIES.",
+    );
+  }
+  const chatbotRepository =
+    configuredChatbotRepository ||
+    (githubRepositories.length === 1 ? githubRepositories[0] : undefined);
   const workspaceRoot =
     process.env.MINISAGO_WORKSPACE_ROOT?.trim() || join(homedir(), "Projects");
   const githubWorktreeRoot = workspaceChild(
@@ -169,6 +187,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
       join(defaultApplicationSupport, "github"),
     githubRepositories,
+    chatbotRepository,
     githubWorktreeRoot,
     headless,
     maxConcurrentJobs: Math.max(
