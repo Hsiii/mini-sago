@@ -4,7 +4,11 @@ import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
 } from "../chatbot/access";
-import { AmbientReactionController } from "./social-reactions";
+import {
+  AmbientReactionController,
+  getAmbientReactionPolicy,
+  type AmbientReactionPolicy,
+} from "./social-reactions";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -67,6 +71,7 @@ type InstagramGatewayConfig = {
   botToken: string;
   chatbotAccess: ChatbotAccessConfig;
   ambientReactionsEnabled: boolean;
+  ambientReactionPolicy: AmbientReactionPolicy;
 };
 
 function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
@@ -83,6 +88,7 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
     ambientReactionsEnabled:
       process.env.MINISAGO_AMBIENT_REACTIONS_ENABLED?.trim().toLowerCase() ===
       "true",
+    ambientReactionPolicy: getAmbientReactionPolicy(),
   };
 }
 
@@ -141,7 +147,7 @@ function getGatewayCloseReason(code: number) {
 }
 
 class InstagramGatewayClient {
-  private ambientReactions = new AmbientReactionController();
+  private ambientReactions: AmbientReactionController;
   private channelTasks = new ChannelTaskQueue();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -153,7 +159,11 @@ class InstagramGatewayClient {
   private stopped = false;
   private botUserId: string | null = null;
 
-  constructor(private readonly config: InstagramGatewayConfig) {}
+  constructor(private readonly config: InstagramGatewayConfig) {
+    this.ambientReactions = new AmbientReactionController({
+      policy: config.ambientReactionPolicy,
+    });
+  }
 
   connect() {
     void this.openSocket(false);
@@ -162,6 +172,7 @@ class InstagramGatewayClient {
   stop() {
     this.stopped = true;
     this.clearHeartbeat();
+    this.ambientReactions.stop();
     this.socket?.close(1000, "MiniSago shutdown");
   }
 
@@ -377,19 +388,12 @@ class InstagramGatewayClient {
       }
 
       if (this.config.ambientReactionsEnabled) {
-        void this.ambientReactions
-          .consider({
-            message,
-            botUserId: this.botUserId,
-            discordRequest: createDiscordRequest(this.config.botToken),
-            accessConfig: this.config.chatbotAccess,
-          })
-          .catch((error) => {
-            console.error(
-              `Failed to consider ambient reaction for ${message.id}:`,
-              error,
-            );
-          });
+        this.ambientReactions.observe({
+          message,
+          botUserId: this.botUserId,
+          discordRequest: createDiscordRequest(this.config.botToken),
+          accessConfig: this.config.chatbotAccess,
+        });
       }
     }
 

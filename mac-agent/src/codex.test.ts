@@ -112,6 +112,7 @@ describe("Codex chatbot runner", () => {
       "ignore",
       "discord.add_reaction",
     ]);
+    expect(SOCIAL_ACTION_OUTPUT_SCHEMA.required).toContain("messageId");
   });
 
   test("routes only through worker-advertised repository capabilities", () => {
@@ -270,6 +271,41 @@ describe("Codex chatbot runner", () => {
     expect(answerPrompt).toContain("ask one short, specific clarification");
   });
 
+  test("reviews one buffered notification burst without duplicating its text", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        purpose: "social_action",
+        request: "",
+        socialActionCandidateMessageIds: ["message-2"],
+        messages: [
+          {
+            id: "message-1",
+            author: "Daniel",
+            timestamp: "2026-07-20T10:00:00.000Z",
+            content: "前面的聊天",
+            attachments: [],
+          },
+          {
+            id: "message-2",
+            author: "Hsi",
+            timestamp: "2026-07-20T10:01:00.000Z",
+            content: "終於修好了",
+            attachments: [],
+          },
+        ],
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain("casually opened Discord");
+    expect(prompt).toContain('"id":"message-1","candidate":false');
+    expect(prompt).toContain('"id":"message-2","candidate":true');
+    expect(prompt.split("終於修好了")).toHaveLength(2);
+    expect(prompt).not.toContain("<current_request>");
+  });
+
   test("keeps capability ahead of tone and labels context as untrusted", () => {
     const prompt = buildCodexPrompt(
       {
@@ -295,7 +331,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(21);
+    expect(PROMPT_VERSION).toBe(22);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",
