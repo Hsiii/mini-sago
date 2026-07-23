@@ -514,11 +514,12 @@ export function parseExecutionRoute(
     .filter((line) => !/^\s*>/u.test(line))
     .join("\n");
   const englishMutation = actionableOwnerRequest.match(
-    /^(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|chatbot|bot|minisago|this|that|it)\b/imu,
+    /^(?:\s*[-*]\s*)?(?:\s*(?:please|can you|could you|would you)\s+)?(create|open|change|adjust|improve|update|edit|close|comment on|implement|fix|commit|push|deploy|publish|release)\b[^\n]{0,64}?\b(issue|pr|pull request|code|repository|repo|project|branch|deployment|service|app|worker|chatbot|bot|minisago|your|this|that|it)\b/imu,
   );
-  const chineseMutation = actionableOwnerRequest.match(
-    /^(?:\s*(?:請|幫我|請幫我)\s*)?(建立|新增|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|聊天機器人|機器人|MiniSago|這個|那個)/imu,
-  );
+  const chineseMutation =
+    actionableOwnerRequest.match(
+      /^(?:\s*[-*]\s*)?(?:\s*(?:請|幫我|請幫我)\s*)?(建立|新增|開|修改|更新|關閉|留言|實作|修復|提交|推送|部署|發布).{0,32}(issue|PR|pull request|程式碼|代碼|repo|repository|專案|分支|服務|應用|worker|聊天機器人|機器人|MiniSago|這個|那個)/imu,
+    ) ?? actionableOwnerRequest.match(/(開)\s*(PR|pull request)\b/iu);
   const writeRequested = Boolean(englishMutation || chineseMutation);
   const mutationText = `${englishMutation?.[1] ?? chineseMutation?.[1] ?? ""} ${englishMutation?.[2] ?? chineseMutation?.[2] ?? ""}`;
   const mutationScope: ChatbotMutationScope | undefined = !writeRequested
@@ -538,8 +539,8 @@ export function parseExecutionRoute(
     : (ownerRepository ?? referencedRepository);
   const selectedRepository =
     repository ??
-    (/\bminisago\b|\b(?:the|this)\s+chatbot\b|(?:這個|這隻)?聊天機器人/iu.test(
-      ownerRequest,
+    (/\bminisago\b|\b(?:the|this)\s+chatbot\b|(?:這個|這隻)?聊天機器人|\b(?:change|fix|update|adjust|improve)\b[^\n]{0,80}\b(?:your|worker|repl(?:y|ies)|responses?|messages?|line ?breaks?|image read(?:ing)?|mentions?|access)\b|(?:改|修|調整|更新).{0,40}(?:你|回覆|訊息|換行|讀圖|圖片|權限|行為|說話方式)|\bworker concurrency\b/iu.test(
+      actionableOwnerRequest,
     )
       ? "Hsiii/MiniSago"
       : undefined);
