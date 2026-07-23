@@ -159,6 +159,7 @@ describe("ambient Discord attention", () => {
     ]);
     expect(test.jobs[0]?.availableTools?.[0]?.metadata).toMatchObject({
       standardUnicodeEmoji: true,
+      customEmojiStatus: "complete",
       customEmojis: [{ value: "sago:emoji-1", name: "sago", animated: true }],
     });
     expect(requests).toContain(

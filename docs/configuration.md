@@ -99,6 +99,10 @@ and applies channel, member, and hourly reaction cooldowns before calling
 Discord. Ambient planning does not download attachments. The Discord token
 never leaves the hosted service.
 
+Mention answers use the same host-owned reaction broker and emoji inventory.
+One answer inference can choose a reply, a reaction bound to the triggering
+message, or both; it does not require a second reaction-planning model call.
+
 The checked-in deployment still hardcodes:
 
 - configured-guild fallback `1282936453134815275`;

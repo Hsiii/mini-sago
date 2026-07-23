@@ -5,6 +5,7 @@ import {
   canMemberSearchChannel,
   extractChatbotRequest,
   extractMentionRequest,
+  executeChatbotAnswerDecision,
   formatDiscordAnswer,
   formatDiscordAnswers,
   getNearbyHumanMessages,
@@ -16,6 +17,7 @@ import {
   lookupGuildMembers,
   missingDeveloperRepositoryResponse,
   parseDiscordContextPlan,
+  parseChatbotAnswerDecision,
   parseExecutionRoute,
   parsePreviousTraceLookup,
   postChatbotResponse,
@@ -39,6 +41,63 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
 };
 
 describe("Discord chatbot", () => {
+  test("accepts reply-only, reaction-only, and combined mention decisions", () => {
+    expect(
+      parseChatbotAnswerDecision(
+        '{"reply":"看得到兩個","reaction":{"emoji":"sago:emoji-1"}}',
+      ),
+    ).toEqual({
+      reply: "看得到兩個",
+      reactionEmoji: "sago:emoji-1",
+    });
+    expect(
+      parseChatbotAnswerDecision('{"reply":null,"reaction":{"emoji":"👀"}}'),
+    ).toEqual({ reply: null, reactionEmoji: "👀" });
+    expect(
+      parseChatbotAnswerDecision('{"reply":"可以啊","reaction":null}'),
+    ).toEqual({ reply: "可以啊" });
+    expect(parseChatbotAnswerDecision("舊版純文字回答")).toEqual({
+      reply: "舊版純文字回答",
+    });
+  });
+
+  test("binds a proposed mention reaction to the current message", async () => {
+    const calls: unknown[] = [];
+    const capabilities = {
+      expiresAt: Date.now() + 60_000,
+      tools: [
+        {
+          name: "discord.add_reaction",
+          risk: "ambient" as const,
+          description: "react",
+          inputSchema: {},
+        },
+      ],
+      customEmojiValues: new Set(["sago:emoji-1"]),
+    };
+
+    const result = await executeChatbotAnswerDecision({
+      content: '{"reply":"這顆可以用","reaction":{"emoji":"sago:emoji-1"}}',
+      message: { id: "mention-1", channel_id: "channel-1" },
+      reactionCapabilities: capabilities,
+      reactionBroker: {
+        addReaction: async (options) => {
+          calls.push(options);
+          return true;
+        },
+      },
+      discordRequest: async () => undefined as never,
+    });
+
+    expect(result).toEqual({ reply: "這顆可以用", reacted: true });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      channelId: "channel-1",
+      messageId: "mention-1",
+      emoji: "sago:emoji-1",
+    });
+  });
+
   test("extracts a natural request from either Discord mention form", () => {
     expect(extractMentionRequest(`<@${BOT_ID}> summarize this`, BOT_ID)).toBe(
       "summarize this",

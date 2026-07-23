@@ -24,6 +24,8 @@ replaces the original message.
 
 Mention the **MiniSago bot account** and ask a question. You can also reply to
 one of her answers to continue the conversation without mentioning her again.
+When Discord permits reactions, a mention answer may be a reply, a reaction to
+your message, or both.
 
 MiniSago can:
 

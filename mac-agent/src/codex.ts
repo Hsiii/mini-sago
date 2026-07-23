@@ -11,6 +11,7 @@ import { prepareDeveloperWorkspace } from "./developer-workspace";
 import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
 
 export {
+  ANSWER_OUTPUT_SCHEMA,
   buildCodexPrompt,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
