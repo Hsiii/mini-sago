@@ -338,32 +338,8 @@ function privilegedRequestContext(request: string, message: DiscordMessage) {
     .join("\n");
 }
 
-const PROTECTED_CHAT_SEGMENT =
-  /```[\s\S]*?```|`[^`\n]*`|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s，。！？；：]+/gu;
-
-function normalizeChineseChatProse(content: string) {
-  return content
-    .replace(/[，、：；？]/gu, " ")
-    .replace(/。(?=[」』）)]?(?:\n|$))/gu, "")
-    .replace(/。/gu, "\n")
-    .replace(/[ \t]+/gu, " ")
-    .replace(/ *\n */gu, "\n")
-    .replace(/\n{3,}/gu, "\n\n");
-}
-
 function normalizeDiscordAnswer(content: string) {
-  const trimmed = content.trim();
-  let normalized = "";
-  let previousEnd = 0;
-
-  for (const match of trimmed.matchAll(PROTECTED_CHAT_SEGMENT)) {
-    const start = match.index;
-    normalized += normalizeChineseChatProse(trimmed.slice(previousEnd, start));
-    normalized += match[0];
-    previousEnd = start + match[0].length;
-  }
-  normalized += normalizeChineseChatProse(trimmed.slice(previousEnd));
-  normalized = normalized.trim();
+  const normalized = content.trim();
 
   if (!normalized) {
     return "我剛剛腦袋一片空白 再問我一次";

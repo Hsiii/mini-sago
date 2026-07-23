@@ -767,23 +767,11 @@ describe("Discord chatbot", () => {
     });
   });
 
-  test("uses Discord-style Chinese spacing without flattening expression", () => {
-    expect(
-      formatDiscordAnswer(
-        "重新查完整一點，6uc 應該是午前。\n最直接：有人說「6uc是午前」。",
-      ),
-    ).toBe("重新查完整一點 6uc 應該是午前\n最直接 有人說「6uc是午前」");
-    expect(
-      formatDiscordAnswer(
-        "請跑 `foo，bar`，再看 https://example.com/a，下一步。",
-      ),
-    ).toBe("請跑 `foo，bar` 再看 https://example.com/a 下一步");
-    expect(formatDiscordAnswer("第一句。\n\n第二句！\n\n\n第三句")).toBe(
-      "第一句\n\n第二句！\n\n第三句",
-    );
-    expect(formatDiscordAnswer("真的假的？我不信欸（除非你有截圖）！")).toBe(
-      "真的假的 我不信欸（除非你有截圖）！",
-    );
+  test("preserves the model's punctuation and line breaks", () => {
+    const answer =
+      "重新查完整一點，6uc 應該是午前。\n最直接：有人說「6uc是午前」。";
+
+    expect(formatDiscordAnswer(answer)).toBe(answer);
   });
 
   test("searches the guild and returns channel names and safe jump links", async () => {
