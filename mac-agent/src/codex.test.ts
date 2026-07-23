@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ChatbotAccessConfig } from "../../lib/chatbot/access";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import {
-  assertChatbotJobAllowed,
+  assertChatbotJobAllowed as assertChatbotJobAllowedWithConfig,
   buildCodexPrompt,
   buildGithubDeveloperPolicy,
   buildSeatbeltProfile,
-  canUseDeveloperTools,
+  canUseDeveloperTools as canUseDeveloperToolsWithConfig,
   codexEnvironment,
-  codexProfileForJob,
+  codexProfileForJob as codexProfileForJobWithConfig,
   COMMUNITY_CHATBOT_PROFILE,
   CONTEXT_PLAN_OUTPUT_SCHEMA,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
@@ -17,6 +18,18 @@ import {
   OWNER_ROUTER_PROFILE,
   PROMPT_VERSION,
 } from "./codex";
+
+const ACCESS_CONFIG: ChatbotAccessConfig = {
+  ownerUserId: "917446775873343600",
+  guildIds: new Set(),
+  channelIds: new Set(),
+};
+const assertChatbotJobAllowed = (job: ChatbotJob) =>
+  assertChatbotJobAllowedWithConfig(job, ACCESS_CONFIG);
+const canUseDeveloperTools = (job: ChatbotJob) =>
+  canUseDeveloperToolsWithConfig(job, ACCESS_CONFIG);
+const codexProfileForJob = (job: ChatbotJob) =>
+  codexProfileForJobWithConfig(job, ACCESS_CONFIG);
 
 const job: ChatbotJob = {
   id: "job-1",

@@ -3,6 +3,11 @@ import { homedir, hostname } from "node:os";
 import { isIP } from "node:net";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
+import {
+  getChatbotAccessConfig,
+  type ChatbotAccessConfig,
+} from "../../lib/chatbot/access";
+
 export type MacAgentConfig = {
   bridgeUrl: string;
   bridgeSecret: string;
@@ -11,6 +16,7 @@ export type MacAgentConfig = {
   githubConfigDir: string;
   githubRepositories: string[];
   chatbotRepository?: string;
+  chatbotAccess: ChatbotAccessConfig;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
   headless: boolean;
@@ -93,6 +99,7 @@ export function workspaceChild(root: string, candidate: string, name: string) {
 }
 
 export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
+  const chatbotAccess = getChatbotAccessConfig();
   const bridgeSecret = process.env.MINISAGO_MAC_BRIDGE_SECRET?.trim();
 
   if (!bridgeSecret || Buffer.byteLength(bridgeSecret) < 32) {
@@ -188,6 +195,7 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       join(defaultApplicationSupport, "github"),
     githubRepositories,
     chatbotRepository,
+    chatbotAccess,
     githubWorktreeRoot,
     headless,
     maxConcurrentJobs: Math.max(

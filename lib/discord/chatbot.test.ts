@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ChatbotAccessConfig } from "../chatbot/access";
 import {
   canMemberSearchChannel,
   extractChatbotRequest,
@@ -26,6 +27,16 @@ import {
 } from "./chatbot";
 
 const BOT_ID = "123456789012345678";
+const ACCESS_CONFIG: ChatbotAccessConfig = {
+  ownerUserId: "917446775873343600",
+  guildIds: new Set([
+    "917436845187563610",
+    "1282936453134815275",
+    "1439286996869713992",
+    "1521168712579682567",
+  ]),
+  channelIds: new Set(["1517766866964316201"]),
+};
 
 describe("Discord chatbot", () => {
   test("extracts a natural request from either Discord mention form", () => {
@@ -52,9 +63,15 @@ describe("Discord chatbot", () => {
       },
     };
 
-    expect(extractChatbotRequest(message, BOT_ID)).toBe("再找一次");
+    expect(extractChatbotRequest(message, BOT_ID, ACCESS_CONFIG)).toBe(
+      "再找一次",
+    );
     expect(
-      extractChatbotRequest({ ...message, content: undefined }, BOT_ID),
+      extractChatbotRequest(
+        { ...message, content: undefined },
+        BOT_ID,
+        ACCESS_CONFIG,
+      ),
     ).toBe("");
     expect(
       extractChatbotRequest(
@@ -66,6 +83,7 @@ describe("Discord chatbot", () => {
           },
         },
         BOT_ID,
+        ACCESS_CONFIG,
       ),
     ).toBeNull();
   });
@@ -79,7 +97,9 @@ describe("Discord chatbot", () => {
       author: { id: "917446775873343600", username: "Hsi" },
     };
 
-    expect(extractChatbotRequest(directMessage, BOT_ID)).toBe("幫我找一下");
+    expect(extractChatbotRequest(directMessage, BOT_ID, ACCESS_CONFIG)).toBe(
+      "幫我找一下",
+    );
     expect(
       extractChatbotRequest(
         {
@@ -87,12 +107,14 @@ describe("Discord chatbot", () => {
           author: { id: "other-user", username: "Other" },
         },
         BOT_ID,
+        ACCESS_CONFIG,
       ),
     ).toBeNull();
     expect(
       extractChatbotRequest(
         { ...directMessage, guild_id: "917436845187563610" },
         BOT_ID,
+        ACCESS_CONFIG,
       ),
     ).toBeNull();
   });
@@ -125,20 +147,42 @@ describe("Discord chatbot", () => {
   });
 
   test("authorizes configured guilds, channels, and the owner", () => {
-    expect(isChatbotAuthorized("member-1", "917436845187563610")).toBe(true);
-    expect(isChatbotAuthorized("member-2", "1282936453134815275")).toBe(true);
-    expect(isChatbotAuthorized("member-3", "1439286996869713992")).toBe(true);
-    expect(isChatbotAuthorized("member-4", "1521168712579682567")).toBe(true);
     expect(
-      isChatbotAuthorized("member-5", "other-guild", "1517766866964316201"),
+      isChatbotAuthorized("member-1", ACCESS_CONFIG, "917436845187563610"),
     ).toBe(true);
     expect(
-      isChatbotAuthorized("member-5", "other-guild", "other-channel"),
+      isChatbotAuthorized("member-2", ACCESS_CONFIG, "1282936453134815275"),
+    ).toBe(true);
+    expect(
+      isChatbotAuthorized("member-3", ACCESS_CONFIG, "1439286996869713992"),
+    ).toBe(true);
+    expect(
+      isChatbotAuthorized("member-4", ACCESS_CONFIG, "1521168712579682567"),
+    ).toBe(true);
+    expect(
+      isChatbotAuthorized(
+        "member-5",
+        ACCESS_CONFIG,
+        "other-guild",
+        "1517766866964316201",
+      ),
+    ).toBe(true);
+    expect(
+      isChatbotAuthorized(
+        "member-5",
+        ACCESS_CONFIG,
+        "other-guild",
+        "other-channel",
+      ),
     ).toBe(false);
-    expect(isChatbotAuthorized("member-5", "other-guild")).toBe(false);
-    expect(isChatbotAuthorized("member-5")).toBe(false);
-    expect(isChatbotAuthorized("917446775873343600", "other-guild")).toBe(true);
-    expect(isChatbotAuthorized("917446775873343600")).toBe(true);
+    expect(isChatbotAuthorized("member-5", ACCESS_CONFIG, "other-guild")).toBe(
+      false,
+    );
+    expect(isChatbotAuthorized("member-5", ACCESS_CONFIG)).toBe(false);
+    expect(
+      isChatbotAuthorized("917446775873343600", ACCESS_CONFIG, "other-guild"),
+    ).toBe(true);
+    expect(isChatbotAuthorized("917446775873343600", ACCESS_CONFIG)).toBe(true);
   });
 
   test("allows community code questions into the read-only chat path", async () => {
@@ -153,6 +197,7 @@ describe("Discord chatbot", () => {
         author: { id: "member-1", username: "Member" },
       },
       botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
         if (path.endsWith("?limit=1")) {
@@ -184,6 +229,7 @@ describe("Discord chatbot", () => {
         author: { id: "other-user", username: "Other" },
       },
       botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
         if (path.endsWith("?limit=1")) {
@@ -228,6 +274,7 @@ describe("Discord chatbot", () => {
         },
       },
       botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
         if (path.endsWith("?limit=1")) {
@@ -258,6 +305,7 @@ describe("Discord chatbot", () => {
         author: { id: "917446775873343600", username: "Hsi" },
       },
       botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
         if (path.endsWith("?limit=1")) {
@@ -289,6 +337,7 @@ describe("Discord chatbot", () => {
         author: { id: "other-user", username: "Other" },
       },
       botUserId: BOT_ID,
+      accessConfig: ACCESS_CONFIG,
       discordRequest: async (path, options) => {
         requests.push({ path, body: options?.body });
         if (path.endsWith("?limit=1")) {
@@ -610,12 +659,14 @@ describe("Discord chatbot", () => {
         customId,
         userId: "community-member",
         discordRequest,
+        accessConfig: ACCESS_CONFIG,
       }),
     ).toEqual({ status: "forbidden" });
     const accepted = takeChatbotMutationApproval({
       customId,
       userId: "917446775873343600",
       discordRequest,
+      accessConfig: ACCESS_CONFIG,
     });
     expect(accepted).toMatchObject({
       status: "accepted",
@@ -626,6 +677,7 @@ describe("Discord chatbot", () => {
         customId,
         userId: "917446775873343600",
         discordRequest,
+        accessConfig: ACCESS_CONFIG,
       }),
     ).toEqual({ status: "expired" });
   });

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import {
   chatbotAccessTier,
   canUseChatbotCapability,
+  type ChatbotAccessConfig,
 } from "../../lib/chatbot/access";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
@@ -39,18 +40,25 @@ type CodexRunOptions = {
   githubRepositories: string[];
   githubWorktreeRoot: string;
   workspaceRoot: string;
+  chatbotAccess: ChatbotAccessConfig;
   signal?: AbortSignal;
 };
 
-export function codexProfileForJob(job: ChatbotJob) {
+export function codexProfileForJob(
+  job: ChatbotJob,
+  accessConfig: ChatbotAccessConfig,
+) {
   if (job.purpose === "execution_route") return OWNER_ROUTER_PROFILE;
-  return chatbotAccessTier(job.requesterUserId) === "owner" &&
+  return chatbotAccessTier(job.requesterUserId, accessConfig) === "owner" &&
     job.executionMode === "dev"
     ? OWNER_CHATBOT_PROFILE
     : COMMUNITY_CHATBOT_PROFILE;
 }
 
-export function assertChatbotJobAllowed(job: ChatbotJob) {
+export function assertChatbotJobAllowed(
+  job: ChatbotJob,
+  accessConfig: ChatbotAccessConfig,
+) {
   const capabilities = [
     job.executionMode === "dev" || job.repository || job.mutationScope
       ? ("dev" as const)
@@ -61,16 +69,20 @@ export function assertChatbotJobAllowed(job: ChatbotJob) {
       : []),
   ];
   const denied = capabilities.find(
-    (capability) => !canUseChatbotCapability(job.requesterUserId, capability),
+    (capability) =>
+      !canUseChatbotCapability(job.requesterUserId, capability, accessConfig),
   );
   if (denied) {
     throw new Error(`Requester cannot use the ${denied} capability.`);
   }
 }
 
-export function canUseDeveloperTools(job: ChatbotJob) {
+export function canUseDeveloperTools(
+  job: ChatbotJob,
+  accessConfig: ChatbotAccessConfig,
+) {
   return (
-    canUseChatbotCapability(job.requesterUserId, "dev") &&
+    canUseChatbotCapability(job.requesterUserId, "dev", accessConfig) &&
     job.executionMode === "dev" &&
     (job.purpose === undefined || job.purpose === "answer")
   );
@@ -200,9 +212,9 @@ export async function checkCodexAuthentication({
 }
 
 export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
-  assertChatbotJobAllowed(job);
-  const profile = codexProfileForJob(job);
-  const hasDeveloperAccess = canUseDeveloperTools(job);
+  assertChatbotJobAllowed(job, options.chatbotAccess);
+  const profile = codexProfileForJob(job, options.chatbotAccess);
+  const hasDeveloperAccess = canUseDeveloperTools(job, options.chatbotAccess);
   const timeoutController = new AbortController();
   const timeout = setTimeout(
     () => timeoutController.abort(),

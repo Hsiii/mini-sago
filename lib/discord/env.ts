@@ -3,6 +3,10 @@ import {
   TARGET_GUILD_ID,
   WORDLE_ROLE_ID,
 } from "./constants";
+import {
+  getChatbotAccessConfig,
+  type ChatbotAccessConfig,
+} from "../chatbot/access";
 
 export type ManagedRole = {
   id: string;
@@ -17,6 +21,7 @@ type DiscordConfig = {
   botToken: string;
   guildId?: string;
   managedRoles: ManagedRole[];
+  chatbotAccess: ChatbotAccessConfig;
 };
 
 function requireEnv(name: string) {
@@ -136,11 +141,13 @@ export function getDiscordConfig(): DiscordConfig {
     botToken: requireEnv("DISCORD_BOT_TOKEN"),
     guildId: process.env.DISCORD_GUILD_ID?.trim() || TARGET_GUILD_ID,
     managedRoles: parseManagedRoles(process.env.SELF_ASSIGNABLE_ROLES),
+    chatbotAccess: getChatbotAccessConfig(),
   };
 }
 
 export function getPublicDiscordSummary() {
   const roles = parseManagedRoles(process.env.SELF_ASSIGNABLE_ROLES);
+  const chatbotAccess = getChatbotAccessConfig();
 
   return {
     hasApplicationId: Boolean(process.env.DISCORD_APPLICATION_ID?.trim()),
@@ -149,5 +156,7 @@ export function getPublicDiscordSummary() {
     hasGuildId: Boolean(process.env.DISCORD_GUILD_ID?.trim()),
     roleCount: roles.length,
     roles,
+    chatbotGuildCount: chatbotAccess.guildIds.size,
+    chatbotChannelCount: chatbotAccess.channelIds.size,
   };
 }
