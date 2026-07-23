@@ -34,6 +34,8 @@ MiniSago can:
 - reason carefully about identity questions using available server evidence;
 - explain the observable sources and retrieval choices behind her previous
   answer.
+- optionally react to fresh community messages when a quiet acknowledgment is
+  more natural than interrupting the conversation.
 
 Community members can discuss code and links through the read-only chat path,
 but repository checkout, developer commands, GitHub mutations, Mac access, and
@@ -49,6 +51,7 @@ days.
 
 Chatbot access is limited to selected guilds and channels. The configured owner
 can also use it in other visible servers, threads, and direct messages.
+Ambient reactions are disabled by default and never enable unsolicited replies.
 
 > [!TIP]
 > In Discord's mention picker, choose MiniSago under **Members/Apps**, not a

@@ -10,6 +10,7 @@ const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GUILD_INSTALL = "0";
 
 const requiredGuildPermissionFlags = [
+  ["ADD_REACTIONS", 1n << 6n],
   ["VIEW_CHANNEL", 1n << 10n],
   ["SEND_MESSAGES", 1n << 11n],
   ["MANAGE_MESSAGES", 1n << 13n],
