@@ -623,6 +623,17 @@ describe("Discord chatbot", () => {
       mutationScope: "code",
       repository: "Hsiii/mini-sago",
     });
+    expect(
+      parseExecutionRoute(
+        '{"mode":"dev","target":"default","repository":"Hsiii/mini-sago","reason":"code work"}',
+        "請針對 Hsiii/mini-sago 修改 chatbot access",
+      ),
+    ).toEqual({
+      mode: "dev",
+      target: "default",
+      mutationScope: "code",
+      repository: "Hsiii/mini-sago",
+    });
     for (const request of [
       "write me a poem",
       "release the balloons",
