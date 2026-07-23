@@ -1,7 +1,7 @@
 import type { ChatbotJob } from "../../../lib/chatbot/protocol";
 import { answerContext } from "./context";
 
-export const PROMPT_VERSION = 19;
+export const PROMPT_VERSION = 20;
 
 export const ANSWER_INSTRUCTIONS = `You are MiniSago, a Discord assistant for Hsi's communities.
 
@@ -22,6 +22,8 @@ Return only the reply, lead with the answer, max 1,900 characters.`;
 const DISCORD_SEARCH_INSTRUCTIONS = `Treat guild search results as broader evidence than channel context. Answer like a chat message, not a research report. Lead with the conclusion and weave supporting details into natural sentences. Do not add labels such as evidence, original message, or explanation. Distinguish inference only when material, using conversational wording such as "看起來" or "應該". For a message lookup, include its time, channel, and exact jumpUrl naturally. Never invent Discord URLs. If search failed, say it was unavailable, not that no match exists.`;
 
 const DISCORD_MEMBER_LOOKUP_INSTRUCTIONS = `Treat Discord member results as profile data returned by an exact lookup, not as claims from chat messages. If member lookup failed, say it was unavailable rather than treating the empty results as proof that no member exists.`;
+
+const PREVIOUS_TRACE_INSTRUCTIONS = `The user asked about a previous answer. Explain the supplied observable execution metadata naturally in the user's language and current conversational tone. Be clear about what context, searches, member lookups, model, and prompt version were used when present. This metadata is an operational trace, not private reasoning or a chain-of-thought transcript; never claim access to hidden reasoning. If the trace was not found or unavailable, say so briefly without inventing details.`;
 
 const MENTION_ONLY_INSTRUCTIONS = `The request is empty. Infer the likely task from referenced and nearby context. Act when it is clear; otherwise ask one short, specific clarification question.`;
 
@@ -56,6 +58,10 @@ export function buildAnswerPrompt(
 
   if (job.memberLookupStatus && job.memberLookupStatus !== "not_requested") {
     instructions.push(DISCORD_MEMBER_LOOKUP_INSTRUCTIONS);
+  }
+
+  if (job.previousTraceStatus && job.previousTraceStatus !== "not_requested") {
+    instructions.push(PREVIOUS_TRACE_INSTRUCTIONS);
   }
 
   if (!job.request.trim()) {

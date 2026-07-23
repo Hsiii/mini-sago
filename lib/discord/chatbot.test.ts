@@ -12,11 +12,11 @@ import {
   isConversationContextMessage,
   isChatbotAuthorized,
   isHumanContextMessage,
-  isTraceExplanationRequest,
   lookupGuildMembers,
   missingDeveloperRepositoryResponse,
   parseDiscordContextPlan,
   parseExecutionRoute,
+  parsePreviousTraceLookup,
   postChatbotResponse,
   searchGuildMessages,
   toChatbotMessage,
@@ -92,15 +92,6 @@ describe("Discord chatbot", () => {
         BOT_ID,
       ),
     ).toBeNull();
-  });
-
-  test("recognizes natural requests for the previous response trace", () => {
-    expect(isTraceExplanationRequest("how did she decide。")).toBe(true);
-    expect(isTraceExplanationRequest("你剛剛為什麼這樣回答？")).toBe(true);
-    expect(isTraceExplanationRequest("把決策過程告訴我")).toBe(true);
-    expect(isTraceExplanationRequest("how did she find the article?")).toBe(
-      false,
-    );
   });
 
   test("keeps the replied-to MiniSago message in request context", () => {
@@ -498,10 +489,11 @@ describe("Discord chatbot", () => {
   test("validates and limits Codex Discord context plans", () => {
     expect(
       parseDiscordContextPlan(`\`\`\`json
-{"historyCount":73,"memberQueries":["Daniel","Daniel","午前"],"queries":[{"author":"self","mentions":"Daniel","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
+{"historyCount":73,"includePreviousTrace":true,"memberQueries":["Daniel","Daniel","午前"],"queries":[{"author":"self","mentions":"Daniel","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
 \`\`\``),
     ).toEqual({
       historyCount: 73,
+      includePreviousTrace: true,
       memberQueries: ["Daniel", "午前"],
       queries: [
         {
@@ -516,8 +508,30 @@ describe("Discord chatbot", () => {
     });
     expect(parseDiscordContextPlan("not json")).toEqual({
       historyCount: 20,
+      includePreviousTrace: false,
       memberQueries: [],
       queries: [],
+    });
+  });
+
+  test("accepts only structured previous-trace lookup results", () => {
+    const trace = {
+      contextMessageCount: 20,
+      searchQueries: [],
+      searchResultCount: 0,
+      memberQueries: [],
+      elapsedMs: 1_200,
+      model: "test-model",
+      promptVersion: 20,
+    };
+    expect(
+      parsePreviousTraceLookup(JSON.stringify({ status: "complete", trace })),
+    ).toEqual({ status: "complete", trace });
+    expect(parsePreviousTraceLookup('{"status":"not_found"}')).toEqual({
+      status: "not_found",
+    });
+    expect(parsePreviousTraceLookup("not json")).toEqual({
+      status: "unavailable",
     });
   });
 

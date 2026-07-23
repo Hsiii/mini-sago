@@ -3,7 +3,10 @@ import { dirname } from "node:path";
 
 import { Database } from "bun:sqlite";
 
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type {
+  ChatbotJob,
+  ChatbotTraceContext,
+} from "../../lib/chatbot/protocol";
 
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1_000;
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1_000;
@@ -74,33 +77,43 @@ function sanitizedJob(job: ChatbotJob): ChatbotJob {
   };
 }
 
-function queryDescription(query: Record<string, unknown>) {
-  const details: string[] = [];
-  if (typeof query.content === "string")
-    details.push(`關鍵字「${query.content}」`);
-  if (typeof query.author === "string") details.push(`作者 ${query.author}`);
-  if (typeof query.mentions === "string")
-    details.push(`提及 ${query.mentions}`);
-  if (Array.isArray(query.has) && query.has.length > 0) {
-    details.push(`類型 ${query.has.join("、")}`);
-  }
-  if (typeof query.embedType === "string")
-    details.push(`${query.embedType} 媒體`);
-  if (typeof query.linkHostname === "string")
-    details.push(`${query.linkHostname} 連結`);
-  if (typeof query.attachmentExtension === "string") {
-    details.push(`${query.attachmentExtension} 附件`);
-  }
-  return details.join("、") || "一組結構化條件";
-}
-
-function elapsedDescription(rows: TraceRow[]) {
+function elapsedMs(rows: TraceRow[]) {
   const started = Math.min(...rows.map((row) => row.started_at));
   const finished = Math.max(
     ...rows.map((row) => row.finished_at ?? row.started_at),
   );
-  const seconds = Math.max(0, finished - started) / 1_000;
-  return seconds < 1 ? "不到 1 秒" : `大約 ${seconds.toFixed(1)} 秒`;
+  return Math.max(0, finished - started);
+}
+
+function sanitizedSearchQuery(query: Record<string, unknown>) {
+  return Object.fromEntries(
+    [
+      "author",
+      "mentions",
+      "content",
+      "has",
+      "embedType",
+      "linkHostname",
+      "attachmentExtension",
+      "sortBy",
+      "sortOrder",
+    ].flatMap((key) => {
+      const value = query[key];
+      if (typeof value === "string") return [[key, value.slice(0, 200)]];
+      if (Array.isArray(value)) {
+        return [
+          [
+            key,
+            value
+              .filter((item): item is string => typeof item === "string")
+              .slice(0, 8)
+              .map((item) => item.slice(0, 100)),
+          ],
+        ];
+      }
+      return [];
+    }),
+  );
 }
 
 export class ChatbotTraceStore {
@@ -184,7 +197,10 @@ export class ChatbotTraceStore {
     if (this.databaseBytes() > MAX_DATABASE_BYTES) this.cleanup(now);
   }
 
-  explainPrevious(channelId: string, currentRequestMessageId: string) {
+  previousTrace(
+    channelId: string,
+    currentRequestMessageId: string,
+  ): ChatbotTraceContext | undefined {
     const previous = this.database
       .query(
         `SELECT request_message_id
@@ -199,9 +215,7 @@ export class ChatbotTraceStore {
       request_message_id: string;
     } | null;
 
-    if (!previous) {
-      return "我找不到這個頻道上一則回答的決策紀錄 可能已經超過保留期限或是在紀錄功能開啟前回答的";
-    }
+    if (!previous) return undefined;
 
     const rows = this.database
       .query(
@@ -218,48 +232,36 @@ export class ChatbotTraceStore {
       .find((row) => row.purpose === "answer");
     const plan = safeJson<ContextPlan>(planner?.output ?? null);
     const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
-    const historyLabel =
-      typeof plan?.historyCount === "number"
-        ? `讀取最多 ${plan.historyCount} 則同頻道訊息`
-        : !plan
-          ? "直接讀取這個對話最近的訊息"
-          : plan.history === "extended"
-            ? "擴大到最多 100 則同頻道訊息"
-            : plan.history === "medium"
-              ? "擴大到最多 50 則同頻道訊息"
-              : "使用附近最多 20 則訊息";
-    const contextCount = answerJob?.messages.length ?? 0;
-    const searchCount = answerJob?.searchResults?.length ?? 0;
-    const memberQueries = plan?.memberQueries ?? [];
-    const queries = plan?.queries ?? [];
-    const parts = [
-      `我剛剛先${historyLabel} 實際交給回答階段的是 ${contextCount} 則`,
-    ];
-
-    if (queries.length > 0) {
-      const examples = queries.slice(0, 2).map(queryDescription).join(" 還有 ");
-      parts.push(
-        `另外用了 ${queries.length} 組條件搜尋伺服器紀錄 包含${examples} 最後帶回 ${searchCount} 則符合的訊息`,
-      );
-    } else {
-      parts.push("規劃後判斷不用另外搜尋伺服器舊訊息");
-    }
-
-    if (memberQueries.length > 0) {
-      parts.push(
-        `另外查了 ${memberQueries.length} 個 Discord 成員名稱 包含 ${memberQueries.slice(0, 2).join("、")}`,
-      );
-    }
-
-    parts.push("接著模型只根據這批內容和當次問題整理成回答");
-
-    parts.push(`整個可觀察到的流程花了${elapsedDescription(rows)}`);
-    if (terminal) {
-      parts.push(
-        `當時使用 ${terminal.model} 和第 ${terminal.prompt_version} 版提示`,
-      );
-    }
-    return `${parts.join("\n")}\n這是我留下的決策軌跡摘要 不包含私密思考逐字稿`;
+    const legacyHistoryCount =
+      plan?.history === "extended"
+        ? 100
+        : plan?.history === "medium"
+          ? 50
+          : plan?.history === "local"
+            ? 20
+            : undefined;
+    return {
+      ...((typeof plan?.historyCount === "number" || legacyHistoryCount) && {
+        historyCount:
+          typeof plan?.historyCount === "number"
+            ? plan.historyCount
+            : legacyHistoryCount,
+      }),
+      contextMessageCount: answerJob?.messages.length ?? 0,
+      searchQueries: (plan?.queries ?? [])
+        .slice(0, 4)
+        .map(sanitizedSearchQuery),
+      searchResultCount: answerJob?.searchResults?.length ?? 0,
+      memberQueries: (plan?.memberQueries ?? [])
+        .filter((value): value is string => typeof value === "string")
+        .slice(0, 4)
+        .map((value) => value.slice(0, 100)),
+      elapsedMs: elapsedMs(rows),
+      ...(terminal?.model ? { model: terminal.model } : {}),
+      ...(terminal?.prompt_version !== undefined
+        ? { promptVersion: terminal.prompt_version }
+        : {}),
+    };
   }
 
   cleanup(now = Date.now()) {

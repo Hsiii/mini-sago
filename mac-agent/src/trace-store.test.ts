@@ -37,7 +37,7 @@ function job(overrides: Partial<ChatbotJob>): ChatbotJob {
 }
 
 describe("chatbot trace store", () => {
-  test("explains the latest planner and answer stages in plain language", () => {
+  test("returns sanitized observable metadata for the latest answer", () => {
     const traces = store();
     const planner = job({ id: "planner-1", purpose: "context_plan" });
     const answer = job({
@@ -72,14 +72,16 @@ describe("chatbot trace store", () => {
     traces.start(answer, 1_600, { model: "owner-model" });
     traces.finish(answer.id, "The answer", 3_000);
 
-    const explanation = traces.explainPrevious("channel-1", "request-2");
-    expect(explanation).toContain("最多 50 則");
-    expect(explanation).toContain("實際交給回答階段的是 42 則");
-    expect(explanation).toContain("關鍵字「launch」、作者 Daniel");
-    expect(explanation).toContain("帶回 1 則");
-    expect(explanation).toContain("大約 2.0 秒");
-    expect(explanation).toContain("owner-model 和第 7 版提示");
-    expect(explanation).toContain("不包含私密思考逐字稿");
+    expect(traces.previousTrace("channel-1", "request-2")).toEqual({
+      historyCount: 50,
+      contextMessageCount: 42,
+      searchQueries: [{ content: "launch", author: "Daniel" }],
+      searchResultCount: 1,
+      memberQueries: [],
+      elapsedMs: 2_000,
+      model: "owner-model",
+      promptVersion: 7,
+    });
     traces.close();
   });
 
@@ -90,9 +92,7 @@ describe("chatbot trace store", () => {
     traces.finish(oldJob.id, "Old answer", 2_000);
     traces.cleanup(15 * 24 * 60 * 60 * 1_000);
 
-    expect(traces.explainPrevious("channel-1", "request-2")).toContain(
-      "找不到這個頻道上一則回答的決策紀錄",
-    );
+    expect(traces.previousTrace("channel-1", "request-2")).toBeUndefined();
     traces.close();
   });
 });

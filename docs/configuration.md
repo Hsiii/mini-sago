@@ -122,7 +122,10 @@ The Mac installer consumes `.env.local`. It creates an isolated Codex home that
 links the existing `~/.codex/auth.json` but does not load normal Codex
 configuration, skills, memories, plugins, MCP servers, or repository
 instructions. Its trace database is owner-readable, expires entries after 14
-days, and prunes oldest entries above 250 MB.
+days, and prunes oldest entries above 250 MB. When a user asks about a previous
+answer, the context planner may retrieve bounded observable metadata from the
+same channel; the answer model explains it without receiving private
+chain-of-thought.
 
 ## Owner development and GitHub
 
