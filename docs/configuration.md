@@ -1,188 +1,164 @@
 # Configuration
 
-This document covers runtime environment variables. The user-facing feature
-overview lives in [README.md](../README.md), and setup/deployment procedures
+Use the checked-in environment examples as the mechanical configuration
+reference:
+
+- `.env.example` for local development and the Mac helper;
+- `.env.production.example` for the hosted Discord service; and
+- `.env.worker.example` for the headless Codex worker.
+
+Defaults enforced by an image or installer live in `Dockerfile.worker` and
+`scripts/mac-agent.mjs`. This document records the boundaries and security
+decisions that are not obvious from those files. Setup and deployment procedures
 live in [operations.md](operations.md).
 
-## Core Discord configuration
+## Hosted service variables
 
-| Name                     | Required | Description                                                                                                         |
-| ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_APPLICATION_ID` | Yes      | Discord application ID                                                                                              |
-| `DISCORD_PUBLIC_KEY`     | Yes      | Public key used to verify interaction signatures                                                                    |
-| `DISCORD_BOT_TOKEN`      | Yes      | Bot token used for Discord REST calls and the Gateway listener                                                      |
-| `DISCORD_GUILD_ID`       | No       | Only guild allowed to use role access and scheduled-post features. Defaults to the WM31 guild `1282936453134815275` |
+| Name                                | Required  | Purpose                                                                 |
+| ----------------------------------- | --------- | ----------------------------------------------------------------------- |
+| `DISCORD_APPLICATION_ID`            | Yes       | Discord application ID                                                  |
+| `DISCORD_PUBLIC_KEY`                | Yes       | Verifies interaction signatures                                         |
+| `DISCORD_BOT_TOKEN`                 | Yes       | Discord REST and Gateway authentication                                 |
+| `DISCORD_GUILD_ID`                  | No        | Guild allowed to use configured-guild features; defaults to WM31        |
+| `DISCORD_GATEWAY_DISABLED`          | No        | Set to `true` for HTTP-only instances                                   |
+| `MINISAGO_MAC_BRIDGE_SECRET`        | Chatbot   | Authenticates the trusted Mac worker profile                            |
+| `MINISAGO_WORKER_BRIDGE_SECRET`     | Chatbot   | Authenticates the server-owned cloud worker profile                     |
+| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No        | Default destination for `bun run publish:panel`                         |
+| `SELF_ASSIGNABLE_ROLES`             | No        | JSON role definitions; the built-in fallback targets WM31               |
+| `GITHUB_WEBHOOK_SECRET`             | PR bridge | Verifies GitHub's `X-Hub-Signature-256`; blank disables the endpoint    |
+| `GITHUB_PR_THREAD_CHANNEL_ID`       | No        | Discord destination for PR review threads                               |
+| `GITHUB_PR_THREAD_STATE_FILE`       | No        | Persistent PR-to-thread mapping                                         |
+| `TOEFL_VOCAB_CHANNEL_ID`            | No        | Daily vocabulary destination; blank disables posting                    |
+| `TOEFL_VOCAB_TIME`                  | No        | Local `HH:MM` posting time                                              |
+| `TOEFL_VOCAB_TIMEZONE`              | No        | IANA timezone for vocabulary posting                                    |
+| `TOEFL_VOCAB_STATE_FILE`            | No        | Persistent daily-send state                                             |
+| `GAMER_FORUM_*`                     | No        | Forum source, destination, schedule, reader, state, and disable switch  |
+| `X_POST_*`                          | No        | X handle/feed, destination, polling interval, state, and disable switch |
 
-`DISCORD_GUILD_ID` is the boundary between universal and server-specific
-behavior. Guilds other than this value cannot use the Wordle/Brawl Stars
-commands, channel access panel, or this deployment's scheduled posts. Chatbot
-access is governed separately by its four built-in allowed guilds and owner
-fallback.
+See `.env.production.example` for production state paths and the complete
+scheduled-monitor variable names.
 
-## Universal / cross-guild configuration
+## Worker variables
 
-| Name                            | Required     | Description                                                                                                    |
-| ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_GATEWAY_DISABLED`      | No           | Set to `true` to run only HTTP features and disable universal Instagram replies and chatbot mentions           |
-| `MINISAGO_MAC_BRIDGE_SECRET`    | Chatbot      | High-entropy secret for the trusted Mac worker; leaving all bridge secrets blank disables the WebSocket bridge |
-| `MINISAGO_WORKER_BRIDGE_SECRET` | Cloud worker | High-entropy secret bound by the broker to the unified `oracle` worker and `chat,dev`                          |
+| Name                            | Required | Purpose                                                                                |
+| ------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets |
+| `MINISAGO_MAC_BRIDGE_SECRET`    | Mac      | Must match the hosted Mac-profile secret                                               |
+| `MINISAGO_CODEX_PATH`           | No       | Codex executable                                                                       |
+| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state                                                                  |
+| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled macOS lock monitor                                                            |
+| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database                                                          |
+| `MINISAGO_WORKSPACE_ROOT`       | Dev      | Parent directory for isolated repository work                                          |
+| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Advertised capacity, from 1 to 16                                                      |
+| `MINISAGO_HEADLESS`             | Linux    | Keeps a non-macOS worker connected without a session monitor                           |
+| `MINISAGO_WORKER_ID`            | No       | Stable worker identity                                                                 |
+| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                  |
+| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from 0 to 1000                                                      |
+| `MINISAGO_GITHUB_REPOSITORIES`  | Dev      | Exact `owner/repository` allowlist                                                     |
+| `MINISAGO_GITHUB_CONFIG_DIR`    | Dev      | Dedicated GitHub CLI state                                                             |
+| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Disposable per-job checkout root                                                       |
 
-Gateway features are enabled by default whenever `DISCORD_BOT_TOKEN` is set and
-`DISCORD_GATEWAY_DISABLED` is not `true`. They work in every server and channel
-where MiniSago can view messages, read message history, and send messages.
-Instagram handling replies with only converted `kkinstagram.com` URLs, leaves
-the original message untouched, and never creates webhooks.
+The Mac installer reads `.env.local`; the headless worker reads `.env.worker`.
+Image and installer defaults are shown in the corresponding example files.
 
-Only one Gateway-enabled instance should use a bot token at a time. When
-production is active, use `DISCORD_GATEWAY_DISABLED=true` in local or temporary
-environments unless that instance is intentionally replacing production.
+## Discord boundaries
 
-## Codex chatbot worker
+`DISCORD_GUILD_ID` selects the only guild allowed to use the channel access
+panel, role commands, and scheduled posts. Its fallback and the built-in
+Wordle/Brawl Stars `SELF_ASSIGNABLE_ROLES` target WM31; they are deployment data,
+not portable examples. Change both values together when moving or repurposing
+those features. Every scheduled-post destination must belong to the configured
+guild.
 
-These values are consumed by `bun run mac-agent:install` from `.env.local`. Only
-the bridge secret must also be present in production.
+Chatbot authorization is independent. The allowed guilds, allowed channel, and
+owner fallback are code-level security boundaries rather than environment
+configuration.
 
-| Name                            | Required | Description                                                                                               |
-| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------- |
-| `MINISAGO_MAC_BRIDGE_SECRET`    | Yes      | Same random secret configured on the hosted server                                                        |
-| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only   |
-| `MINISAGO_CODEX_PATH`           | No       | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                           |
-| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`    |
-| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled native lock monitor; the installer creates and configures it automatically                       |
-| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database; defaults under the platform state directory                                |
-| `MINISAGO_WORKSPACE_ROOT`       | No       | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container        |
-| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`         |
-| `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                                |
-| `MINISAGO_WORKER_ID`            | No       | Stable worker identity; defaults from the host, while the container image uses `oracle`                   |
-| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev`, and `mac`; only a Mac worker should advertise `mac`                        |
-| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing       |
-| `MINISAGO_GITHUB_REPOSITORIES`  | For dev  | Exact `owner/repository` scopes advertised to the bridge; the credential must be scoped to the same repos |
-| `MINISAGO_GITHUB_CONFIG_DIR`    | For dev  | Dedicated GitHub CLI config used for owner development jobs                                               |
-| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Per-job isolated worktree root; defaults to `<workspace>/worktrees`                                       |
+The checked-in deployment currently hardcodes:
 
-The helper uses the existing `~/.codex/auth.json` through a symlink inside its
-isolated Codex home. It does not copy the credential or load normal Codex
-config, skills, memories, plugins, MCP servers, or repository instructions.
-The trace database is readable only by the local user and is automatically
-pruned after 14 days or when it exceeds 250 MB.
+- owner identity in `lib/chatbot/access.ts`;
+- chatbot guilds `917436845187563610`, `1282936453134815275`,
+  `1439286996869713992`, and `1521168712579682567`;
+- chatbot channel `1517766866964316201`;
+- configured-guild fallback `1282936453134815275`;
+- WM31 Wordle role `1451976411152781466` and Brawl Stars role
+  `1450774352386719775`; and
+- PR review repository and reviewer mapping for `Hsiii/health-check-system`.
 
-The Discord owner ID is a code-level security boundary. Owner requests first
-use GPT-5.6 Luna with low reasoning to choose `chat` or `dev`; Mac targeting is
-independent. Chat requests use Luna with high reasoning; dev uses GPT-5.6 Sol
-with medium reasoning and receives only the selected per-job checkout. Other authorized
-community members use Luna with high reasoning and are limited to conversational,
-summarization, and public-information requests. GitHub pull-request reviews,
-issue mutations, code changes, command execution, and similar privileged
-requests are rejected before they reach the worker, then checked again by the
-worker before Codex runs.
+A general self-host must change these source-level boundaries or disable the
+corresponding features. Installing the bot in another guild does not expose the
+WM31 controls or scheduled feeds there.
 
-The broker binds the cloud secret to its server-owned worker ID and capability
-set; the Mac secret is accepted only from a worker that advertises `mac`. The bridge prefers the highest-priority compatible
-worker, falls back when it is full or offline, and keeps every multi-stage
-workflow on one worker after routing. Luna selects the `mac` target only when
-the request explicitly needs a resource on Hsi's Mac.
+Gateway features are enabled when a bot token is present unless
+`DISCORD_GATEWAY_DISABLED=true`. Run only one Gateway-enabled instance per bot
+token; use the disabled setting for local or temporary HTTP-only instances while
+production is connected.
 
-## Owner GitHub automation
+## Worker trust boundary
 
-The worker image includes `gh` and uses one dedicated GitHub CLI login from a
-host secret directory or Docker volume. The checked-in Compose stack runs one
-`chat,dev` worker. MiniSago does not accept, copy, or inject a GitHub token
-through its own environment.
+The hosted broker has separate worker profiles:
 
-Only the final owner-authorized dev answer receives developer command and
-network permissions. Luna routing, Discord context planning, identity
-resolution, community jobs, and ordinary owner chat cannot execute `gh`. The
-bridge rejects a dev job unless the worker advertised its exact repository;
-the worker then clones only that repository into a disposable job checkout.
-Untrusted PR content can influence analysis but cannot grant mutation because
-the deterministic mutation check uses only the owner's request. A mutating
-`dev` job carries an owner-derived `issue`, `code`, or `deploy` scope. Per-job
-`gh` and `git` wrappers guard that scope, require draft
-PR creation, and reject merge, ready, protected-branch, and force-push
-operations through the normal command paths.
+- `MINISAGO_WORKER_BRIDGE_SECRET` authenticates the server-owned `oracle`
+  `chat,dev` worker; and
+- `MINISAGO_MAC_BRIDGE_SECRET` authenticates a worker advertising `mac`.
 
-The dedicated login should use one fine-grained token limited to the active
-repositories in `MINISAGO_GITHUB_REPOSITORIES`. It may receive repository
-contents, issues, and pull-request write access plus read access to checks and
-Actions. Do not grant administration, secrets, environments, deployments,
-organization, or unrelated-repository access. GitHub rulesets must block
-direct and force pushes to protected branches; Hsi remains responsible for
-merging. Exact setup remains tracked in
+Use independent random secrets of at least 32 bytes. The broker binds the cloud
+secret to its server-owned identity and capabilities, and accepts the Mac secret
+only from a worker advertising `mac`.
+
+Workers advertise capacity, capabilities, and priority. The broker selects the
+highest-priority compatible worker, falls back when it is unavailable or full,
+and keeps all stages of a workflow on the selected worker. Only requests that
+explicitly need a resource on Hsi's Mac may target `mac`.
+
+Community and owner chat jobs run on GPT-5.6 Luna with high reasoning. Owner
+requests first use Luna with low reasoning to select `chat` or `dev`; development
+jobs then use GPT-5.6 Sol with medium reasoning. Mac targeting is an independent
+decision. These profiles are part of the security and capability boundary, not
+just quality preferences.
+
+The Mac installer consumes `.env.local`. It creates an isolated Codex home that
+links the existing `~/.codex/auth.json` but does not load normal Codex
+configuration, skills, memories, plugins, MCP servers, or repository
+instructions. Its trace database is owner-readable, expires entries after 14
+days, and prunes oldest entries above 250 MB.
+
+## Owner development and GitHub
+
+The Discord owner ID is enforced before privileged work reaches a worker and
+again before Codex runs. Community jobs and ordinary chat cannot execute
+developer commands. Owner development jobs receive only a selected disposable
+repository checkout.
+
+GitHub access uses a dedicated persistent `gh` login; MiniSago does not accept,
+copy, or inject its token through environment variables. A worker may accept a
+development job only for an exact repository advertised in
+`MINISAGO_GITHUB_REPOSITORIES`.
+
+Use one fine-grained credential limited to those repositories. It may receive
+repository contents, issues, and pull-request write access, with read access to
+checks and Actions when needed. Do not grant administration, secrets,
+environments, deployments, organization, or unrelated-repository access.
+
+Remote mutation is derived only from the owner's request and is restricted to
+an `issue`, `code`, or `deploy` scope. Per-job wrappers enforce that scope,
+require draft pull requests, and reject merge, ready, protected-branch, and
+force-push operations through normal command paths. GitHub rulesets must also
+block direct and force pushes to protected branches; Hsi remains responsible
+for merging. Repository content and command output remain untrusted data.
+Credential and ruleset setup is tracked in
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12).
 
-Repository contents, diffs, issues, comments, and command output remain
-untrusted data. MiniSago is instructed to create issue mutations only when Hsi
-asks, keep reviews read-only unless asked to post them, never push a protected
-branch, and deliver code changes as draft PRs without merging or marking them
-ready.
+## Persistent state
 
-## GitHub pull request review threads
+The PR review bridge and scheduled monitors use state files for idempotency.
+Local defaults live under `.data`; production paths must live under `/app/state`
+on the persistent `sago_cloud_bot-core-state` volume. The relevant variables
+are:
 
-| Name                          | Required | Description                                                                                                                              |
-| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITHUB_WEBHOOK_SECRET`       | Yes      | Shared secret used to verify GitHub's `X-Hub-Signature-256`. Leaving it blank disables the endpoint                                      |
-| `GITHUB_PR_THREAD_CHANNEL_ID` | No       | Text channel where public review threads are created. Defaults to `1521506395034226830`                                                  |
-| `GITHUB_PR_THREAD_STATE_FILE` | No       | PR-to-thread mapping used for idempotency and merge archival. Defaults to `.data/github-pr-threads.json`; use `/app/state/...` in Docker |
+- `GITHUB_PR_THREAD_STATE_FILE`
+- `TOEFL_VOCAB_STATE_FILE`
+- `GAMER_FORUM_STATE_FILE`
+- `X_POST_STATE_FILE`
 
-The bridge accepts only `pull_request` events for
-`Hsiii/health-check-system`. When `Hsiii` marks a draft ready, Daniel and
-Jasmine are mentioned. PRs by Daniel, Jasmine, or another author mention Hsi.
-Known team authors are also explicitly added to the public thread.
-The review request containing the pull-request link is pinned in the thread.
-
-## Configured-guild role access (WM31 by default)
-
-| Name                                | Required | Description                                                                                                                      |
-| ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_CHANNEL_ACCESS_CHANNEL_ID` | No       | Default Discord channel ID for `bun run publish:panel`                                                                           |
-| `SELF_ASSIGNABLE_ROLES`             | No       | JSON array of managed role configs. Defaults to the Wordle role `1451976411152781466` and Brawl Stars role `1450774352386719775` |
-
-Default `SELF_ASSIGNABLE_ROLES` value:
-
-```json
-[
-  {
-    "id": "1451976411152781466",
-    "label": "Wordle Channel",
-    "description": "Access to the Wordle channel",
-    "emoji": "🟩"
-  },
-  {
-    "id": "1450774352386719775",
-    "label": "Brawl Stars Channel",
-    "description": "Access to the Brawl Stars channel",
-    "emoji": "⭐"
-  }
-]
-```
-
-The defaults above are existing WM31 channel roles. They are intentionally not
-portable defaults for other servers. Change both `DISCORD_GUILD_ID` and
-`SELF_ASSIGNABLE_ROLES` only when deliberately moving or repurposing the
-configured-guild role feature.
-
-## Configured-guild scheduled posts
-
-Every configured channel below must belong to `DISCORD_GUILD_ID`. These are
-deployment-specific outbound jobs, not features automatically enabled for every
-server where MiniSago is installed.
-
-| Name                           | Required | Description                                                                                                                |
-| ------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `TOEFL_VOCAB_CHANNEL_ID`       | No       | Discord channel ID that receives the daily TOEFL vocabulary message. Leave unset to disable                                |
-| `TOEFL_VOCAB_TIME`             | No       | Local posting time in `HH:MM` format. Defaults to `08:00`                                                                  |
-| `TOEFL_VOCAB_TIMEZONE`         | No       | IANA timezone used for daily scheduling. Defaults to `Asia/Taipei`                                                         |
-| `TOEFL_VOCAB_STATE_FILE`       | No       | JSON file used to avoid duplicate daily sends. Defaults to `.data/toefl-vocab-state.json`; use `/app/state/...` in Docker  |
-| `GAMER_FORUM_CHANNEL_ID`       | No       | Discord channel ID that receives Gamer forum post alerts. Defaults to `1518127531968958558`                                |
-| `GAMER_FORUM_URL`              | No       | Gamer forum thread URL to watch. Defaults to the Mahjong Soul gift-code thread `to=112` URL                                |
-| `GAMER_FORUM_CHECK_TIMES`      | No       | Comma-separated local check times. Defaults to `08:30,20:30`                                                               |
-| `GAMER_FORUM_TIMEZONE`         | No       | IANA timezone for forum checks. Defaults to `Asia/Taipei`                                                                  |
-| `GAMER_FORUM_READER_BASE_URL`  | No       | Reader prefix used to fetch normalized forum content. Defaults to `https://r.jina.ai/`                                     |
-| `GAMER_FORUM_STATE_FILE`       | No       | JSON file used to avoid duplicate forum alerts. Defaults to `.data/gamer-forum-state.json`; use `/app/state/...` in Docker |
-| `GAMER_FORUM_MONITOR_DISABLED` | No       | Set to `true` to disable the Gamer forum monitor                                                                           |
-| `X_POST_HANDLE`                | No       | X handle to monitor. Defaults to `thsottiaux`                                                                              |
-| `X_POST_CHANNEL_ID`            | No       | Discord channel that receives new X posts. Defaults to `1527893157168283668`                                               |
-| `X_POST_FEED_URL`              | No       | RSS source. Defaults to the FxEmbed feed generated from `X_POST_HANDLE`                                                    |
-| `X_POST_CHECK_INTERVAL_MS`     | No       | X feed polling interval in milliseconds. Defaults to `300000` (5 minutes); minimum `10000`                                 |
-| `X_POST_STATE_FILE`            | No       | JSON file used to avoid duplicate X posts. Defaults to `.data/x-post-state.json`; use `/app/state/...` in Docker           |
-| `X_POST_MONITOR_DISABLED`      | No       | Set to `true` to disable the X post monitor                                                                                |
+Do not place these files on the container's ephemeral filesystem in production.
