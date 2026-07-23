@@ -4,10 +4,9 @@ import { join, resolve } from "node:path";
 import type { ChatbotJob } from "../../lib/chatbot/protocol";
 
 type DeveloperWorkspaceOptions = {
-  githubReadConfigDir: string;
+  githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
-  githubWriteConfigDir: string;
   signal?: AbortSignal;
 };
 
@@ -167,12 +166,8 @@ export async function prepareDeveloperWorkspace(
   const directory = join(jobRoot, ...repository.split("/"));
   const binDirectory = join(jobRoot, "bin");
   const branch = `minisago/${safeJobId(job.id)}`;
-  const githubConfigDir =
-    mode === "dev-write"
-      ? options.githubWriteConfigDir
-      : options.githubReadConfigDir;
   const preparationEnvironment = {
-    GH_CONFIG_DIR: githubConfigDir,
+    GH_CONFIG_DIR: options.githubConfigDir,
     GH_HOST: "github.com",
     GH_PROMPT_DISABLED: "1",
     GIT_TERMINAL_PROMPT: "0",

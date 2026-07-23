@@ -11,7 +11,7 @@ services:
       MINISAGO_WORKER_CAPABILITIES: chat,dev-read
     volumes:
       - minisago-codex:/home/bun/.codex
-      - minisago-github-read:/home/bun/.config/gh-read
+      - minisago-github:/home/bun/.config/gh
       - minisago-state-read:/var/lib/minisago
       - minisago-workspace-read:/workspace
 
@@ -27,14 +27,13 @@ services:
       MINISAGO_WORKER_CAPABILITIES: dev-write
     volumes:
       - minisago-codex:/home/bun/.codex
-      - minisago-github-write:/home/bun/.config/gh-write
+      - minisago-github:/home/bun/.config/gh
       - minisago-state-write:/var/lib/minisago
       - minisago-workspace-write:/workspace
 
 volumes:
   minisago-codex:
-  minisago-github-read:
-  minisago-github-write:
+  minisago-github:
   minisago-state-read:
   minisago-state-write:
   minisago-workspace-read:

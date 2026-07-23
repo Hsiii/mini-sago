@@ -233,14 +233,14 @@ when Oracle is full or offline, and pins the remaining stages after Luna picks
 the execution target. A request that explicitly needs a Mac resource is moved
 to a connected worker advertising `mac`.
 
-For owner dev answers, GitHub access uses separate persistent `gh` logins.
-`dev-read` gets a repo-scoped read-only login and is the default for reviews;
-`dev-write` gets a separate repo-scoped write login only for explicit owner
-mutations. Router, planner, community, and chat processes cannot execute
-developer commands. Each dev job clones only the selected repository under
-`MINISAGO_GITHUB_WORKTREE_ROOT` and removes the checkout afterward. GitHub
-rulesets must prevent the write identity from pushing protected branches or
-merging; provider and production credentials are not mounted.
+For owner dev answers, GitHub access uses one dedicated persistent `gh` login.
+`dev-read` remains the behavioral default for reviews; `dev-write` is selected
+only for explicit owner mutations. Router, planner, community, and chat
+processes cannot execute developer commands. Each dev job clones only the
+selected repository under `MINISAGO_GITHUB_WORKTREE_ROOT` and removes the
+checkout afterward. GitHub rulesets must prevent direct and force pushes to
+protected branches; provider and production credentials are not mounted, and
+Hsi remains responsible for merging.
 Ordinary chat stages retain the two-minute timeout; final owner dev answers may
 run for up to fifteen minutes for cloning, tests, builds, and PR preparation.
 
@@ -260,8 +260,9 @@ cloned repositories stay outside the image.
 Recommended split:
 
 - Oracle runs separate `chat,dev-read` and `dev-write` containers with distinct
-  broker secrets, GitHub credentials, state, and workspace volumes. Enable the
-  write container after its repo scope and protected-branch ruleset are configured.
+  broker secrets, state, and workspace volumes. They share one dedicated
+  repository-scoped GitHub login. Enable the write container after its repo
+  scope and protected-branch ruleset are configured.
 - Mac advertises `chat,dev-read,dev-write,mac` at a lower priority. It remains connected as a
   fallback and receives work directly when Luna determines that local Mac
   files, apps, browser state, or hardware are required.
@@ -280,24 +281,24 @@ docker compose -f compose.worker.yaml up -d
 docker compose -f compose.worker.yaml logs -f worker
 ```
 
-Set the exact repository list in `MINISAGO_GITHUB_REPOSITORIES`. Authenticate a
-fine-grained read-only identity into the read volume and a separate
-fine-grained write identity into the write volume. The write identity should
-have only the repository permissions needed for issues, feature branches, and
-draft PRs. A GitHub ruleset must block it from protected-branch pushes and
-merges. Do not paste a token into Discord, a Codex task, `.env.worker`, or the
-repository:
+Set the exact repository list in `MINISAGO_GITHUB_REPOSITORIES`. Create one
+fine-grained token for those active repositories with contents, issues, and
+pull-request write access and optional read access to checks and Actions. Do
+not grant administration, secrets, environments, deployments, organization,
+or unrelated-repository access. Require pull requests on protected branches
+and block direct and force pushes. Do not paste the token into Discord, a Codex
+task, `.env.worker`, the shell command line, or the repository. Run the login
+command and paste it only when `gh` reads standard input:
 
 ```bash
-docker compose -f compose.worker.yaml run --rm -e GH_CONFIG_DIR=/home/bun/.config/gh-read worker gh auth login --hostname github.com --git-protocol https --web
-docker compose -f compose.worker.yaml run --rm -e GH_CONFIG_DIR=/home/bun/.config/gh-write worker-write gh auth login --hostname github.com --git-protocol https --web
-docker compose -f compose.worker.yaml up -d --force-recreate worker
-docker compose -f compose.worker.yaml exec -e GH_CONFIG_DIR=/home/bun/.config/gh-read worker gh auth status
-docker compose -f compose.worker.yaml exec -e GH_CONFIG_DIR=/home/bun/.config/gh-write worker-write gh auth status
+docker compose -f compose.worker.yaml run --rm worker gh auth login --hostname github.com --git-protocol https --with-token
+docker compose -f compose.worker.yaml up -d --force-recreate
+docker compose -f compose.worker.yaml exec worker gh auth status
 ```
 
-The worker's two GitHub CLI logins and Codex login use separate persistent volumes.
-See [Configuration](configuration.md#owner-github-automation) for the runtime
+The dedicated GitHub CLI login and Codex login use separate persistent volumes.
+Both capability workers mount the same GitHub volume. See
+[Configuration](configuration.md#owner-github-automation) for the runtime
 boundary.
 
 Put the production bridge URL in both worker files and give
@@ -343,14 +344,13 @@ Prerequisites:
 Run:
 
 ```bash
-GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github-read" gh auth login --hostname github.com --git-protocol https --web
-GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github-write" gh auth login --hostname github.com --git-protocol https --web
+GH_CONFIG_DIR="$HOME/Library/Application Support/MiniSago/github" gh auth login --hostname github.com --git-protocol https --with-token
 bun run mac-agent:install
 bun run mac-agent:status
 ```
 
-Use the same repo scopes and protected-branch rules as the cloud worker. These
-isolated logins are separate from the normal `~/.config/gh` login.
+Use the same repo scopes and protected-branch rules as the cloud worker. This
+isolated login is separate from the normal `~/.config/gh` login.
 
 The installer compiles a small native session monitor and registers
 `dev.hsichen.minisago-mac-agent` as a per-user LaunchAgent. It connects only
