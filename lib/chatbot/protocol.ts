@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 18;
+export const CHATBOT_PROTOCOL_VERSION = 19;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -23,6 +23,14 @@ export type ChatbotReaction = {
 export type ChatbotExecutionMode = "chat" | "dev";
 export type ChatbotExecutionTarget = "default" | "mac";
 export type ChatbotMutationScope = "code" | "issue" | "deploy";
+
+export type ChatbotToolCapability = {
+  name: string;
+  risk: "ambient" | "normal" | "owner_confirmed";
+  description: string;
+  inputSchema: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
 
 export type ChatbotMemberResult = {
   query: string;
@@ -58,13 +66,19 @@ export type ChatbotMessage = {
 export type ChatbotJob = {
   id: string;
   requesterUserId: string;
-  purpose?: "answer" | "execution_route" | "context_plan" | "trace_lookup";
+  purpose?:
+    | "answer"
+    | "execution_route"
+    | "context_plan"
+    | "social_action"
+    | "trace_lookup";
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
   availableRepositories?: string[];
   chatbotRepository?: string;
+  availableTools?: ChatbotToolCapability[];
   channelId: string;
   requestMessageId: string;
   request: string;

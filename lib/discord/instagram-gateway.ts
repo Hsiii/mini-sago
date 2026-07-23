@@ -4,6 +4,7 @@ import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
 } from "../chatbot/access";
+import { AmbientReactionController } from "./social-reactions";
 
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
@@ -65,6 +66,7 @@ type DiscordMessageCreate = {
 type InstagramGatewayConfig = {
   botToken: string;
   chatbotAccess: ChatbotAccessConfig;
+  ambientReactionsEnabled: boolean;
 };
 
 function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
@@ -78,6 +80,9 @@ function getInstagramGatewayConfig(): InstagramGatewayConfig | null {
   return {
     botToken,
     chatbotAccess: getChatbotAccessConfig(),
+    ambientReactionsEnabled:
+      process.env.MINISAGO_AMBIENT_REACTIONS_ENABLED?.trim().toLowerCase() ===
+      "true",
   };
 }
 
@@ -136,6 +141,7 @@ function getGatewayCloseReason(code: number) {
 }
 
 class InstagramGatewayClient {
+  private ambientReactions = new AmbientReactionController();
   private channelTasks = new ChannelTaskQueue();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -368,6 +374,22 @@ class InstagramGatewayClient {
       } catch (error) {
         console.error(`Failed to handle chatbot mention ${message.id}:`, error);
         return;
+      }
+
+      if (this.config.ambientReactionsEnabled) {
+        void this.ambientReactions
+          .consider({
+            message,
+            botUserId: this.botUserId,
+            discordRequest: createDiscordRequest(this.config.botToken),
+            accessConfig: this.config.chatbotAccess,
+          })
+          .catch((error) => {
+            console.error(
+              `Failed to consider ambient reaction for ${message.id}:`,
+              error,
+            );
+          });
       }
     }
 

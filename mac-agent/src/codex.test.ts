@@ -17,6 +17,8 @@ import {
   OWNER_CHATBOT_PROFILE,
   OWNER_ROUTER_PROFILE,
   PROMPT_VERSION,
+  SOCIAL_ACTION_OUTPUT_SCHEMA,
+  SOCIAL_ACTION_PROFILE,
 } from "./codex";
 
 const ACCESS_CONFIG: ChatbotAccessConfig = {
@@ -75,6 +77,10 @@ describe("Codex chatbot runner", () => {
       model: "gpt-5.6-luna",
       reasoningEffort: "low",
     });
+    expect(SOCIAL_ACTION_PROFILE).toEqual({
+      model: "gpt-5.6-luna",
+      reasoningEffort: "low",
+    });
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("target");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.required).toContain("mutationScope");
     expect(EXECUTION_ROUTE_OUTPUT_SCHEMA.properties.target.enum).toEqual([
@@ -96,6 +102,16 @@ describe("Codex chatbot runner", () => {
         purpose: "execution_route",
       }),
     ).toBe(OWNER_ROUTER_PROFILE);
+    expect(
+      codexProfileForJob({
+        ...job,
+        purpose: "social_action",
+      }),
+    ).toBe(SOCIAL_ACTION_PROFILE);
+    expect(SOCIAL_ACTION_OUTPUT_SCHEMA.properties.action.enum).toEqual([
+      "ignore",
+      "discord.add_reaction",
+    ]);
   });
 
   test("routes only through worker-advertised repository capabilities", () => {
@@ -279,7 +295,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(20);
+    expect(PROMPT_VERSION).toBe(21);
     expect(prompt).toContain("Answer directly and fully");
     expect(prompt).toContain(
       "evidence must not make the reply sound like a report",

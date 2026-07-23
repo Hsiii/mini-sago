@@ -16,6 +16,7 @@ export {
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
+  SOCIAL_ACTION_OUTPUT_SCHEMA,
 } from "./prompts";
 
 const LOCAL_CHAT_TIMEOUT_MS = 110_000;
@@ -29,6 +30,10 @@ export const OWNER_CHATBOT_PROFILE = {
   reasoningEffort: "medium",
 } as const;
 export const OWNER_ROUTER_PROFILE = {
+  model: "gpt-5.6-luna",
+  reasoningEffort: "low",
+} as const;
+export const SOCIAL_ACTION_PROFILE = {
   model: "gpt-5.6-luna",
   reasoningEffort: "low",
 } as const;
@@ -49,6 +54,7 @@ export function codexProfileForJob(
   accessConfig: ChatbotAccessConfig,
 ) {
   if (job.purpose === "execution_route") return OWNER_ROUTER_PROFILE;
+  if (job.purpose === "social_action") return SOCIAL_ACTION_PROFILE;
   return chatbotAccessTier(job.requesterUserId, accessConfig) === "owner" &&
     job.executionMode === "dev"
     ? OWNER_CHATBOT_PROFILE

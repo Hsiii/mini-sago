@@ -135,7 +135,7 @@ export type DiscordContextPlan = {
   queries: DiscordSearchQuery[];
 };
 
-type DiscordRequest = <T>(
+export type DiscordRequest = <T>(
   path: string,
   options?: { method?: string; body?: unknown },
 ) => Promise<T>;
