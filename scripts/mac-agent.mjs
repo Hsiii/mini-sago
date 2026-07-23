@@ -191,6 +191,10 @@ async function install() {
       process.env.MINISAGO_GITHUB_REPOSITORIES?.trim() || "",
     ),
     envLine(
+      "MINISAGO_CHATBOT_REPOSITORY",
+      process.env.MINISAGO_CHATBOT_REPOSITORY?.trim() || "",
+    ),
+    envLine(
       "MINISAGO_GITHUB_CONFIG_DIR",
       process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
         join(applicationSupport, "github"),

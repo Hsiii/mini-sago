@@ -84,6 +84,26 @@ describe("Codex chatbot runner", () => {
     ).toBe(OWNER_ROUTER_PROFILE);
   });
 
+  test("routes only through worker-advertised repository capabilities", () => {
+    const prompt = buildCodexPrompt(
+      {
+        ...job,
+        purpose: "execution_route",
+        availableRepositories: ["Hsiii/mini-sago", "Kiwi/backend"],
+        chatbotRepository: "Hsiii/mini-sago",
+      },
+      [],
+      [],
+    );
+
+    expect(prompt).toContain(
+      'available_repositories_json\n["Hsiii/mini-sago","Kiwi/backend"]',
+    );
+    expect(prompt).toContain('chatbot_repository_json\n"Hsiii/mini-sago"');
+    expect(prompt).toContain("Never invent a repository");
+    expect(prompt).not.toContain("use Hsiii/MiniSago");
+  });
+
   test("rechecks privileged work at the Mac boundary", () => {
     expect(() =>
       assertChatbotJobAllowed({ ...job, request: "review this PR" }),

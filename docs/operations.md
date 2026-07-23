@@ -127,6 +127,9 @@ docker compose -f compose.worker.yaml logs -f worker
 ```
 
 Set the exact repository allowlist in `MINISAGO_GITHUB_REPOSITORIES`. Put the
+repository that implements chatbot behavior in `MINISAGO_CHATBOT_REPOSITORY`
+when the allowlist has more than one entry. Repositories are cloned into a
+disposable worktree on first use and do not need to exist locally beforehand. Put the
 same 32-byte-or-longer secret in the worker's
 `MINISAGO_MAC_BRIDGE_SECRET` and the hosted broker's
 `MINISAGO_WORKER_BRIDGE_SECRET`. Device authentication must write only to the

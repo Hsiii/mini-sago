@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 16;
+export const CHATBOT_PROTOCOL_VERSION = 17;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -52,6 +52,8 @@ export type ChatbotJob = {
   executionTarget?: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
+  availableRepositories?: string[];
+  chatbotRepository?: string;
   channelId: string;
   requestMessageId: string;
   request: string;
@@ -71,6 +73,7 @@ export type MacAgentClientMessage =
       workerId: string;
       capabilities: ChatbotWorkerCapability[];
       repositories: string[];
+      chatbotRepository?: string;
       priority: number;
     }
   | {

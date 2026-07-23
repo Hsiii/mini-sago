@@ -1,10 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import {
-  canRunChatbotRequest,
-  isPrivilegedChatbotRequest,
-  OWNER_DISCORD_USER_ID,
-} from "../chatbot/access";
+import { canRunChatbotRequest, OWNER_DISCORD_USER_ID } from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
 import type {
@@ -483,23 +479,13 @@ export function parseDiscordContextPlan(content: string): DiscordContextPlan {
 export function parseExecutionRoute(
   content: string,
   ownerRequest: string,
-  repositoryContext = ownerRequest,
+  availableRepositories: string[] = [],
 ): {
   mode: ChatbotExecutionMode;
   target: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
 } {
-  const ownerRepository =
-    ownerRequest.match(
-      /https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
-    )?.[1] ??
-    ownerRequest.match(
-      /(?:^|\s)([a-z0-9_.-]+\/[a-z0-9_.-]+)(?=$|\s|[,.!?])/iu,
-    )?.[1];
-  const referencedRepository = repositoryContext.match(
-    /https?:\/\/github\.com\/([a-z0-9_.-]+\/[a-z0-9_.-]+)(?:\/|\b)/iu,
-  )?.[1];
   const actionableOwnerRequest = ownerRequest
     .replace(/```[\s\S]*?```/gu, "")
     .split("\n")
@@ -525,22 +511,12 @@ export function parseExecutionRoute(
           )
         ? "deploy"
         : "code";
-  const repository = writeRequested
-    ? ownerRepository
-    : (ownerRepository ?? referencedRepository);
-  const selectedRepository =
-    repository ??
-    (/\bminisago\b|\b(?:the|this)\s+chatbot\b|(?:這個|這隻)?聊天機器人|\b(?:change|fix|update|adjust|improve)\b[^\n]{0,80}\b(?:your|worker|repl(?:y|ies)|responses?|messages?|line ?breaks?|image read(?:ing)?|mentions?|access)\b|(?:改|修|調整|更新).{0,40}(?:你|回覆|訊息|換行|讀圖|圖片|權限|行為|說話方式)|\bworker concurrency\b/iu.test(
-      actionableOwnerRequest,
-    )
-      ? "Hsiii/MiniSago"
-      : undefined);
-  const target =
-    /\b(?:on|from|using)\s+(?:my|the)\s+mac\b|(?:我的|我這台|本機|mac 上|mac 裡)/iu.test(
-      ownerRequest,
-    )
-      ? "mac"
-      : "default";
+  const advertisedRepositories = new Map(
+    availableRepositories.map((repository) => [
+      repository.toLocaleLowerCase("en-US"),
+      repository,
+    ]),
+  );
 
   try {
     const normalized = content
@@ -554,11 +530,18 @@ export function parseExecutionRoute(
     };
     if (payload.mode === "dev" || payload.mode === "chat") {
       const mode = writeRequested ? "dev" : payload.mode;
+      const target = payload.target === "mac" ? "mac" : "default";
+      const repository =
+        typeof payload.repository === "string"
+          ? advertisedRepositories.get(
+              payload.repository.toLocaleLowerCase("en-US"),
+            )
+          : undefined;
       return {
         mode,
         target,
         ...(mode === "dev" && mutationScope ? { mutationScope } : {}),
-        ...(selectedRepository ? { repository: selectedRepository } : {}),
+        ...(mode === "dev" && repository ? { repository } : {}),
       };
     }
   } catch {
@@ -566,22 +549,23 @@ export function parseExecutionRoute(
   }
 
   return {
-    mode:
-      writeRequested || isPrivilegedChatbotRequest(ownerRequest)
-        ? "dev"
-        : "chat",
-    target,
+    mode: writeRequested ? "dev" : "chat",
+    target: "default",
     ...(writeRequested && mutationScope ? { mutationScope } : {}),
-    ...(selectedRepository ? { repository: selectedRepository } : {}),
   };
 }
 
 export function missingDeveloperRepositoryResponse(
   mode: ChatbotExecutionMode,
   repository?: string,
+  availableRepositories: string[] = [],
 ) {
   if (mode !== "dev" || repository) return undefined;
-  return "這題要碰程式碼 但我還不知道是哪個 GitHub repo\n丟我 `owner/repo` 或 GitHub 連結 我就能繼續";
+  const choices =
+    availableRepositories.length > 0
+      ? `\n目前可用的有 ${availableRepositories.map((value) => `\`${value}\``).join(" ")}`
+      : "";
+  return `這題要碰程式碼 但我還不知道是哪個 GitHub repo${choices}\n告訴我是哪個 我就能繼續`;
 }
 
 export function isTraceExplanationRequest(request: string) {
@@ -1201,6 +1185,10 @@ export async function handleChatbotMention({
           request,
           requestMessage,
           messages,
+          availableRepositories: workflow.availableRepositories,
+          ...(workflow.chatbotRepository
+            ? { chatbotRepository: workflow.chatbotRepository }
+            : {}),
         };
         const routeDispatch = workflow.dispatch(routeJob);
         if (routeDispatch.status === "accepted") {
@@ -1208,7 +1196,7 @@ export async function handleChatbotMention({
           const route = parseExecutionRoute(
             routeResult.ok ? routeResult.content : "",
             request,
-            privilegedRequestContext(request, message),
+            workflow.availableRepositories,
           );
           executionMode = route.mode;
           executionTarget = route.target;
@@ -1218,7 +1206,7 @@ export async function handleChatbotMention({
           const route = parseExecutionRoute(
             "",
             request,
-            privilegedRequestContext(request, message),
+            workflow.availableRepositories,
           );
           executionMode = route.mode;
           executionTarget = route.target;
@@ -1229,6 +1217,7 @@ export async function handleChatbotMention({
         const missingRepository = missingDeveloperRepositoryResponse(
           executionMode,
           selectedRepository,
+          workflow.availableRepositories,
         );
         if (missingRepository) {
           return { ok: true as const, content: missingRepository };

@@ -30,6 +30,8 @@ type Worker = {
   socket: Socket;
   capabilities: Set<ChatbotWorkerCapability>;
   repositories: Set<string>;
+  repositoryNames: string[];
+  chatbotRepository?: string;
   priority: number;
   available: boolean;
   capacity: number;
@@ -61,6 +63,8 @@ export type WorkerSelectionResult =
   | { status: "accepted" };
 
 export type WorkflowLease = {
+  availableRepositories: string[];
+  chatbotRepository?: string;
   dispatch: (job: ChatbotJob) => DispatchResult;
   route: (
     capabilities: ChatbotWorkerCapability[],
@@ -226,10 +230,12 @@ export class MacAgentBridge {
 
     const workflowId = randomUUID();
     this.workflows.set(workflowId, { workerId: selected.worker.id });
+    const repositoryCapabilities = this.repositoryCapabilities();
 
     return {
       status: "accepted",
       workflow: {
+        ...repositoryCapabilities,
         dispatch: (job) => this.dispatchWorkflowJob(job, workflowId),
         route: (requiredCapabilities, repository) =>
           this.routeWorkflow(workflowId, requiredCapabilities, repository),
@@ -237,6 +243,34 @@ export class MacAgentBridge {
           this.workflows.delete(workflowId);
         },
       },
+    };
+  }
+
+  private repositoryCapabilities() {
+    const repositoryNames = new Map<string, string>();
+    const chatbotRepositories = new Map<string, string>();
+
+    for (const worker of this.workers.values()) {
+      if (!worker.available || !worker.capabilities.has("dev")) continue;
+      for (const repository of worker.repositoryNames) {
+        repositoryNames.set(repositoryKey(repository), repository);
+      }
+      if (worker.chatbotRepository) {
+        chatbotRepositories.set(
+          repositoryKey(worker.chatbotRepository),
+          worker.chatbotRepository,
+        );
+      }
+    }
+
+    const advertisedChatbotRepositories = [...chatbotRepositories.values()];
+    return {
+      availableRepositories: [...repositoryNames.values()].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      ...(advertisedChatbotRepositories.length === 1
+        ? { chatbotRepository: advertisedChatbotRepositories[0] }
+        : {}),
     };
   }
 
@@ -441,6 +475,13 @@ export class MacAgentBridge {
       ) ||
       (policy.requireMac && !message.capabilities.includes("mac")) ||
       !validRepositories(message.repositories) ||
+      (message.chatbotRepository !== undefined &&
+        (typeof message.chatbotRepository !== "string" ||
+          !message.repositories.some(
+            (repository) =>
+              repositoryKey(repository) ===
+              repositoryKey(message.chatbotRepository!),
+          ))) ||
       !Number.isFinite(message.priority)
     ) {
       socket.close(4001, "Authentication failed");
@@ -464,6 +505,8 @@ export class MacAgentBridge {
       socket,
       capabilities: new Set(message.capabilities),
       repositories: new Set(message.repositories.map(repositoryKey)),
+      repositoryNames: [...message.repositories],
+      chatbotRepository: message.chatbotRepository,
       priority: Math.max(0, Math.min(1_000, Math.floor(message.priority))),
       available: false,
       capacity: 1,
