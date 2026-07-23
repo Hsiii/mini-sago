@@ -18,10 +18,9 @@ async function options() {
   const root = await mkdtemp(join(tmpdir(), "minisago-dev-workspace-"));
   roots.push(root);
   return {
-    githubReadConfigDir: "/secrets/github-read",
+    githubConfigDir: "/secrets/github",
     githubRepositories: ["Hsiii/mini-sago"],
     githubWorktreeRoot: join(root, "worktrees"),
-    githubWriteConfigDir: "/secrets/github-write",
   };
 }
 
@@ -41,7 +40,7 @@ function job(mode: "dev-read" | "dev-write"): ChatbotJob {
 }
 
 describe("developer workspace", () => {
-  test("clones only the selected repo with the read credential", async () => {
+  test("clones only the selected repo with the dedicated credential", async () => {
     const commands: Array<{
       command: string[];
       environment: Record<string, string>;
@@ -62,14 +61,11 @@ describe("developer workspace", () => {
       "clone",
       "Hsiii/mini-sago",
     ]);
-    expect(commands[0]!.environment.GH_CONFIG_DIR).toBe("/secrets/github-read");
-    expect(commands[0]!.environment).not.toContainValue(
-      "/secrets/github-write",
-    );
+    expect(commands[0]!.environment.GH_CONFIG_DIR).toBe("/secrets/github");
     await workspace.cleanup();
   });
 
-  test("uses the write credential only for explicit write jobs", async () => {
+  test("uses the same credential for explicit write jobs", async () => {
     const commands: Array<{
       command: string[];
       environment: Record<string, string>;
@@ -85,8 +81,7 @@ describe("developer workspace", () => {
     expect(commands).toHaveLength(2);
     expect(
       commands.every(
-        ({ environment }) =>
-          environment.GH_CONFIG_DIR === "/secrets/github-write",
+        ({ environment }) => environment.GH_CONFIG_DIR === "/secrets/github",
       ),
     ).toBe(true);
     expect(commands[1]!.command.at(-1)).toBe("minisago/job-123");

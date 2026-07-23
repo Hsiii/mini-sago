@@ -8,9 +8,8 @@ export type MacAgentConfig = {
   bridgeSecret: string;
   codexHome: string;
   codexPath: string;
-  githubReadConfigDir: string;
+  githubConfigDir: string;
   githubRepositories: string[];
-  githubWriteConfigDir: string;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
   headless: boolean;
@@ -169,14 +168,11 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
       process.env.MINISAGO_CODEX_HOME?.trim() ||
       join(defaultApplicationSupport, "codex-home"),
     codexPath: await resolveCodexPath(),
-    githubReadConfigDir:
-      process.env.MINISAGO_GITHUB_READ_CONFIG_DIR?.trim() ||
-      join(defaultApplicationSupport, "github-read"),
+    githubConfigDir:
+      process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
+      join(defaultApplicationSupport, "github"),
     githubRepositories,
     githubWorktreeRoot,
-    githubWriteConfigDir:
-      process.env.MINISAGO_GITHUB_WRITE_CONFIG_DIR?.trim() ||
-      join(defaultApplicationSupport, "github-write"),
     headless,
     maxConcurrentJobs: Math.max(
       1,

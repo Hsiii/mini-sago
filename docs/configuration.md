@@ -43,24 +43,23 @@ environments unless that instance is intentionally replacing production.
 These values are consumed by `bun run mac-agent:install` from `.env.local`. Only
 the bridge secret must also be present in production.
 
-| Name                               | Required  | Description                                                                                             |
-| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
-| `MINISAGO_MAC_BRIDGE_SECRET`       | Yes       | Same random secret configured on the hosted server                                                      |
-| `MINISAGO_BRIDGE_URL`              | No        | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only |
-| `MINISAGO_CODEX_PATH`              | No        | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                         |
-| `MINISAGO_CODEX_HOME`              | No        | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`  |
-| `MINISAGO_SESSION_MONITOR_PATH`    | No        | Compiled native lock monitor; the installer creates and configures it automatically                     |
-| `MINISAGO_TRACE_DATABASE_PATH`     | No        | Local response-trace database; defaults under the platform state directory                              |
-| `MINISAGO_WORKSPACE_ROOT`          | No        | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container      |
-| `MINISAGO_MAX_CONCURRENT_JOBS`     | No        | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`       |
-| `MINISAGO_HEADLESS`                | No        | Set to `true` on Linux to stay connected without the macOS session monitor                              |
-| `MINISAGO_WORKER_ID`               | No        | Stable worker identity; defaults from the host, while the container image uses `oracle`                 |
-| `MINISAGO_WORKER_CAPABILITIES`     | No        | Comma-separated `chat`, `dev-read`, `dev-write`, and `mac`; only a Mac worker should advertise `mac`    |
-| `MINISAGO_WORKER_PRIORITY`         | No        | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing     |
-| `MINISAGO_GITHUB_REPOSITORIES`     | For dev   | Exact `owner/repository` scopes advertised to the bridge; credentials must be scoped to the same repos  |
-| `MINISAGO_GITHUB_READ_CONFIG_DIR`  | For dev   | GitHub CLI config containing the repo-scoped read-only credential used by `dev-read`                    |
-| `MINISAGO_GITHUB_WRITE_CONFIG_DIR` | For write | Separate GitHub CLI config containing the repo-scoped write credential used by `dev-write`              |
-| `MINISAGO_GITHUB_WORKTREE_ROOT`    | No        | Per-job isolated worktree root; defaults to `<workspace>/worktrees`                                     |
+| Name                            | Required | Description                                                                                               |
+| ------------------------------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| `MINISAGO_MAC_BRIDGE_SECRET`    | Yes      | Same random secret configured on the hosted server                                                        |
+| `MINISAGO_BRIDGE_URL`           | No       | Hosted WebSocket URL; defaults to `wss://bot.hsichen.dev/api/mac-agent/ws`; plain `ws://` is local-only   |
+| `MINISAGO_CODEX_PATH`           | No       | Codex executable; defaults to the binary bundled in `/Applications/ChatGPT.app`                           |
+| `MINISAGO_CODEX_HOME`           | No       | Isolated helper state directory; the installer defaults under `~/Library/Application Support/MiniSago`    |
+| `MINISAGO_SESSION_MONITOR_PATH` | No       | Compiled native lock monitor; the installer creates and configures it automatically                       |
+| `MINISAGO_TRACE_DATABASE_PATH`  | No       | Local response-trace database; defaults under the platform state directory                                |
+| `MINISAGO_WORKSPACE_ROOT`       | No       | Owner dev-mode workspace; defaults to `~/Projects` on Mac and `/workspace` in the worker container        |
+| `MINISAGO_MAX_CONCURRENT_JOBS`  | No       | Maximum concurrent Codex jobs advertised to the bridge; defaults to `2`, bounded from `1` to `16`         |
+| `MINISAGO_HEADLESS`             | No       | Set to `true` on Linux to stay connected without the macOS session monitor                                |
+| `MINISAGO_WORKER_ID`            | No       | Stable worker identity; defaults from the host, while the container image uses `oracle`                   |
+| `MINISAGO_WORKER_CAPABILITIES`  | No       | Comma-separated `chat`, `dev-read`, `dev-write`, and `mac`; only a Mac worker should advertise `mac`      |
+| `MINISAGO_WORKER_PRIORITY`      | No       | Scheduler priority from `0` to `1000`; cloud defaults to `100` and Mac to `50` for fallback routing       |
+| `MINISAGO_GITHUB_REPOSITORIES`  | For dev  | Exact `owner/repository` scopes advertised to the bridge; the credential must be scoped to the same repos |
+| `MINISAGO_GITHUB_CONFIG_DIR`    | For dev  | Dedicated GitHub CLI config used for owner development jobs                                               |
+| `MINISAGO_GITHUB_WORKTREE_ROOT` | No       | Per-job isolated worktree root; defaults to `<workspace>/worktrees`                                       |
 
 The helper uses the existing `~/.codex/auth.json` through a symlink inside its
 isolated Codex home. It does not copy the credential or load normal Codex
@@ -88,14 +87,13 @@ the request explicitly needs a resource on Hsi's Mac.
 
 ## Owner GitHub automation
 
-The worker image includes `gh`, but read and write authentication live in
-separate host secret directories or Docker volumes. The checked-in Compose
-stack runs separate read and write worker containers, and mounts only the
-credential each worker advertises. `dev-read` is the default
-for PR review and receives only the repo-scoped read credential. `dev-write`
-is selected only when the owner's own request explicitly requires mutation and
-receives the separate repo-scoped write credential. MiniSago does not accept,
-copy, or inject a GitHub token through its own configuration.
+The worker image includes `gh` and uses one dedicated GitHub CLI login from a
+host secret directory or Docker volume. The checked-in Compose stack shares
+that login between its read and write worker containers while retaining
+separate broker secrets, state, workspaces, and advertised capabilities.
+`dev-read` remains the default for PR review, and `dev-write` is selected only
+when the owner's own request explicitly requires mutation. MiniSago does not
+accept, copy, or inject a GitHub token through its own environment.
 
 Only the final owner-authorized dev answer receives developer command and
 network permissions. Luna routing, Discord context planning, identity
@@ -105,15 +103,17 @@ the worker then clones only that repository into a disposable job checkout.
 Untrusted PR content can influence analysis but cannot upgrade `dev-read` to
 `dev-write` because the deterministic mutation check uses only the owner's
 request. A `dev-write` job also carries an owner-derived `issue`, `code`, or
-`deploy` scope. Per-job `gh` and `git` wrappers enforce that scope, require
-draft PR creation, and reject merge, ready, protected-branch, and force-push
-operations outside the prompt.
+`deploy` scope. Per-job `gh` and `git` wrappers guard that scope, require draft
+PR creation, and reject merge, ready, protected-branch, and force-push
+operations through the normal command paths.
 
-The read credential must have read-only repository permissions. The write
-credential may create issues, branches, commits, and draft PRs, but GitHub
-rulesets must deny protected-branch pushes and merging for that identity. Do
-not grant either credential provider, deployment, organization-admin, or
-unrelated-repository access. Exact setup remains tracked in
+The dedicated login should use one fine-grained token limited to the active
+repositories in `MINISAGO_GITHUB_REPOSITORIES`. It may receive repository
+contents, issues, and pull-request write access plus read access to checks and
+Actions. Do not grant administration, secrets, environments, deployments,
+organization, or unrelated-repository access. GitHub rulesets must block
+direct and force pushes to protected branches; Hsi remains responsible for
+merging. Exact setup remains tracked in
 [issue #12](https://github.com/Hsiii/mini-sago/issues/12).
 
 Repository contents, diffs, issues, comments, and command output remain

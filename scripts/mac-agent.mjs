@@ -192,14 +192,9 @@ async function install() {
       process.env.MINISAGO_GITHUB_REPOSITORIES?.trim() || "",
     ),
     envLine(
-      "MINISAGO_GITHUB_READ_CONFIG_DIR",
-      process.env.MINISAGO_GITHUB_READ_CONFIG_DIR?.trim() ||
-        join(applicationSupport, "github-read"),
-    ),
-    envLine(
-      "MINISAGO_GITHUB_WRITE_CONFIG_DIR",
-      process.env.MINISAGO_GITHUB_WRITE_CONFIG_DIR?.trim() ||
-        join(applicationSupport, "github-write"),
+      "MINISAGO_GITHUB_CONFIG_DIR",
+      process.env.MINISAGO_GITHUB_CONFIG_DIR?.trim() ||
+        join(applicationSupport, "github"),
     ),
     envLine(
       "MINISAGO_GITHUB_WORKTREE_ROOT",

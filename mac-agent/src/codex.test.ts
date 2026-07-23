@@ -401,7 +401,7 @@ describe("Codex chatbot runner", () => {
     ).toBe(false);
   });
 
-  test("describes externally enforced GitHub profiles", () => {
+  test("describes owner-routed GitHub profiles", () => {
     const policy = buildGithubDeveloperPolicy({
       ...job,
       id: "job-123",
@@ -422,9 +422,9 @@ describe("Codex chatbot runner", () => {
     const chatPrompt = buildCodexPrompt(job, [], [], policy);
 
     expect(policy).toContain("Hsiii/mini-sago");
-    expect(policy).toContain("externally restricted to dev-read");
-    expect(policy).toContain("Remote GitHub access is read-only");
-    expect(policy).toContain("repo-scoped GitHub login");
+    expect(policy).toContain("routed as dev-read");
+    expect(policy).toContain("must remain read-only on GitHub");
+    expect(policy).toContain("dedicated repo-scoped GitHub login");
     expect(devPrompt).toContain("github_development_policy");
     expect(chatPrompt).not.toContain("github_development_policy");
   });
