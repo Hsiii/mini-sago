@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ChatbotAccessConfig } from "../chatbot/access";
 import {
+  ChatbotConversationTracker,
   canMemberSearchChannel,
   extractChatbotRequest,
   extractMentionRequest,
@@ -40,6 +41,38 @@ const ACCESS_CONFIG: ChatbotAccessConfig = {
 };
 
 describe("Discord chatbot", () => {
+  test("continues the original requester's next message after an answer", () => {
+    let now = 1_000;
+    const conversations = new ChatbotConversationTracker(90_000, () => now);
+    const followUp = {
+      id: "follow-up-1",
+      channel_id: "channel-1",
+      guild_id: "917436845187563610",
+      content: "那明天呢",
+      timestamp: "2026-07-25T11:00:00.000Z",
+      author: { id: "member-1", username: "Member" },
+    };
+
+    conversations.activate("channel-1", "member-1");
+
+    expect(conversations.take(followUp)).toBe(true);
+    expect(conversations.take({ ...followUp, id: "follow-up-2" })).toBe(false);
+
+    conversations.activate("channel-1", "member-1");
+    expect(
+      conversations.take({
+        ...followUp,
+        id: "interruption-1",
+        author: { id: "member-2", username: "Other member" },
+      }),
+    ).toBe(false);
+    expect(conversations.take({ ...followUp, id: "follow-up-3" })).toBe(false);
+
+    conversations.activate("channel-1", "member-1");
+    now += 90_000;
+    expect(conversations.take({ ...followUp, id: "follow-up-4" })).toBe(false);
+  });
+
   test("accepts reply-only, reaction-only, and combined mention decisions", () => {
     expect(
       parseChatbotAnswerDecision(
