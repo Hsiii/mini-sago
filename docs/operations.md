@@ -105,6 +105,8 @@ MiniSago's curated Discord MCP tools.
 Chat runs in an isolated workspace with restricted permissions. Owner
 development enables commands and network access only inside a selected
 disposable checkout; the container remains the outer boundary on Oracle.
+The Linux worker selects Codex's legacy Landlock sandbox because Bubblewrap
+cannot create its nested user namespace inside the unprivileged container.
 Provider and production credentials are not mounted. Ordinary chat stages have
 a two-minute timeout; final owner development answers may run for 15 minutes.
 
