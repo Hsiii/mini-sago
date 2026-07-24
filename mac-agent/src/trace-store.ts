@@ -21,6 +21,7 @@ type TraceRow = {
   finished_at: number | null;
   model: string;
   prompt_version: number;
+  tool_trace_json: string | null;
 };
 
 type TraceStoreMetadata = {
@@ -67,13 +68,13 @@ function sanitizedJob(job: ChatbotJob): ChatbotJob {
       : undefined,
   });
 
+  const { mcpAccessToken: _mcpAccessToken, ...safeJob } = job;
   return {
-    ...job,
+    ...safeJob,
     requestMessage: job.requestMessage
       ? sanitizeMessage(job.requestMessage)
       : undefined,
     messages: job.messages.map(sanitizeMessage),
-    searchResults: job.searchResults?.map(sanitizeMessage),
   };
 }
 
@@ -86,34 +87,32 @@ function elapsedMs(rows: TraceRow[]) {
 }
 
 function sanitizedSearchQuery(query: Record<string, unknown>) {
-  return Object.fromEntries(
-    [
-      "author",
-      "mentions",
-      "content",
-      "has",
-      "embedType",
-      "linkHostname",
-      "attachmentExtension",
-      "sortBy",
-      "sortOrder",
-    ].flatMap((key) => {
-      const value = query[key];
-      if (typeof value === "string") return [[key, value.slice(0, 200)]];
-      if (Array.isArray(value)) {
-        return [
-          [
-            key,
-            value
-              .filter((item): item is string => typeof item === "string")
-              .slice(0, 8)
-              .map((item) => item.slice(0, 100)),
-          ],
-        ];
-      }
-      return [];
-    }),
-  );
+  const entries: Array<[string, string | string[]]> = [];
+  for (const key of [
+    "author",
+    "mentions",
+    "content",
+    "has",
+    "embedType",
+    "linkHostname",
+    "attachmentExtension",
+    "sortBy",
+    "sortOrder",
+  ]) {
+    const value = query[key];
+    if (typeof value === "string") {
+      entries.push([key, value.slice(0, 200)]);
+    } else if (Array.isArray(value)) {
+      entries.push([
+        key,
+        value
+          .filter((item): item is string => typeof item === "string")
+          .slice(0, 8)
+          .map((item) => item.slice(0, 100)),
+      ]);
+    }
+  }
+  return Object.fromEntries(entries);
 }
 
 export class ChatbotTraceStore {
@@ -143,13 +142,22 @@ export class ChatbotTraceStore {
         output TEXT,
         error TEXT,
         model TEXT NOT NULL,
-        prompt_version INTEGER NOT NULL
+        prompt_version INTEGER NOT NULL,
+        tool_trace_json TEXT
       );
       CREATE INDEX IF NOT EXISTS chatbot_trace_request
         ON chatbot_trace_jobs(request_message_id, started_at);
       CREATE INDEX IF NOT EXISTS chatbot_trace_channel
         ON chatbot_trace_jobs(channel_id, finished_at DESC);
     `);
+    const traceColumns = this.database
+      .query("PRAGMA table_info(chatbot_trace_jobs)")
+      .all() as Array<{ name: string }>;
+    if (!traceColumns.some((column) => column.name === "tool_trace_json")) {
+      this.database.exec(
+        "ALTER TABLE chatbot_trace_jobs ADD COLUMN tool_trace_json TEXT",
+      );
+    }
     this.cleanup();
   }
 
@@ -175,14 +183,20 @@ export class ChatbotTraceStore {
     if (this.databaseBytes() > MAX_DATABASE_BYTES) this.cleanup(now);
   }
 
-  finish(jobId: string, output: string, now = Date.now()) {
+  finish(
+    jobId: string,
+    output: string,
+    now = Date.now(),
+    toolCalls: NonNullable<ChatbotTraceContext["toolCalls"]> = [],
+  ) {
     this.database
       .query(
         `UPDATE chatbot_trace_jobs
-         SET finished_at = ?, status = 'complete', output = ?, error = NULL
+         SET finished_at = ?, status = 'complete', output = ?, error = NULL,
+             tool_trace_json = ?
          WHERE job_id = ?`,
       )
-      .run(now, output, jobId);
+      .run(now, output, JSON.stringify(toolCalls), jobId);
     if (this.databaseBytes() > MAX_DATABASE_BYTES) this.cleanup(now);
   }
 
@@ -220,7 +234,7 @@ export class ChatbotTraceStore {
     const rows = this.database
       .query(
         `SELECT purpose, input_json, output, error, started_at, finished_at,
-                model, prompt_version
+                model, prompt_version, tool_trace_json
          FROM chatbot_trace_jobs
          WHERE request_message_id = ?
          ORDER BY started_at`,
@@ -232,6 +246,43 @@ export class ChatbotTraceStore {
       .find((row) => row.purpose === "answer");
     const plan = safeJson<ContextPlan>(planner?.output ?? null);
     const answerJob = safeJson<ChatbotJob>(terminal?.input_json ?? null);
+    const toolCalls =
+      safeJson<NonNullable<ChatbotTraceContext["toolCalls"]>>(
+        terminal?.tool_trace_json ?? null,
+      ) ?? [];
+    const mcpHistoryCount = [...toolCalls]
+      .reverse()
+      .flatMap((call) => {
+        const value =
+          call.name === "get_recent_messages"
+            ? call.arguments.limit
+            : call.name === "resolve_context"
+              ? call.arguments.historyCount
+              : undefined;
+        return typeof value === "number" ? [value] : [];
+      })
+      .at(0);
+    const mcpSearchQueries = toolCalls.flatMap((call) =>
+      ["search_messages", "resolve_context"].includes(call.name) &&
+      Array.isArray(call.arguments.queries)
+        ? call.arguments.queries.filter(
+            (query): query is Record<string, unknown> =>
+              Boolean(query) && typeof query === "object",
+          )
+        : [],
+    );
+    const mcpMemberQueries = toolCalls.flatMap((call) =>
+      call.name === "lookup_members" && Array.isArray(call.arguments.queries)
+        ? call.arguments.queries.filter(
+            (query): query is string => typeof query === "string",
+          )
+        : call.name === "resolve_context" &&
+            Array.isArray(call.arguments.memberQueries)
+          ? call.arguments.memberQueries.filter(
+              (query): query is string => typeof query === "string",
+            )
+          : [],
+    );
     const legacyHistoryCount =
       plan?.history === "extended"
         ? 100
@@ -241,21 +292,36 @@ export class ChatbotTraceStore {
             ? 20
             : undefined;
     return {
-      ...((typeof plan?.historyCount === "number" || legacyHistoryCount) && {
+      ...((typeof mcpHistoryCount === "number" ||
+        typeof plan?.historyCount === "number" ||
+        legacyHistoryCount) && {
         historyCount:
-          typeof plan?.historyCount === "number"
-            ? plan.historyCount
-            : legacyHistoryCount,
+          typeof mcpHistoryCount === "number"
+            ? mcpHistoryCount
+            : typeof plan?.historyCount === "number"
+              ? plan.historyCount
+              : legacyHistoryCount,
       }),
       contextMessageCount: answerJob?.messages.length ?? 0,
-      searchQueries: (plan?.queries ?? [])
+      searchQueries: (mcpSearchQueries.length
+        ? mcpSearchQueries
+        : (plan?.queries ?? [])
+      )
         .slice(0, 4)
         .map(sanitizedSearchQuery),
-      searchResultCount: answerJob?.searchResults?.length ?? 0,
-      memberQueries: (plan?.memberQueries ?? [])
+      searchResultCount: toolCalls
+        .filter((call) =>
+          ["search_messages", "resolve_context"].includes(call.name),
+        )
+        .reduce((total, call) => total + (call.resultCount ?? 0), 0),
+      memberQueries: (mcpMemberQueries.length
+        ? mcpMemberQueries
+        : (plan?.memberQueries ?? [])
+      )
         .filter((value): value is string => typeof value === "string")
         .slice(0, 4)
         .map((value) => value.slice(0, 100)),
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
       elapsedMs: elapsedMs(rows),
       ...(terminal?.model ? { model: terminal.model } : {}),
       ...(terminal?.prompt_version !== undefined

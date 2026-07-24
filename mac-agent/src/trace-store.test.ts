@@ -39,7 +39,6 @@ function job(overrides: Partial<ChatbotJob>): ChatbotJob {
 describe("chatbot trace store", () => {
   test("returns sanitized observable metadata for the latest answer", () => {
     const traces = store();
-    const planner = job({ id: "planner-1", purpose: "context_plan" });
     const answer = job({
       messages: Array.from({ length: 42 }, (_, index) => ({
         id: `message-${index}`,
@@ -48,36 +47,41 @@ describe("chatbot trace store", () => {
         content: "context",
         attachments: [],
       })),
-      searchStatus: "complete",
-      searchResults: [
-        {
-          id: "match-1",
-          author: "Daniel",
-          timestamp: "2026-07-20T10:00:00.000Z",
-          content: "the matching message",
-          attachments: [],
-        },
-      ],
+      mcpAccessToken: "must-not-be-persisted",
     });
 
-    traces.start(planner, 1_000);
-    traces.finish(
-      planner.id,
-      JSON.stringify({
-        historyCount: 50,
-        queries: [{ content: "launch", author: "Daniel" }],
-      }),
-      1_500,
-    );
-    traces.start(answer, 1_600, { model: "owner-model" });
-    traces.finish(answer.id, "The answer", 3_000);
+    traces.start(answer, 1_000, { model: "owner-model" });
+    traces.finish(answer.id, "The answer", 3_000, [
+      {
+        name: "resolve_context",
+        arguments: {
+          historyCount: 50,
+          queries: [{ content: "launch", author: "Daniel" }],
+          memberQueries: ["Daniel"],
+        },
+        resultCount: 1,
+        status: "completed",
+      },
+    ]);
 
     expect(traces.previousTrace("channel-1", "request-2")).toEqual({
       historyCount: 50,
       contextMessageCount: 42,
       searchQueries: [{ content: "launch", author: "Daniel" }],
       searchResultCount: 1,
-      memberQueries: [],
+      memberQueries: ["Daniel"],
+      toolCalls: [
+        {
+          name: "resolve_context",
+          arguments: {
+            historyCount: 50,
+            queries: [{ content: "launch", author: "Daniel" }],
+            memberQueries: ["Daniel"],
+          },
+          resultCount: 1,
+          status: "completed",
+        },
+      ],
       elapsedMs: 2_000,
       model: "owner-model",
       promptVersion: 7,

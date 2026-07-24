@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultWorkerCapabilities,
   validateBridgeUrl,
+  validateMcpUrl,
   workspaceChild,
 } from "./config";
 
@@ -31,6 +32,18 @@ describe("worker configuration", () => {
     expect(() =>
       validateBridgeUrl("ws://[2606:4700:4700::1111]/api/mac-agent/ws"),
     ).toThrow("must use wss://");
+  });
+
+  test("allows plaintext MCP traffic only for local hostnames", () => {
+    expect(validateMcpUrl("http://bot-core:3000/api/chatbot/mcp")).toBe(
+      "http://bot-core:3000/api/chatbot/mcp",
+    );
+    expect(validateMcpUrl("https://bot.example.com/api/chatbot/mcp")).toBe(
+      "https://bot.example.com/api/chatbot/mcp",
+    );
+    expect(() =>
+      validateMcpUrl("http://bot.example.com/api/chatbot/mcp"),
+    ).toThrow("must use https://");
   });
 
   test("keeps GitHub worktree roots inside the dev workspace", () => {

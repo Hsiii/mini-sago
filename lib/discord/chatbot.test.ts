@@ -16,7 +16,6 @@ import {
   isHumanContextMessage,
   lookupGuildMembers,
   missingDeveloperRepositoryResponse,
-  parseDiscordContextPlan,
   parseChatbotAnswerDecision,
   parseExecutionRoute,
   parsePreviousTraceLookup,
@@ -603,34 +602,6 @@ describe("Discord chatbot", () => {
         author: { id: "user-1", username: "Daniel", global_name: "daniel" },
       }).authorAliases,
     ).toBeUndefined();
-  });
-
-  test("validates and limits Codex Discord context plans", () => {
-    expect(
-      parseDiscordContextPlan(`\`\`\`json
-{"historyCount":73,"includePreviousTrace":true,"memberQueries":["Daniel","Daniel","午前"],"queries":[{"author":"self","mentions":"Daniel","content":"new app"},{"has":["link","file","invalid"]},{"embedType":"gif"},{"attachmentExtension":".pdf"},{"content":"ignored"}]}
-\`\`\``),
-    ).toEqual({
-      historyCount: 73,
-      includePreviousTrace: true,
-      memberQueries: ["Daniel", "午前"],
-      queries: [
-        {
-          author: "self",
-          mentions: "Daniel",
-          content: "new app",
-        },
-        { has: ["link", "file"] },
-        { embedType: "gif" },
-        { attachmentExtension: "pdf" },
-      ],
-    });
-    expect(parseDiscordContextPlan("not json")).toEqual({
-      historyCount: 20,
-      includePreviousTrace: false,
-      memberQueries: [],
-      queries: [],
-    });
   });
 
   test("accepts only structured previous-trace lookup results", () => {

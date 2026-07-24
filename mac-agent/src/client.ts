@@ -1,6 +1,7 @@
 import {
   CHATBOT_PROTOCOL_VERSION,
   type ChatbotJob,
+  type ChatbotMcpTraceCall,
   type MacAgentClientMessage,
   type MacAgentServerMessage,
 } from "../../lib/chatbot/protocol";
@@ -221,14 +222,16 @@ export class MacAgentClient {
               );
             })()
           : await (async () => {
+              const toolCalls: ChatbotMcpTraceCall[] = [];
               this.traceStore.start(job, startedAt, {
                 model: codexProfileForJob(job, this.config.chatbotAccess).model,
               });
               const answer = await runCodexJob(job, {
                 ...this.config,
+                onMcpToolCall: (call) => toolCalls.push(call),
                 signal: controller.signal,
               });
-              this.traceStore.finish(job.id, answer);
+              this.traceStore.finish(job.id, answer, Date.now(), toolCalls);
               return answer;
             })();
 

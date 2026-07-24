@@ -93,7 +93,6 @@ function rankCandidates(job: ChatbotJob) {
   const contextMessages = [
     ...(job.requestMessage ? [job.requestMessage] : []),
     ...job.messages,
-    ...(job.searchResults ?? []),
   ];
 
   const seen = new Set<string>();

@@ -157,14 +157,14 @@ describe("Mac agent bridge", () => {
     expect(bridge.getStatus()).toBe("available");
   });
 
-  test("reserves the bridge across planning and answering jobs", async () => {
+  test("reserves the bridge across routing and answering jobs", async () => {
     useWorker();
     const bridge = new MacAgentBridge();
     const { socket } = fakeSocket();
     const job: ChatbotJob = {
-      id: "planner-1",
+      id: "router-1",
       requesterUserId: "test-user",
-      purpose: "context_plan",
+      purpose: "execution_route",
       channelId: "channel-1",
       requestMessageId: "message-1",
       request: "What did we decide?",
