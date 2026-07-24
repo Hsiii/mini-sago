@@ -26,6 +26,9 @@ Mention the **MiniSago bot account** and ask a question. You can also reply to
 one of her answers with Discord's reply ping enabled to continue the
 conversation without typing another mention. Turn off the reply ping when you
 only want to quote or refer to something she said; MiniSago will stay quiet.
+When her answer is still the latest part of the conversation, the same person
+can also send one follow-up within 90 seconds without mentioning her again.
+Another person's message or an expired window ends that continuation.
 When Discord permits reactions, a mention answer may be a reply, a reaction to
 your message, or both.
 

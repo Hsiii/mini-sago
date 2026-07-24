@@ -25,6 +25,7 @@ import {
 const DISCORD_API_BASE_URL = "https://discord.com/api/v10";
 const DISCORD_MESSAGE_LIMIT = 2_000;
 const TYPING_REFRESH_MS = 8_000;
+const ACTIVE_CONVERSATION_TTL_MS = 90_000;
 
 type DiscordAttachment = {
   id: string;
@@ -141,6 +142,44 @@ export type ApprovedMutation = {
   mutationScope: ChatbotMutationScope;
   repository: string;
 };
+
+type ActiveConversation = {
+  requesterUserId: string;
+  expiresAt: number;
+};
+
+export class ChatbotConversationTracker {
+  private conversations = new Map<string, ActiveConversation>();
+
+  constructor(
+    private readonly ttlMs = ACTIVE_CONVERSATION_TTL_MS,
+    private readonly now = () => Date.now(),
+  ) {}
+
+  activate(channelId: string, requesterUserId: string) {
+    const now = this.now();
+    for (const [activeChannelId, conversation] of this.conversations) {
+      if (conversation.expiresAt <= now) {
+        this.conversations.delete(activeChannelId);
+      }
+    }
+    this.conversations.set(channelId, {
+      requesterUserId,
+      expiresAt: now + this.ttlMs,
+    });
+  }
+
+  take(message: DiscordMessage) {
+    const conversation = this.conversations.get(message.channel_id);
+    if (!conversation) return false;
+
+    this.conversations.delete(message.channel_id);
+    return (
+      conversation.expiresAt > this.now() &&
+      message.author?.id === conversation.requesterUserId
+    );
+  }
+}
 
 export type ChatbotAnswerDecision = {
   reply: string | null;
@@ -1121,6 +1160,7 @@ export async function handleChatbotMention({
   approvedMutation,
   accessConfig,
   reactionBroker,
+  conversationTracker,
 }: {
   message: ChatbotMention;
   botUserId: string;
@@ -1128,6 +1168,7 @@ export async function handleChatbotMention({
   approvedMutation?: ApprovedMutation;
   accessConfig: ChatbotAccessConfig;
   reactionBroker?: DiscordReactionBroker;
+  conversationTracker?: ChatbotConversationTracker;
 }) {
   const requesterUserId = message.author?.id;
 
@@ -1135,7 +1176,10 @@ export async function handleChatbotMention({
     return false;
   }
 
-  const request = extractChatbotRequest(message, botUserId, accessConfig);
+  let request = extractChatbotRequest(message, botUserId, accessConfig);
+  if (request === null && conversationTracker?.take(message)) {
+    request = message.content?.trim() ?? "";
+  }
   if (request === null) {
     return false;
   }
@@ -1531,6 +1575,7 @@ export async function handleChatbotMention({
       formatDiscordAnswers(reply),
       discordRequest,
     );
+    conversationTracker?.activate(message.channel_id, requesterUserId);
   }
 
   return true;

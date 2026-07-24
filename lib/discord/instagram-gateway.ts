@@ -1,5 +1,9 @@
 import { getInstagramReplyUrls } from "./instagram-links";
-import { createDiscordRequest, handleChatbotMention } from "./chatbot";
+import {
+  ChatbotConversationTracker,
+  createDiscordRequest,
+  handleChatbotMention,
+} from "./chatbot";
 import {
   getChatbotAccessConfig,
   type ChatbotAccessConfig,
@@ -151,6 +155,7 @@ function getGatewayCloseReason(code: number) {
 class InstagramGatewayClient {
   private ambientReactions: AmbientReactionController;
   private channelTasks = new ChannelTaskQueue();
+  private conversations = new ChatbotConversationTracker();
   private heartbeatAcked = true;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private reconnectAttempts = 0;
@@ -385,6 +390,7 @@ class InstagramGatewayClient {
           discordRequest: createDiscordRequest(this.config.botToken),
           accessConfig: this.config.chatbotAccess,
           reactionBroker: this.reactionBroker,
+          conversationTracker: this.conversations,
         });
 
         if (handled) {
