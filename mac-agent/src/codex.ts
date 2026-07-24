@@ -5,7 +5,10 @@ import {
   canUseChatbotCapability,
   type ChatbotAccessConfig,
 } from "../../lib/chatbot/access";
-import type { ChatbotJob } from "../../lib/chatbot/protocol";
+import type {
+  ChatbotJob,
+  ChatbotMcpTraceCall,
+} from "../../lib/chatbot/protocol";
 import { prepareAttachments } from "./attachments";
 import { prepareDeveloperWorkspace } from "./developer-workspace";
 import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
@@ -13,7 +16,6 @@ import { buildCodexPrompt, outputSchemaForJob } from "./prompts";
 export {
   ANSWER_OUTPUT_SCHEMA,
   buildCodexPrompt,
-  CONTEXT_PLAN_OUTPUT_SCHEMA,
   EXECUTION_ROUTE_OUTPUT_SCHEMA,
   outputSchemaForJob,
   PROMPT_VERSION,
@@ -45,8 +47,10 @@ type CodexRunOptions = {
   githubConfigDir: string;
   githubRepositories: string[];
   githubWorktreeRoot: string;
+  mcpUrl: string;
   workspaceRoot: string;
   chatbotAccess: ChatbotAccessConfig;
+  onMcpToolCall?: (call: ChatbotMcpTraceCall) => void;
   signal?: AbortSignal;
 };
 
@@ -111,6 +115,7 @@ export function codexEnvironment(
   codexPath: string,
   allowDeveloperTools = false,
   developerEnvironment: Record<string, string> = {},
+  runtimeEnvironment: Record<string, string> = {},
 ) {
   const allowedNames = [
     "HOME",
@@ -146,6 +151,8 @@ export function codexEnvironment(
     }
   }
 
+  Object.assign(environment, runtimeEnvironment);
+
   if (allowDeveloperTools) {
     Object.assign(environment, developerEnvironment);
   }
@@ -166,7 +173,41 @@ ${
 </github_development_policy>`;
 }
 
-function parseFinalResponse(output: string, allowDeveloperTools = false) {
+function sanitizedToolArguments(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const sanitize = (item: unknown, depth = 0): unknown => {
+    if (depth >= 5) return "[truncated]";
+    if (typeof item === "string") return item.slice(0, 1_024);
+    if (
+      typeof item === "number" ||
+      typeof item === "boolean" ||
+      item === null
+    ) {
+      return item;
+    }
+    if (Array.isArray(item)) {
+      return item.slice(0, 25).map((entry) => sanitize(entry, depth + 1));
+    }
+    if (item && typeof item === "object") {
+      return Object.fromEntries(
+        Object.entries(item)
+          .slice(0, 25)
+          .map(([key, entry]) => [
+            key.slice(0, 100),
+            sanitize(entry, depth + 1),
+          ]),
+      );
+    }
+    return String(item).slice(0, 1_024);
+  };
+  return sanitize(value) as Record<string, unknown>;
+}
+
+export function parseFinalResponse(
+  output: string,
+  allowDeveloperTools = false,
+  onMcpToolCall?: CodexRunOptions["onMcpToolCall"],
+) {
   let finalResponse = "";
 
   for (const line of output.split("\n")) {
@@ -176,17 +217,68 @@ function parseFinalResponse(output: string, allowDeveloperTools = false) {
 
     const event = JSON.parse(line) as {
       type?: string;
-      item?: { type?: string; text?: string };
+      item?: {
+        type?: string;
+        text?: string;
+        server?: string;
+        tool?: string;
+        arguments?: unknown;
+        result?: unknown;
+        status?: string;
+      };
     };
 
     if (
       !allowDeveloperTools &&
       event.item?.type &&
-      ["command_execution", "file_change", "mcp_tool_call"].includes(
-        event.item.type,
-      )
+      ["command_execution", "file_change"].includes(event.item.type)
     ) {
       throw new Error("Codex attempted a disabled local tool.");
+    }
+
+    if (
+      event.type === "item.completed" &&
+      event.item?.type === "mcp_tool_call" &&
+      event.item.server === "minisago" &&
+      event.item.tool
+    ) {
+      const result =
+        event.item.result &&
+        typeof event.item.result === "object" &&
+        "structured_content" in event.item.result
+          ? (
+              event.item.result as {
+                structured_content?: unknown;
+              }
+            ).structured_content
+          : undefined;
+      const resultRecord =
+        result && typeof result === "object"
+          ? (result as Record<string, unknown>)
+          : undefined;
+      const resultCount =
+        event.item.tool === "search_messages" &&
+        Array.isArray(resultRecord?.results)
+          ? resultRecord.results.length
+          : event.item.tool === "resolve_context" &&
+              resultRecord?.search &&
+              typeof resultRecord.search === "object" &&
+              Array.isArray(
+                (resultRecord.search as Record<string, unknown>).results,
+              )
+            ? (
+                (resultRecord.search as Record<string, unknown>)
+                  .results as unknown[]
+              ).length
+            : undefined;
+      onMcpToolCall?.({
+        name: event.item.tool.slice(0, 100),
+        arguments: sanitizedToolArguments(event.item.arguments),
+        ...(typeof resultCount === "number" ? { resultCount } : {}),
+        ...(event.item.status
+          ? { status: event.item.status.slice(0, 30) }
+          : {}),
+      });
     }
 
     if (
@@ -265,12 +357,11 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
 
   try {
     const preparationJob =
-      job.purpose === "context_plan" || job.purpose === "social_action"
+      job.purpose === "social_action"
         ? {
             ...job,
             requestMessage: undefined,
             messages: [],
-            searchResults: [],
           }
         : job;
     prepared = await prepareAttachments(
@@ -339,6 +430,26 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       );
     }
 
+    if (job.purpose === "answer") {
+      if (!job.mcpAccessToken) {
+        throw new Error("Chatbot answer job is missing its MCP session.");
+      }
+      codexArguments.push(
+        "--config",
+        `mcp_servers.minisago.url=${JSON.stringify(options.mcpUrl)}`,
+        "--config",
+        'mcp_servers.minisago.bearer_token_env_var="MINISAGO_MCP_TOKEN"',
+        "--config",
+        "mcp_servers.minisago.required=true",
+        "--config",
+        'mcp_servers.minisago.default_tools_approval_mode="auto"',
+        "--config",
+        "mcp_servers.minisago.startup_timeout_sec=10",
+        "--config",
+        "mcp_servers.minisago.tool_timeout_sec=60",
+      );
+    }
+
     if (outputSchema) {
       const schemaPath = join(prepared.directory, "output-schema.json");
       await Bun.write(schemaPath, JSON.stringify(outputSchema));
@@ -375,6 +486,7 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
               MINISAGO_JOB_ID: job.id,
             }
           : {},
+        job.mcpAccessToken ? { MINISAGO_MCP_TOKEN: job.mcpAccessToken } : {},
       ),
     });
     const stop = () => child.kill();
@@ -396,7 +508,11 @@ export async function runCodexJob(job: ChatbotJob, options: CodexRunOptions) {
       throw new Error(codexFailureMessage(stdout, stderr, exitCode));
     }
 
-    return parseFinalResponse(stdout, hasDeveloperAccess);
+    return parseFinalResponse(
+      stdout,
+      hasDeveloperAccess,
+      options.onMcpToolCall,
+    );
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", abort);

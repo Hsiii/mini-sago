@@ -81,8 +81,14 @@ Server Settings -> Integrations -> Webhooks.
 
 The hosted service is a context broker; Codex runs behind an authenticated
 outbound WebSocket connection. There is no public worker endpoint or durable
-job queue. A workflow reserves one worker for routing, context planning, any
-evidence resolution, and the final answer, then releases it.
+job queue. A workflow reserves one worker for routing, any MCP-backed evidence
+resolution, and the final answer, then releases it.
+
+The service exposes one Streamable HTTP MCP route for workers. It accepts only
+opaque bearer tokens created for an active chatbot workflow. Each token is
+bound in memory to the real requester and Discord permission context, expires
+after 16 minutes, and is revoked when the workflow finishes. MCP arguments
+cannot select a requester, guild, channel, worker capability, or mutation scope.
 
 Guild searches are restricted to channels where the requester has View Channel
 and Read Message History. If role data is unavailable, search falls back to the
@@ -92,8 +98,9 @@ are not sent to Codex.
 Each Codex run is ephemeral. It receives the selected message context and at
 most 10 supported attachments, 20 MB each and 40 MB total. Downloads accept only
 Discord HTTPS CDN hosts, stop when the request is cancelled, and are deleted
-afterward. Normal Codex configuration, memories, MCP servers, plugins, and
-private browser sessions are unavailable.
+afterward. Normal Codex configuration, memories, user-configured MCP servers,
+plugins, and private browser sessions are unavailable. Answer jobs receive only
+MiniSago's curated Discord MCP tools.
 
 Chat runs in an isolated workspace with restricted permissions. Owner
 development enables commands and network access only inside a selected
@@ -187,10 +194,11 @@ Metadata-only logs live under
 `~/Library/Application Support/MiniSago/logs`; they exclude prompts, Discord
 messages, answers, links, and attachment contents. Debug traces live at
 `~/Library/Application Support/MiniSago/traces.sqlite`. They may contain message
-context, sanitized attachment metadata, planner output, search context, model
-output, errors, and timings, but never signed URL parameters or downloaded
-attachment bodies. They are owner-readable, expire after 14 days, and are
-pruned oldest-first above 250 MB.
+context, sanitized attachment metadata, bounded MCP tool names and arguments,
+model output, errors, and timings, but never MCP bearer tokens, signed URL
+parameters, tool-result message bodies, or downloaded attachment bodies. They
+are owner-readable, expire after 14 days, and are pruned oldest-first above
+250 MB.
 
 `bun run mac-agent:uninstall` removes the helper, its secret, compiled monitor,
 logs, traces, and isolated GitHub logins. It does not modify the normal

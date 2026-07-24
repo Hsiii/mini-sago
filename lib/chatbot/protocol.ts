@@ -1,4 +1,4 @@
-export const CHATBOT_PROTOCOL_VERSION = 21;
+export const CHATBOT_PROTOCOL_VERSION = 22;
 export const CHATBOT_JOB_TIMEOUT_MS = 120_000;
 export const CHATBOT_DEV_JOB_TIMEOUT_MS = 15 * 60_000;
 
@@ -37,12 +37,20 @@ export type ChatbotMemberResult = {
   names: string[];
 };
 
+export type ChatbotMcpTraceCall = {
+  name: string;
+  arguments: Record<string, unknown>;
+  resultCount?: number;
+  status?: string;
+};
+
 export type ChatbotTraceContext = {
   historyCount?: number;
   contextMessageCount: number;
   searchQueries: Array<Record<string, unknown>>;
   searchResultCount: number;
   memberQueries: string[];
+  toolCalls?: ChatbotMcpTraceCall[];
   elapsedMs: number;
   model?: string;
   promptVersion?: number;
@@ -66,18 +74,14 @@ export type ChatbotMessage = {
 export type ChatbotJob = {
   id: string;
   requesterUserId: string;
-  purpose?:
-    | "answer"
-    | "execution_route"
-    | "context_plan"
-    | "social_action"
-    | "trace_lookup";
+  purpose?: "answer" | "execution_route" | "social_action" | "trace_lookup";
   executionMode?: ChatbotExecutionMode;
   executionTarget?: ChatbotExecutionTarget;
   mutationScope?: ChatbotMutationScope;
   repository?: string;
   availableRepositories?: string[];
   chatbotRepository?: string;
+  mcpAccessToken?: string;
   availableTools?: ChatbotToolCapability[];
   socialActionCandidateMessageIds?: string[];
   channelId: string;
@@ -85,16 +89,6 @@ export type ChatbotJob = {
   request: string;
   requestMessage?: ChatbotMessage;
   messages: ChatbotMessage[];
-  searchStatus?: "not_requested" | "complete" | "unavailable";
-  searchResults?: ChatbotMessage[];
-  memberLookupStatus?: "not_requested" | "complete" | "unavailable";
-  memberResults?: ChatbotMemberResult[];
-  previousTraceStatus?:
-    | "not_requested"
-    | "complete"
-    | "not_found"
-    | "unavailable";
-  previousTrace?: ChatbotTraceContext;
 };
 
 export type MacAgentClientMessage =

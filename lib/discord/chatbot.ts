@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import type { ChatbotAccessConfig } from "../chatbot/access";
 import { macAgentBridge, type MacAgentJobResult } from "../chatbot/bridge";
 import { CHATBOT_CONTEXT_LIMITS } from "../chatbot/context-limits";
+import {
+  registerChatbotMcpSession,
+  type ChatbotMcpSessionSnapshot,
+} from "../chatbot/mcp";
 import type {
   ChatbotAttachment,
   ChatbotExecutionMode,
@@ -101,27 +105,17 @@ type DiscordMessageSearchResponse = {
   messages?: DiscordMessage[][];
 };
 
-const SEARCH_HAS_VALUES = [
-  "image",
-  "sound",
-  "video",
-  "file",
-  "sticker",
-  "embed",
-  "link",
-  "poll",
-  "snapshot",
-] as const;
-const SEARCH_EMBED_TYPES = [
-  "image",
-  "video",
-  "gif",
-  "sound",
-  "article",
-] as const;
-
-type SearchHas = (typeof SEARCH_HAS_VALUES)[number];
-type SearchEmbedType = (typeof SEARCH_EMBED_TYPES)[number];
+type SearchHas =
+  | "image"
+  | "sound"
+  | "video"
+  | "file"
+  | "sticker"
+  | "embed"
+  | "link"
+  | "poll"
+  | "snapshot";
+type SearchEmbedType = "image" | "video" | "gif" | "sound" | "article";
 
 export type DiscordSearchQuery = {
   author?: string;
@@ -133,13 +127,6 @@ export type DiscordSearchQuery = {
   attachmentExtension?: string;
   sortBy?: "relevance" | "timestamp";
   sortOrder?: "asc" | "desc";
-};
-
-export type DiscordContextPlan = {
-  historyCount: number;
-  includePreviousTrace: boolean;
-  memberQueries: string[];
-  queries: DiscordSearchQuery[];
 };
 
 export type DiscordRequest = <T>(
@@ -509,141 +496,6 @@ export function formatDiscordAnswers(content: string) {
 
 const SELF_AUTHOR_PATTERN = /^(?:self|i|me|myself|我|自己)$/iu;
 const USER_MENTION_PATTERN = /^<@!?(\d+)>$/u;
-function shortString(value: unknown, maximumLength: number) {
-  return typeof value === "string" && value.trim()
-    ? value.trim().slice(0, maximumLength)
-    : undefined;
-}
-
-export function parseDiscordContextPlan(content: string): DiscordContextPlan {
-  try {
-    const normalized = content
-      .trim()
-      .replace(/^```(?:json)?\s*/iu, "")
-      .replace(/\s*```$/u, "");
-    const payload = JSON.parse(normalized) as {
-      historyCount?: unknown;
-      includePreviousTrace?: unknown;
-      memberQueries?: unknown;
-      queries?: unknown;
-    };
-    const historyCount =
-      typeof payload.historyCount === "number" &&
-      Number.isInteger(payload.historyCount)
-        ? Math.min(
-            Math.max(payload.historyCount, 0),
-            CHATBOT_CONTEXT_LIMITS.maximumHistoryMessages,
-          )
-        : CHATBOT_CONTEXT_LIMITS.nearbyMessages;
-    const memberQueries = Array.isArray(payload.memberQueries)
-      ? [
-          ...new Set(
-            payload.memberQueries.flatMap((value) => {
-              const query = shortString(
-                value,
-                CHATBOT_CONTEXT_LIMITS.maximumMemberQueryCharacters,
-              );
-              return query ? [query] : [];
-            }),
-          ),
-        ].slice(0, CHATBOT_CONTEXT_LIMITS.maximumMemberLookups)
-      : [];
-    const includePreviousTrace = payload.includePreviousTrace === true;
-    if (!Array.isArray(payload.queries)) {
-      return {
-        historyCount,
-        includePreviousTrace,
-        memberQueries,
-        queries: [],
-      };
-    }
-
-    const queries = payload.queries
-      .slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchQueries)
-      .flatMap((value) => {
-        if (!value || typeof value !== "object") return [];
-        const query = value as Record<string, unknown>;
-        const author = shortString(
-          query.author,
-          CHATBOT_CONTEXT_LIMITS.maximumSearchAuthorCharacters,
-        );
-        const mentions = shortString(
-          query.mentions,
-          CHATBOT_CONTEXT_LIMITS.maximumSearchAuthorCharacters,
-        );
-        const searchContent = shortString(
-          query.content,
-          CHATBOT_CONTEXT_LIMITS.maximumSearchContentCharacters,
-        );
-        const has = Array.isArray(query.has)
-          ? [
-              ...new Set(
-                query.has.filter((item): item is SearchHas =>
-                  SEARCH_HAS_VALUES.includes(item as SearchHas),
-                ),
-              ),
-            ].slice(0, CHATBOT_CONTEXT_LIMITS.maximumSearchFilters)
-          : undefined;
-        const embedType = SEARCH_EMBED_TYPES.includes(
-          query.embedType as SearchEmbedType,
-        )
-          ? (query.embedType as SearchEmbedType)
-          : undefined;
-        const linkHostname = shortString(
-          query.linkHostname,
-          CHATBOT_CONTEXT_LIMITS.maximumSearchHostnameCharacters,
-        );
-        const attachmentExtension = shortString(
-          query.attachmentExtension,
-          CHATBOT_CONTEXT_LIMITS.maximumSearchExtensionCharacters,
-        )?.replace(/^\./, "");
-        const sortBy = ["relevance", "timestamp"].includes(
-          query.sortBy as string,
-        )
-          ? (query.sortBy as DiscordSearchQuery["sortBy"])
-          : undefined;
-        const sortOrder = ["asc", "desc"].includes(query.sortOrder as string)
-          ? (query.sortOrder as DiscordSearchQuery["sortOrder"])
-          : undefined;
-
-        if (
-          !author &&
-          !mentions &&
-          !searchContent &&
-          !has?.length &&
-          !embedType &&
-          !linkHostname &&
-          !attachmentExtension
-        ) {
-          return [];
-        }
-
-        return [
-          {
-            ...(author ? { author } : {}),
-            ...(mentions ? { mentions } : {}),
-            ...(searchContent ? { content: searchContent } : {}),
-            ...(has?.length ? { has } : {}),
-            ...(embedType ? { embedType } : {}),
-            ...(linkHostname ? { linkHostname } : {}),
-            ...(attachmentExtension ? { attachmentExtension } : {}),
-            ...(sortBy ? { sortBy } : {}),
-            ...(sortOrder ? { sortOrder } : {}),
-          },
-        ];
-      });
-
-    return { historyCount, includePreviousTrace, memberQueries, queries };
-  } catch {
-    return {
-      historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
-      includePreviousTrace: false,
-      memberQueries: [],
-      queries: [],
-    };
-  }
-}
-
 export function parsePreviousTraceLookup(content: string): {
   status: "complete" | "not_found" | "unavailable";
   trace?: ChatbotTraceContext;
@@ -1332,7 +1184,11 @@ export async function handleChatbotMention({
   let result:
     | MacAgentJobResult
     | { ok: true; content: ""; awaitingApproval: true };
-  let searchUnavailable = false;
+  let mcpSession: ReturnType<typeof registerChatbotMcpSession> | undefined;
+  let mcpSnapshot: ChatbotMcpSessionSnapshot = {
+    reacted: false,
+    searchUnavailable: false,
+  };
   let reactionCapabilities: DiscordReactionCapabilities | undefined;
   try {
     result = await withTyping(message.channel_id, discordRequest, async () => {
@@ -1444,152 +1300,169 @@ export async function handleChatbotMention({
           };
         }
       }
-      let search: {
-        status: "not_requested" | "complete" | "unavailable";
-        results: ChatbotMessage[];
-      } = { status: "not_requested", results: [] };
-      let memberLookup: {
-        status: "not_requested" | "complete" | "unavailable";
-        results: ChatbotMemberResult[];
-      } = { status: "not_requested", results: [] };
       let previousTrace: {
-        status: "not_requested" | "complete" | "not_found" | "unavailable";
+        status: "complete" | "not_found" | "unavailable";
         trace?: ChatbotTraceContext;
-      } = { status: "not_requested" };
-      let plan: DiscordContextPlan = {
-        historyCount: CHATBOT_CONTEXT_LIMITS.nearbyMessages,
-        includePreviousTrace: false,
-        memberQueries: [],
-        queries: [],
-      };
-
-      const plannerJob: ChatbotJob = {
+      } = { status: "unavailable" };
+      const traceDispatch = workflow.dispatch({
         id: randomUUID(),
         requesterUserId,
-        purpose: "context_plan",
-        executionMode,
-        executionTarget,
-        mutationScope,
-        repository: selectedRepository,
+        purpose: "trace_lookup",
         channelId: message.channel_id,
         requestMessageId: message.id,
         request,
         requestMessage,
-        messages,
-      };
-      const plannerDispatch = workflow.dispatch(plannerJob);
-
-      if (plannerDispatch.status === "accepted") {
-        const plannerResult = await plannerDispatch.result;
-        if (!plannerResult.ok) {
-          console.warn(
-            `Discord context planning unavailable: ${plannerResult.error}`,
-          );
-        } else {
-          plan = parseDiscordContextPlan(plannerResult.content);
-        }
-      } else {
-        console.warn("Discord context planning unavailable.");
+        messages: [],
+      });
+      if (traceDispatch.status === "accepted") {
+        const traceResult = await traceDispatch.result;
+        previousTrace = traceResult.ok
+          ? parsePreviousTraceLookup(traceResult.content)
+          : { status: "unavailable" };
       }
 
-      if (plan.includePreviousTrace) {
-        const traceDispatch = workflow.dispatch({
-          id: randomUUID(),
-          requesterUserId,
-          purpose: "trace_lookup",
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          request,
-          requestMessage,
-          messages: [],
-        });
-        if (traceDispatch.status === "accepted") {
-          const traceResult = await traceDispatch.result;
-          previousTrace = traceResult.ok
-            ? parsePreviousTraceLookup(traceResult.content)
-            : { status: "unavailable" };
-        } else {
-          previousTrace = { status: "unavailable" };
+      if (message.guild_id && reactionBroker) {
+        try {
+          reactionCapabilities = await reactionBroker.discover({
+            guildId: message.guild_id,
+            channelId: message.channel_id,
+            botUserId,
+            discordRequest,
+          });
+        } catch {
+          console.warn("Discord reaction capabilities unavailable.");
         }
       }
 
-      if (message.guild_id) {
-        const historyPromise =
-          plan.historyCount > CHATBOT_CONTEXT_LIMITS.nearbyMessages
-            ? getRecentHumanMessages({
+      const recentMessages = (historyCount: number) =>
+        historyCount <= CHATBOT_CONTEXT_LIMITS.nearbyMessages
+          ? Promise.resolve(
+              historyCount === 0 ? [] : messages.slice(-historyCount),
+            )
+          : getRecentHumanMessages({
+              channelId: message.channel_id,
+              requestMessageId: message.id,
+              botUserId,
+              discordRequest,
+              messageLimit: historyCount,
+            });
+      const searchMessages = message.guild_id
+        ? (queries: DiscordSearchQuery[]) =>
+            searchGuildMessages({
+              guildId: message.guild_id!,
+              requesterUserId,
+              requesterRoleIds: message.member?.roles,
+              currentChannelId: message.channel_id,
+              requestMessageId: message.id,
+              queries,
+              discordRequest,
+            })
+        : undefined;
+      const lookupMembers = message.guild_id
+        ? (queries: string[]) =>
+            lookupGuildMembers({
+              guildId: message.guild_id!,
+              queries,
+              discordRequest,
+            })
+        : undefined;
+      const reactionTool = reactionCapabilities?.tools.find(
+        (tool) => tool.name === "discord.add_reaction",
+      );
+      const addReaction =
+        reactionBroker && reactionCapabilities && reactionTool
+          ? (emoji: string) =>
+              reactionBroker.addReaction({
                 channelId: message.channel_id,
-                requestMessageId: message.id,
-                botUserId,
-                discordRequest,
-                messageLimit: plan.historyCount,
-              })
-            : Promise.resolve(
-                plan.historyCount === 0
-                  ? []
-                  : messages.slice(-plan.historyCount),
-              );
-        const searchPromise =
-          plan.queries.length > 0
-            ? searchGuildMessages({
-                guildId: message.guild_id,
-                requesterUserId,
-                requesterRoleIds: message.member?.roles,
-                currentChannelId: message.channel_id,
-                requestMessageId: message.id,
-                queries: plan.queries,
+                messageId: message.id,
+                emoji,
+                capabilities: reactionCapabilities!,
                 discordRequest,
               })
-                .then((results) => ({
-                  status: "complete" as const,
-                  results,
-                }))
-                .catch(() => {
-                  console.warn("Discord message search unavailable.");
-                  return {
+          : undefined;
+
+      mcpSession = registerChatbotMcpSession({
+        getRecentMessages: recentMessages,
+        ...(searchMessages ? { searchMessages } : {}),
+        ...(lookupMembers ? { lookupMembers } : {}),
+        getPreviousTrace: async () => previousTrace,
+        resolveContext: async ({
+          historyCount,
+          includePreviousTrace,
+          memberQueries,
+          queries,
+        }) => {
+          const historyPromise = recentMessages(historyCount)
+            .then((resolvedMessages) => ({
+              status: "complete" as const,
+              messages: resolvedMessages,
+            }))
+            .catch(() => ({
+              status: "unavailable" as const,
+              messages: [] as ChatbotMessage[],
+            }));
+          const searchPromise =
+            queries.length > 0
+              ? searchMessages
+                ? searchMessages(queries)
+                    .then((results) => ({
+                      status: "complete" as const,
+                      results,
+                    }))
+                    .catch(() => ({
+                      status: "unavailable" as const,
+                      results: [] as ChatbotMessage[],
+                    }))
+                : Promise.resolve({
                     status: "unavailable" as const,
                     results: [] as ChatbotMessage[],
-                  };
-                })
-            : Promise.resolve(search);
-        const memberLookupPromise =
-          plan.memberQueries.length > 0
-            ? lookupGuildMembers({
-                guildId: message.guild_id,
-                queries: plan.memberQueries,
-                discordRequest,
-              })
-                .then((results) => ({
-                  status: "complete" as const,
-                  results,
-                }))
-                .catch(() => {
-                  console.warn("Discord member lookup unavailable.");
-                  return {
+                  })
+              : Promise.resolve({
+                  status: "not_requested" as const,
+                  results: [] as ChatbotMessage[],
+                });
+          const membersPromise =
+            memberQueries.length > 0
+              ? lookupMembers
+                ? lookupMembers(memberQueries)
+                    .then((results) => ({
+                      status: "complete" as const,
+                      results,
+                    }))
+                    .catch(() => ({
+                      status: "unavailable" as const,
+                      results: [] as ChatbotMemberResult[],
+                    }))
+                : Promise.resolve({
                     status: "unavailable" as const,
                     results: [] as ChatbotMemberResult[],
-                  };
-                })
-            : Promise.resolve(memberLookup);
+                  })
+              : Promise.resolve({
+                  status: "not_requested" as const,
+                  results: [] as ChatbotMemberResult[],
+                });
 
-        [messages, search, memberLookup] = await Promise.all([
-          historyPromise,
-          searchPromise,
-          memberLookupPromise,
-        ]);
-        searchUnavailable = search.status === "unavailable";
-      } else if (plan.historyCount === 0) {
-        messages = [];
-      } else if (plan.historyCount <= CHATBOT_CONTEXT_LIMITS.nearbyMessages) {
-        messages = messages.slice(-plan.historyCount);
-      } else {
-        messages = await getRecentHumanMessages({
-          channelId: message.channel_id,
-          requestMessageId: message.id,
-          botUserId,
-          discordRequest,
-          messageLimit: plan.historyCount,
-        });
-      }
+          const [history, search, members] = await Promise.all([
+            historyPromise,
+            searchPromise,
+            membersPromise,
+          ]);
+          return {
+            history,
+            search,
+            members,
+            previousTrace: includePreviousTrace
+              ? previousTrace
+              : { status: "not_requested" as const },
+          };
+        },
+        ...(addReaction ? { addReaction } : {}),
+        ...(reactionTool
+          ? {
+              addReactionDescription: `${reactionTool.description} Available values: ${JSON.stringify(reactionTool.metadata ?? {})}`,
+            }
+          : {}),
+      });
 
       const job: ChatbotJob = {
         id: randomUUID(),
@@ -1604,28 +1477,8 @@ export async function handleChatbotMention({
         request,
         requestMessage,
         messages,
-        searchStatus: search.status,
-        searchResults: search.results,
-        memberLookupStatus: memberLookup.status,
-        memberResults: memberLookup.results,
-        previousTraceStatus: previousTrace.status,
-        previousTrace: previousTrace.trace,
+        mcpAccessToken: mcpSession.token,
       };
-      if (message.guild_id && reactionBroker) {
-        try {
-          reactionCapabilities = await reactionBroker.discover({
-            guildId: message.guild_id,
-            channelId: message.channel_id,
-            botUserId,
-            discordRequest,
-          });
-          if (reactionCapabilities.tools.length > 0) {
-            job.availableTools = reactionCapabilities.tools;
-          }
-        } catch {
-          console.warn("Discord reaction capabilities unavailable.");
-        }
-      }
       const dispatch = workflow.dispatch(job);
 
       if (dispatch.status === "offline") {
@@ -1642,25 +1495,31 @@ export async function handleChatbotMention({
     console.error(`Chatbot request ${message.id} failed:`, error);
     result = { ok: false, error: "聊天機器人請求失敗" };
   } finally {
+    if (mcpSession) {
+      mcpSnapshot = mcpSession.snapshot();
+      mcpSession.revoke();
+    }
     workflow.release();
   }
   if ("awaitingApproval" in result) return true;
 
-  let reacted = false;
+  let reacted = mcpSnapshot.reacted;
   let reply: string | null = null;
   if (result.ok) {
-    ({ reply, reacted } = await executeChatbotAnswerDecision({
+    const decision = await executeChatbotAnswerDecision({
       content: result.content,
       message,
       reactionBroker,
       reactionCapabilities,
       discordRequest,
-    }));
+    });
+    reply = decision.reply;
+    reacted ||= decision.reacted;
   } else {
     reply = "我剛剛卡住了 晚點再叫我一次";
   }
 
-  if (searchUnavailable && reply) {
+  if (mcpSnapshot.searchUnavailable && reply) {
     reply = `我剛剛翻不到伺服器的舊訊息 這次回答可能不太完整\n\n${reply}`;
   }
   if (!reply && !reacted) {

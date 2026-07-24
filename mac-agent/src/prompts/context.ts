@@ -85,37 +85,6 @@ export function answerContext(
 ) {
   const sections = [requestContext(job)];
 
-  if (job.availableTools?.length) {
-    sections.push(block("available_tools_json", job.availableTools));
-  }
-
-  if (job.memberLookupStatus && job.memberLookupStatus !== "not_requested") {
-    sections.push(
-      block("discord_member_lookup_status", job.memberLookupStatus),
-      block("discord_member_results_json", job.memberResults ?? []),
-    );
-  }
-
-  if (job.searchStatus && job.searchStatus !== "not_requested") {
-    sections.push(
-      block("discord_search_status", job.searchStatus),
-      block(
-        "discord_search_results_json",
-        (job.searchResults ?? []).map((message, sourceIndex) => ({
-          sourceIndex,
-          ...promptMessage(message),
-        })),
-      ),
-    );
-  }
-
-  if (job.previousTraceStatus && job.previousTraceStatus !== "not_requested") {
-    sections.push(
-      block("previous_trace_status", job.previousTraceStatus),
-      block("previous_trace_json", job.previousTrace ?? null),
-    );
-  }
-
   if (attachmentText.length > 0) {
     sections.push(block("extracted_attachments", attachmentText.join("\n\n")));
   }

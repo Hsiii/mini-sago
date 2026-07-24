@@ -7,6 +7,7 @@ import {
   macAgentWebSocketHandler,
   type MacAgentSocketData,
 } from "../lib/chatbot/bridge";
+import { handleChatbotMcpRequest } from "../lib/chatbot/mcp";
 import { startGamerForumMonitor } from "../lib/discord/gamer-forum-monitor";
 import { startInstagramGateway } from "../lib/discord/instagram-gateway";
 import {
@@ -59,6 +60,10 @@ function handleRequest(request: Request, server: Server<MacAgentSocketData>) {
 
   if (request.method === "GET" && pathname === "/api/health") {
     return buildHealthResponse();
+  }
+
+  if (pathname === "/api/chatbot/mcp") {
+    return handleChatbotMcpRequest(request);
   }
 
   if (request.method === "POST" && pathname === "/api/interactions") {

@@ -19,6 +19,7 @@ export type MacAgentConfig = {
   chatbotAccess: ChatbotAccessConfig;
   githubWorktreeRoot: string;
   maxConcurrentJobs: number;
+  mcpUrl: string;
   headless: boolean;
   sessionMonitorPath: string;
   traceDatabasePath: string;
@@ -79,6 +80,32 @@ export function validateBridgeUrl(value: string) {
     );
   }
 
+  return url.toString();
+}
+
+export function validateMcpUrl(value: string) {
+  const url = new URL(value);
+  const hostname = url.hostname.replace(/^\[|\]$/gu, "");
+  const ipVersion = isIP(hostname);
+  const isLocal =
+    ["localhost", "127.0.0.1", "::1"].includes(hostname) ||
+    (ipVersion === 0 && !hostname.includes(".") && !hostname.includes(":"));
+
+  if (url.protocol !== "https:" && !(isLocal && url.protocol === "http:")) {
+    throw new Error(
+      "MINISAGO_MCP_URL must use https:// unless it is local or container-local.",
+    );
+  }
+
+  return url.toString();
+}
+
+function defaultMcpUrl(bridgeUrl: string) {
+  const url = new URL(bridgeUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  url.pathname = "/api/chatbot/mcp";
+  url.search = "";
+  url.hash = "";
   return url.toString();
 }
 
@@ -180,11 +207,13 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
     "MINISAGO_GITHUB_WORKTREE_ROOT",
   );
 
+  const bridgeUrl = validateBridgeUrl(
+    process.env.MINISAGO_BRIDGE_URL?.trim() ||
+      "wss://bot.hsichen.dev/api/mac-agent/ws",
+  );
+
   return {
-    bridgeUrl: validateBridgeUrl(
-      process.env.MINISAGO_BRIDGE_URL?.trim() ||
-        "wss://bot.hsichen.dev/api/mac-agent/ws",
-    ),
+    bridgeUrl,
     bridgeSecret,
     codexHome:
       process.env.MINISAGO_CODEX_HOME?.trim() ||
@@ -205,6 +234,9 @@ export async function loadMacAgentConfig(): Promise<MacAgentConfig> {
         Number.parseInt(process.env.MINISAGO_MAX_CONCURRENT_JOBS || "2", 10) ||
           2,
       ),
+    ),
+    mcpUrl: validateMcpUrl(
+      process.env.MINISAGO_MCP_URL?.trim() || defaultMcpUrl(bridgeUrl),
     ),
     sessionMonitorPath:
       process.env.MINISAGO_SESSION_MONITOR_PATH?.trim() ||

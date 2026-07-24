@@ -41,6 +41,13 @@ MiniSago can:
 - optionally react to fresh community messages when a quiet acknowledgment is
   more natural than interrupting the conversation.
 
+Mention answers start with nearby conversation context. When that is
+insufficient, the answer model can use MiniSago's short-lived MCP tools to read
+more channel history, search only channels the requester can access, resolve
+member aliases, inspect a previous answer's observable trace, or add one
+validated reaction. Simple questions skip the former context-planning model
+call.
+
 Community members can discuss code and links through the read-only chat path,
 but repository checkout, developer commands, GitHub mutations, Mac access, and
 other privileged capabilities are owner-only. Community and owner chat requests

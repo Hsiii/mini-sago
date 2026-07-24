@@ -46,25 +46,26 @@ scheduled-monitor variable names.
 
 ## Worker variables
 
-| Name                             | Required | Purpose                                                                                 |
-| -------------------------------- | -------- | --------------------------------------------------------------------------------------- |
-| `MINISAGO_BRIDGE_URL`            | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets  |
-| `MINISAGO_MAC_BRIDGE_SECRET`     | Mac      | Must match the hosted Mac-profile secret                                                |
-| `MINISAGO_CODEX_PATH`            | No       | Codex executable                                                                        |
-| `MINISAGO_CODEX_HOME`            | No       | Isolated helper state                                                                   |
-| `MINISAGO_SESSION_MONITOR_PATH`  | No       | Compiled macOS lock monitor                                                             |
-| `MINISAGO_TRACE_DATABASE_PATH`   | No       | Local response-trace database                                                           |
-| `MINISAGO_WORKSPACE_ROOT`        | Dev      | Parent directory for isolated repository work                                           |
-| `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Advertised capacity, from 1 to 16                                                       |
-| `MINISAGO_HEADLESS`              | Linux    | Keeps a non-macOS worker connected without a session monitor                            |
-| `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                                                  |
-| `MINISAGO_WORKER_CAPABILITIES`   | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                   |
-| `MINISAGO_WORKER_PRIORITY`       | No       | Scheduler priority from 0 to 1000                                                       |
-| `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                                                      |
-| `MINISAGO_CHATBOT_REPOSITORY`    | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed |
-| `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner Discord ID configured on the hosted service                                  |
-| `MINISAGO_GITHUB_CONFIG_DIR`     | Dev      | Dedicated GitHub CLI state                                                              |
-| `MINISAGO_GITHUB_WORKTREE_ROOT`  | No       | Disposable per-job checkout root                                                        |
+| Name                             | Required | Purpose                                                                                    |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `MINISAGO_BRIDGE_URL`            | No       | Hosted WebSocket URL; plain `ws://` is accepted only for local/container-local targets     |
+| `MINISAGO_MCP_URL`               | No       | Curated MCP endpoint; derived from the bridge origin and restricted to HTTPS or local HTTP |
+| `MINISAGO_MAC_BRIDGE_SECRET`     | Mac      | Must match the hosted Mac-profile secret                                                   |
+| `MINISAGO_CODEX_PATH`            | No       | Codex executable                                                                           |
+| `MINISAGO_CODEX_HOME`            | No       | Isolated helper state                                                                      |
+| `MINISAGO_SESSION_MONITOR_PATH`  | No       | Compiled macOS lock monitor                                                                |
+| `MINISAGO_TRACE_DATABASE_PATH`   | No       | Local response-trace database                                                              |
+| `MINISAGO_WORKSPACE_ROOT`        | Dev      | Parent directory for isolated repository work                                              |
+| `MINISAGO_MAX_CONCURRENT_JOBS`   | No       | Advertised capacity, from 1 to 16                                                          |
+| `MINISAGO_HEADLESS`              | Linux    | Keeps a non-macOS worker connected without a session monitor                               |
+| `MINISAGO_WORKER_ID`             | No       | Stable worker identity                                                                     |
+| `MINISAGO_WORKER_CAPABILITIES`   | No       | Comma-separated `chat`, `dev`, and `mac` capabilities                                      |
+| `MINISAGO_WORKER_PRIORITY`       | No       | Scheduler priority from 0 to 1000                                                          |
+| `MINISAGO_GITHUB_REPOSITORIES`   | Dev      | Exact `owner/repository` allowlist                                                         |
+| `MINISAGO_CHATBOT_REPOSITORY`    | No       | Advertised repository that owns chatbot behavior; inferred when only one repo is listed    |
+| `MINISAGO_CHATBOT_OWNER_USER_ID` | Yes      | Same owner Discord ID configured on the hosted service                                     |
+| `MINISAGO_GITHUB_CONFIG_DIR`     | Dev      | Dedicated GitHub CLI state                                                                 |
+| `MINISAGO_GITHUB_WORKTREE_ROOT`  | No       | Disposable per-job checkout root                                                           |
 
 The Mac installer reads `.env.local`; the headless worker reads `.env.worker`.
 Image and installer defaults are shown in the corresponding example files.
@@ -94,10 +95,10 @@ are configurable; the defaults notice 25% of eligible bursts and permit at most
 four checks per hour. Unsolicited replies remain disabled.
 
 The hosted service verifies the bot's effective channel permissions, advertises
-available custom emoji to the planner, validates the selected message and emoji,
-and applies channel, member, and hourly reaction cooldowns before calling
-Discord. Ambient planning does not download attachments. The Discord token
-never leaves the hosted service.
+available custom emoji through the bounded reaction capability, validates the
+selected message and emoji, and applies channel, member, and hourly reaction
+cooldowns before calling Discord. Ambient planning does not download
+attachments. The Discord token never leaves the hosted service.
 
 Mention answers use the same host-owned reaction broker and emoji inventory.
 One answer inference can choose a reply, a reaction bound to the triggering
@@ -144,12 +145,17 @@ just quality preferences.
 
 The Mac installer consumes `.env.local`. It creates an isolated Codex home that
 links the existing `~/.codex/auth.json` but does not load normal Codex
-configuration, skills, memories, plugins, MCP servers, or repository
-instructions. Its trace database is owner-readable, expires entries after 14
-days, and prunes oldest entries above 250 MB. When a user asks about a previous
-answer, the context planner may retrieve bounded observable metadata from the
-same channel; the answer model explains it without receiving private
-chain-of-thought.
+configuration, skills, memories, plugins, user-configured MCP servers, or
+repository instructions. Answer jobs receive only MiniSago's curated MCP server
+with an opaque per-request bearer token. The server binds requester identity,
+guild, channel permissions, and available actions outside model-controlled
+arguments, expires the token after 16 minutes, and revokes it when the workflow
+ends.
+
+The trace database is owner-readable, expires entries after 14 days, and prunes
+oldest entries above 250 MB. When a user asks about a previous answer, the
+`get_previous_trace` MCP tool returns bounded observable metadata from the same
+channel without exposing private chain-of-thought.
 
 ## Owner development and GitHub
 
