@@ -389,7 +389,7 @@ describe("Codex chatbot runner", () => {
       ["archive.zip: unsupported"],
     );
 
-    expect(PROMPT_VERSION).toBe(26);
+    expect(PROMPT_VERSION).toBe(27);
     expect(prompt).toContain("Answer directly from the supplied context");
     expect(prompt).toContain("Stay accurate without sounding like a report");
     expect(prompt).toContain("Speak as MiniSago in the first person");
@@ -406,6 +406,16 @@ describe("Codex chatbot runner", () => {
     expect(prompt).toContain("gentle teasing only when it fits");
     expect(prompt).toContain("proportionate reactions");
     expect(prompt).toContain("have a real lean");
+    expect(prompt).toContain("暈 or 暈船 means catching feelings");
+    expect(prompt).toContain(
+      '不揪 is usually the playful complaint "you didn\'t invite me?"',
+    );
+    expect(prompt).toContain("被塑膠 means being ignored");
+    expect(prompt).toContain("各各=各付各的");
+    expect(prompt).toContain("這感我付=這段感情感覺只有我在付出");
+    expect(prompt).toContain(
+      "Treat unfamiliar or fast-changing slang as uncertain",
+    );
     expect(prompt).toContain("Chinese replies must use one punctuation style");
     expect(prompt).toContain("Casual: no commas or periods (，、。,.)");
     expect(prompt).toContain("Use spaces and line breaks for pauses");
@@ -455,7 +465,7 @@ describe("Codex chatbot runner", () => {
     const prompt = buildCodexPrompt({ ...job, messages: [] }, [], []);
     const instructions = prompt.split("<current_request>")[0] ?? "";
 
-    expect(instructions.length).toBeLessThan(3_600);
+    expect(instructions.length).toBeLessThan(5_200);
     expect(prompt).not.toContain("<available_tools_json>");
     expect(prompt).not.toContain("<extracted_attachments>");
     expect(prompt).not.toContain("<ignored_attachments>");
